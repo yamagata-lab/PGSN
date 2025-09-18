@@ -200,7 +200,7 @@ class Term(ABC):
         t = self
         for arg in arg_terms:
             t = App.build(t1=t, t2=arg, is_named=self.is_named)
-        if kwargs == {}:
+        if len(arg_terms) > 0 and kwargs == {}:
             return t
         return App.build(t1=t, t2=kwarg, is_named=self.is_named)
 

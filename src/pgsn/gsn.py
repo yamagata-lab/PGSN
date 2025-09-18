@@ -11,7 +11,10 @@ gsn_class = pgsn.dsl.define_class(inherit=pgsn.dsl.base_class,
                                      attributes=["description"])
 
 support_class = pgsn.dsl.define_class(inherit=gsn_class, name='Support')
-undeveloped = support_class(description='Undeveloped')
+undeveloped_class = pgsn.dsl.define_class(inherit=support_class,
+                                          name='Undeveloped',
+                                          defaults={"description": ""})
+undeveloped = undeveloped_class()
 evidence_class = pgsn.dsl.define_class(inherit=support_class, name='Evidence')
 strategy_class = pgsn.dsl.define_class(inherit=support_class, name='Strategy',
                                           attributes=["sub_goals"])
@@ -62,7 +65,7 @@ GSN_KEYS_TO_HIDE_IF_EMPTY = {"contexts", "assumptions"}
 
 # Keys for lists whose children should be attached directly to the parent
 GSN_KEYS_TO_FLATTEN = {"support", "sub_goals", "contexts", "assumptions"}
-GSN_TYPES = {"Goal", "Strategy", "Evidence", "Context", "Assumption"}
+GSN_TYPES = {"Goal", "Strategy", "Evidence", "Context", "Assumption", "Undeveloped"}
 
 
 # Term and to_python are assumed to be in your module
@@ -139,6 +142,7 @@ GSN_SHAPES = {
         'Solution': 'ellipse',  # Solutionも円で
         'Context': 'box',  # 本来は角丸だけど、まずは四角で
         'Assumption': 'ellipse',
+        'Undeveloped': 'diamond'
     }
 
 
