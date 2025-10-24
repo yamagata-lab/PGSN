@@ -1,33 +1,31 @@
-import src.pgsn.pgsn_term
-from pgsn import dsl
-from src.pgsn import pgsn_term
-from pgsn.dsl import lambda_abs, lambda_abs_vars, lambda_abs_keywords, plus, let
+from pgsn.dsl import *
+from pgsn import pgsn_term
 
 
 def test_list():
-    c = stdlib.constant('c')
-    d = stdlib.constant('d')
-    t = stdlib.cons(c)(stdlib.empty)
-    t1 = stdlib.head(t)
-    t2 = stdlib.cons(d)(t)
-    t3 = stdlib.tail(t2)
+    c = constant('c')
+    d = constant('d')
+    t = cons(c)(empty)
+    t1 = head(t)
+    t2 = cons(d)(t)
+    t3 = tail(t2)
     assert t.fully_eval().terms[0] == c.fully_eval()
     assert t1.fully_eval() == c.fully_eval()
     assert t2.fully_eval().terms == (d.remove_name(), c.remove_name())
     assert t3.fully_eval() == t.fully_eval()
-    assert stdlib.index(t2)(stdlib.integer(0)).fully_eval() == d.fully_eval()
-    assert stdlib.index(t2)(stdlib.integer(1)).fully_eval() == c.fully_eval()
+    assert index(t2)(integer(0)).fully_eval() == d.fully_eval()
+    assert index(t2)(integer(1)).fully_eval() == c.fully_eval()
     assert t3.fully_eval() == t.fully_eval()
 
 
 def test_concat():
-    a = stdlib.constant('a')
-    b = stdlib.constant('b')
-    c = stdlib.constant('c')
-    d = stdlib.constant('d')
-    t1 = stdlib.cons(a, stdlib.empty)
-    t2 = stdlib.list_term((b, c, d))
-    t = stdlib.concat(t1, t2)
+    a = constant('a')
+    b = constant('b')
+    c = constant('c')
+    d = constant('d')
+    t1 = cons(a, empty)
+    t2 = list_term((b, c, d))
+    t = concat(t1, t2)
     assert t(0).fully_eval() == a.fully_eval()
     assert t(1).fully_eval() == b.fully_eval()
     assert t(2).fully_eval() == c.fully_eval()
@@ -35,50 +33,50 @@ def test_concat():
 
 
 def test_integer():
-    i1 = stdlib.integer(1)
-    i2 = stdlib.integer(1)
-    i = stdlib.plus(i1)(i2)
+    i1 = integer(1)
+    i2 = integer(1)
+    i = plus(i1)(i2)
     assert i.fully_eval().value == 2
 
 
 def test_fold():
-    i1 = stdlib.integer(1)
-    i2 = stdlib.integer(1)
-    ll = stdlib.cons(i1)(stdlib.cons(i2)(stdlib.empty))
-    i = stdlib.integer_sum(ll)
+    i1 = integer(1)
+    i2 = integer(1)
+    ll = cons(i1)(cons(i2)(empty))
+    i = integer_sum(ll)
     assert i.fully_eval().value == 2
 
 
 def test_map():
-    i1 = stdlib.integer(1)
-    i2 = stdlib.integer(2)
-    ll = stdlib.cons(i1)(stdlib.cons(i2)(stdlib.empty))
-    plus_one = stdlib.plus(i1)
-    ll_1 = stdlib.map_term(plus_one)(ll)
+    i1 = integer(1)
+    i2 = integer(2)
+    ll = cons(i1)(cons(i2)(empty))
+    plus_one = plus(i1)
+    ll_1 = map_term(plus_one)(ll)
     assert len(ll_1.fully_eval().terms) == 2
     assert ll_1.fully_eval().terms[0].value == 2
     assert ll_1.fully_eval().terms[1].value == 3
 
 
 def test_multi_arg_function():
-    x = stdlib.variable('x')
-    y = stdlib.variable('y')
-    a = stdlib.variable('a')
-    b = stdlib.variable('b')
-    default = stdlib.integer(1)
-    defaults = stdlib.record({'b': default})
-    f = lambda_abs_vars((x, y), lambda_abs_keywords(arguments={'a': a, 'b': b}, defaults=defaults, body=stdlib.plus(x)(b)))
-    f1 = lambda_abs(x, lambda_abs_keywords(arguments={'a': a}, defaults=stdlib.empty_record, body=stdlib.plus(x)(a)))
-    zero = stdlib.integer(0)
-    one = stdlib.integer(1)
-    two = stdlib.integer(2)
-    three = stdlib.integer(2)
-    r = stdlib.record({'a': zero})
+    x = variable('x')
+    y = variable('y')
+    a = variable('a')
+    b = variable('b')
+    default = integer(1)
+    defaults = record({'b': default})
+    f = lambda_abs_vars((x, y), lambda_abs_keywords(arguments={'a': a, 'b': b}, defaults=defaults, body=plus(x)(b)))
+    f1 = lambda_abs(x, lambda_abs_keywords(arguments={'a': a}, defaults=empty_record, body=plus(x)(a)))
+    zero = integer(0)
+    one = integer(1)
+    two = integer(2)
+    three = integer(2)
+    r = record({'a': zero})
     assert f1(one)(r).fully_eval().value == 1
     assert f(one)(two)(r).fully_eval().value == 2
-    r1 = stdlib.record({'a': zero, 'b': zero})
+    r1 = record({'a': zero, 'b': zero})
     assert f(one)(two)(r1).fully_eval().value == 1
-    r2 = stdlib.record({})
+    r2 = record({})
     assert isinstance(f1(one)(two)(r2).fully_eval(), pgsn_term.App)
     assert f1(one, a=zero).fully_eval().value == 1
     assert f(one, two, a=zero).fully_eval().value ==2
@@ -86,18 +84,18 @@ def test_multi_arg_function():
 
 
 def test_let():
-    x = stdlib.variable('x')
-    identity = stdlib.lambda_abs(x, x)
+    x = variable('x')
+    identity = lambda_abs(x, x)
     t = x(x)
-    t1 = stdlib.let(x, identity, t)
+    t1 = let(x, identity, t)
     assert t1.fully_eval() == identity.fully_eval()
 
 
 def test_let2():
-    x = stdlib.variable('x')
-    y = stdlib.variable('y')
-    one = stdlib.integer(1)
-    two = stdlib.integer(2)
+    x = variable('x')
+    y = variable('y')
+    one = integer(1)
+    two = integer(2)
     t = lambda_abs_vars((x, y),
                         (lambda_abs(x, plus(x)(y))(plus(x)(x)))
                         )
@@ -111,44 +109,44 @@ def test_let2():
 
 
 def test_bool():
-    c = stdlib.constant('c')
-    d = stdlib.constant('d')
-    true = stdlib.boolean(True)
-    false = stdlib.boolean(False)
-    assert stdlib.if_then_else(true)(c)(d).fully_eval() == c.fully_eval()
-    assert stdlib.if_then_else(false)(c)(d).fully_eval() == d.fully_eval()
-    assert stdlib.guard(true)(c).fully_eval() == c.fully_eval()
-    assert stdlib.guard(false)(c).fully_eval() != c.fully_eval()
+    c = constant('c')
+    d = constant('d')
+    true = boolean(True)
+    false = boolean(False)
+    assert if_then_else(true)(c)(d).fully_eval() == c.fully_eval()
+    assert if_then_else(false)(c)(d).fully_eval() == d.fully_eval()
+    assert guard(true)(c).fully_eval() == c.fully_eval()
+    assert guard(false)(c).fully_eval() != c.fully_eval()
 
 
 def test_equal():
-    s1 = stdlib.string('s1')
-    s2 = stdlib.string('s2')
-    assert stdlib.equal(s1)(s1).fully_eval().value
-    assert not stdlib.equal(s1)(s2).fully_eval().value
+    s1 = string('s1')
+    s2 = string('s2')
+    assert equal(s1)(s1).fully_eval().value
+    assert not equal(s1)(s2).fully_eval().value
 
 
 def test_record():
-    zero = stdlib.integer(0)
-    one = stdlib.integer(1)
-    two = stdlib.integer(2)
-    a = stdlib.string('a')
-    b = stdlib.string('b')
-    c = stdlib.string('c')
-    r = stdlib.add_attribute(stdlib.empty_record)(a)(zero)
-    r = stdlib.add_attribute(r)(b)(one)
+    zero = integer(0)
+    one = integer(1)
+    two = integer(2)
+    a = string('a')
+    b = string('b')
+    c = string('c')
+    r = add_attribute(empty_record)(a)(zero)
+    r = add_attribute(r)(b)(one)
     assert isinstance(r.fully_eval(), pgsn_term.Record)
     assert r(b).fully_eval().value == 1
-    assert stdlib.has_label(r)(b).fully_eval().value
-    assert not stdlib.has_label(r)(c).fully_eval().value
-    assert stdlib.has_label(stdlib.remove_attribute(r)(b))(a).fully_eval().value
-    assert not stdlib.has_label(stdlib.remove_attribute(r)(b))(b).fully_eval().value
-    assert stdlib.list_labels(r).fully_eval() == pgsn_term.List.named(terms=(a, b)).fully_eval()
-    r1 = stdlib.record({'c': two})
-    assert stdlib.overwrite_record(r)(r1)(a).fully_eval().value == 0
-    assert stdlib.overwrite_record(r)(r1)(c).fully_eval().value == 2
-    r2 = stdlib.record({'b': two})
-    assert stdlib.overwrite_record(r)(r2)(b).fully_eval().value == 2
+    assert has_label(r)(b).fully_eval().value
+    assert not has_label(r)(c).fully_eval().value
+    assert has_label(remove_attribute(r)(b))(a).fully_eval().value
+    assert not has_label(remove_attribute(r)(b))(b).fully_eval().value
+    assert list_labels(r).fully_eval() == pgsn_term.List.named(terms=(a, b)).fully_eval()
+    r1 = record({'c': two})
+    assert overwrite_record(r)(r1)(a).fully_eval().value == 0
+    assert overwrite_record(r)(r1)(c).fully_eval().value == 2
+    r2 = record({'b': two})
+    assert overwrite_record(r)(r2)(b).fully_eval().value == 2
 
 
 class Id(pgsn_term.ConstMixin, pgsn_term.Unary):
@@ -163,80 +161,80 @@ class Id(pgsn_term.ConstMixin, pgsn_term.Unary):
 
 def test_pgsn_term_nested2():
     id_f = Id.named()
-    x = stdlib.variable('x')
-    y = stdlib.variable('y')
-    z = stdlib.variable('z')
-    a = stdlib.constant('a')
-    b = stdlib.constant('b')
-    label = stdlib.string('ll')
-    t = stdlib.lambda_abs_vars(
+    x = variable('x')
+    y = variable('y')
+    z = variable('z')
+    a = constant('a')
+    b = constant('b')
+    label = string('ll')
+    t = lambda_abs_vars(
         (x, y),
-        stdlib.let(x, id_f(x), id_f(x)))
+        let(x, id_f(x), id_f(x)))
     assert t(a)(b).fully_eval() == a.fully_eval()
     t2 = lambda_abs_vars((x, y), t(x)(y))
     assert t2(a)(b).fully_eval() == a.fully_eval()
-    t3 = stdlib.lambda_abs_vars(
+    t3 = lambda_abs_vars(
         (x, y),
-        stdlib.let(
-            x, stdlib.add_attribute(stdlib.empty_record)(label)(x),
-            stdlib.overwrite_record(x)(y)
+        let(
+            x, add_attribute(empty_record)(label)(x),
+            overwrite_record(x)(y)
         )
     )
-    r = stdlib.record({'a': a})
-    label_a = stdlib.string('a')
-    assert t3(stdlib.empty_record)(r)(label_a).fully_eval() == a.fully_eval()
-    assert stdlib.has_label(t3(stdlib.empty_record)(r))(label).fully_eval()
-    assert t3(stdlib.empty_record)(r)(label).fully_eval() == stdlib.empty_record.fully_eval()
+    r = record({'a': a})
+    label_a = string('a')
+    assert t3(empty_record)(r)(label_a).fully_eval() == a.fully_eval()
+    assert has_label(t3(empty_record)(r))(label).fully_eval()
+    assert t3(empty_record)(r)(label).fully_eval() == empty_record.fully_eval()
 
 
-x = stdlib.variable('x')
-y = stdlib.variable('y')
-z = stdlib.variable('z')
-f = stdlib.lambda_abs(x, x)
-label_a = stdlib.string('a')
-label_f = stdlib.string('f')
-r1 = stdlib.record({'a': stdlib.true})
-r2 = stdlib.record({'f': f})
-r3 = stdlib.add_attribute(stdlib.empty_record)(label_a)(stdlib.true)
-r4 = stdlib.add_attribute(stdlib.empty_record)(label_f)(f)
+x = variable('x')
+y = variable('y')
+z = variable('z')
+f = lambda_abs(x, x)
+label_a = string('a')
+label_f = string('f')
+r1 = record({'a': true})
+r2 = record({'f': f})
+r3 = add_attribute(empty_record)(label_a)(true)
+r4 = add_attribute(empty_record)(label_f)(f)
 
 
 def test_overwrite_record_fun():
-    assert set(stdlib.overwrite_record(r1)(stdlib.empty_record). \
+    assert set(overwrite_record(r1)(empty_record). \
                fully_eval().attributes().keys()) == {'a'}
-    assert set(stdlib.overwrite_record(r2)(stdlib.empty_record). \
+    assert set(overwrite_record(r2)(empty_record). \
                fully_eval().attributes().keys()) == {'f'}
 
 
-eta = stdlib.lambda_abs_vars((y, z), stdlib.overwrite_record(y)(z))
+eta = lambda_abs_vars((y, z), overwrite_record(y)(z))
 
 
 def test_overwrite_record_eta():
-    assert set(eta(r1)(stdlib.empty_record). \
+    assert set(eta(r1)(empty_record). \
                fully_eval().attributes().keys()) == {'a'}
-    assert set(eta(r2)(stdlib.empty_record). \
+    assert set(eta(r2)(empty_record). \
                fully_eval().attributes().keys()) == {'f'}
 
 
 def test_add_attribute_record_fun():
     assert set(r3.fully_eval().attributes().keys()) == {'a'}
     assert set(r4.fully_eval().attributes().keys()) == {'f'}
-    assert set(stdlib.add_attribute(r3)(label_a)(stdlib.true). \
+    assert set(add_attribute(r3)(label_a)(true). \
                fully_eval().attributes().keys()) == {'a'}
-    assert set(stdlib.add_attribute(r4)(label_f)(f). \
+    assert set(add_attribute(r4)(label_f)(f). \
                fully_eval().attributes().keys()) == {'f'}
 
 
 id_f = Id.named()
 
 def test_value_of():
-    assert src.pgsn.pgsn_term.value_of(stdlib.integer(1)) == 1
-    assert src.pgsn.pgsn_term.value_of(stdlib.true)
-    assert src.pgsn.pgsn_term.value_of(stdlib.string('hoge')) == 'hoge'
-    assert src.pgsn.pgsn_term.value_of(id_f(['gaga', 'piyo'])) == ['gaga', 'piyo']
-    assert src.pgsn.pgsn_term.value_of(id_f({'gaga':1, 'piyo':2})) == {'gaga':1, 'piyo':2}
+    assert pgsn_term.value_of(integer(1)) == 1
+    assert pgsn_term.value_of(true)
+    assert pgsn_term.value_of(string('hoge')) == 'hoge'
+    assert pgsn_term.value_of(id_f(['gaga', 'piyo'])) == ['gaga', 'piyo']
+    assert pgsn_term.value_of(id_f({'gaga':1, 'piyo':2})) == {'gaga':1, 'piyo':2}
 
 
 def test_format():
-    f_string = stdlib.string('{x}, {y}, {z}')
-    assert src.pgsn.pgsn_term.value_of(stdlib.format_string(f_string, {'x':1, 'y': 'hoge', 'z': [1, 2]})) == '1, hoge, [1, 2]'
+    f_string = string('{x}, {y}, {z}')
+    assert pgsn_term.value_of(format_string(f_string, {'x':1, 'y': 'hoge', 'z': [1, 2]})) == '1, hoge, [1, 2]'

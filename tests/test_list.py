@@ -1,12 +1,13 @@
 from pgsn import dsl
+from pgsn.dsl import *
 from src.pgsn.pgsn_term import List
 
 
 def test_list():
-    x = stdlib.constant('x')
-    y = stdlib.constant('y')
-    z = stdlib.constant('z')
-    ll = List.named(terms=(x, y, z))
+    x = constant('x')
+    y = constant('y')
+    z = constant('z')
+    ll = list_term((x, y, z))
     assert ll.terms == (x, y, z)
-    i = stdlib.integer(1)
+    i = integer(1)
     assert ll(i).eval().name == 'y'

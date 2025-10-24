@@ -1,17 +1,15 @@
-from pgsn import dsl
-from src.pgsn import pgsn_term
-from pgsn.dsl import define_class, is_subclass, is_instance
+from pgsn.dsl import *
 
-a = stdlib.string('a')
-b = stdlib.string('b')
-c = stdlib.string('c')
-defaults = stdlib.record({'a': stdlib.boolean(True)})
-self = stdlib.variable('self')
-v = stdlib.lambda_abs(self, stdlib.if_then_else(self(a))(self(b))(self(c)))
+a = string('a')
+b = string('b')
+c = string('c')
+defaults = record({'a': boolean(True)})
+self = variable('self')
+v = lambda_abs(self, if_then_else(self(a))(self(b))(self(c)))
 # attrs1 = inherit(defaults)(record_term.record({'value': get_value_term}))
-attrs1 = stdlib.record({'a': stdlib.true})
-cls = define_class(inherit=stdlib.base_class, defaults=defaults, attributes=["a"], methods={})
-test = stdlib.string('test')
+attrs1 = record({'a': true})
+cls = define_class(inherit=base_class, defaults=defaults, attributes=["a"], methods={})
+test = string('test')
 
 
 cls1 = define_class(inherit=cls, attributes=[])
@@ -20,19 +18,20 @@ cls3 = define_class(inherit=cls2, attributes=['c'], methods={'v': v})
 
 
 def test_class():
-    assert isinstance(cls.fully_eval(), pgsn_term.PGSNClass)
-    assert isinstance(cls1.fully_eval(), pgsn_term.PGSNClass)
-    assert isinstance(cls2.fully_eval(), pgsn_term.PGSNClass)
-    assert isinstance(cls3.fully_eval(), pgsn_term.PGSNClass)
+    assert isinstance(base_class.fully_eval(), PGSNClass)
+    assert isinstance(cls.fully_eval(), PGSNClass)
+    assert isinstance(cls1.fully_eval(), PGSNClass)
+    assert isinstance(cls2.fully_eval(), PGSNClass)
+    assert isinstance(cls3.fully_eval(), PGSNClass)
     assert cls.fully_eval().attributes() == {'a'}
     assert set(cls3.fully_eval().methods().keys()) == {'v'}
 
 
 def test_subclass():
-    assert isinstance(cls1.fully_eval(), pgsn_term.PGSNClass)
+    assert isinstance(cls1.fully_eval(), PGSNClass)
     assert is_subclass(cls)(cls).fully_eval().value
     assert is_subclass(cls1)(cls).fully_eval().value
-    assert not is_subclass(stdlib.base_class)(cls).fully_eval().value
+    assert not is_subclass(base_class)(cls).fully_eval().value
 
 
 obj1 = cls({})
@@ -45,12 +44,12 @@ obj6 = cls3({'a': False, 'b': 1, 'c':2})
 
 
 def test_obj_instance():
-    assert isinstance(obj1.fully_eval(), pgsn_term.PGSNObject)
-    assert isinstance(obj2.fully_eval(), pgsn_term.PGSNObject)
-    assert not isinstance(obj3.fully_eval(), pgsn_term.PGSNObject)
-    assert isinstance(obj4.fully_eval(), pgsn_term.PGSNObject)
-    assert isinstance(obj5.fully_eval(), pgsn_term.PGSNObject)
-    assert isinstance(obj6.fully_eval(), pgsn_term.PGSNObject)
+    assert isinstance(obj1.fully_eval(), PGSNObject)
+    assert isinstance(obj2.fully_eval(), PGSNObject)
+    assert not isinstance(obj3.fully_eval(), PGSNObject)
+    assert isinstance(obj4.fully_eval(), PGSNObject)
+    assert isinstance(obj5.fully_eval(), PGSNObject)
+    assert isinstance(obj6.fully_eval(), PGSNObject)
     assert is_instance(obj1)(cls).fully_eval().value
     assert not is_instance(obj1)(cls1).fully_eval().value
 

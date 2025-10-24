@@ -2,11 +2,7 @@ from __future__ import annotations
 
 import json
 
-from pgsn.pgsn_term import Term, Variable, Abs, String, Integer, \
-    Boolean, List, Record, ConstMixin, PGSNClass, PGSNObject, DefineClass, \
-    Instance, IsSubclass, Constant, Formatter, IfThenElse, Guard, Equal, \
-    Plus, Cons, Head, Tail, Index, Map, HasLabel, ListLabels, \
-    AddAttribute, RemoveAttribute, OverwriteRecord, to_python, json_term_converter
+from pgsn.pgsn_term import *
 
 ###########################
 # DSL API
@@ -31,7 +27,7 @@ _f = variable('f')
 _label = variable('label')
 
 
-def constant(name: str) -> ConstMixin:
+def constant(name: str) -> Term:
     return Constant.named(name=name)
 
 

@@ -1,10 +1,5 @@
 from src.pgsn import pgsn_term
-from pgsn.dsl import let, lambda_abs, lambda_abs_vars
-
-
-# import string_term
-# import list_term
-# import record_term
+from src.pgsn.dsl import *
 
 
 def test_var():
@@ -14,45 +9,44 @@ def test_var():
 
 
 def test_pgsn_term_id():
-    x = stdlib.variable('x')
-    id_f = stdlib.lambda_abs(x, x)
+    x = variable('x')
+    id_f = lambda_abs(x, x)
     t = id_f(id_f)
     assert t.eval() == id_f.eval()
 
 
 def test_pgsn_term_const():
-    c = stdlib.constant('c')
-    x = stdlib.variable('x')
-    id_f = stdlib.lambda_abs(x, c)
+    c = constant('c')
+    x = variable('x')
+    id_f = lambda_abs(x, c)
     t = id_f(c)
     assert t.eval() == c.eval()
 
 
 def test_pgsn_term_nested():
-    x = stdlib.variable('x')
-    y = stdlib.variable('y')
-    z = stdlib.variable('z')
-    c = stdlib.constant('c')
-    d = stdlib.constant('d')
-    p1 = stdlib.lambda_abs(x, stdlib.lambda_abs(y, x))
-    t = stdlib.lambda_abs(y, stdlib.lambda_abs(x, p1(x)(y)))
+    x = variable('x')
+    y = variable('y')
+    z = variable('z')
+    c = constant('c')
+    d = constant('d')
+    p1 = lambda_abs(x, lambda_abs(y, x))
+    t = lambda_abs(y, lambda_abs(x, p1(x)(y)))
     assert t(c)(d).fully_eval() == d.fully_eval()
 
 
 def test_pgsn_term_higher_order():
-    x = stdlib.variable('x')
-    y = stdlib.variable('y')
-    z = stdlib.variable('z')
-    c = stdlib.constant('c')
-    d = stdlib.constant('d')
-    p1 = stdlib.lambda_abs(x, stdlib.lambda_abs(y, x))
+    x = variable('x')
+    y = variable('y')
+    z = variable('z')
+    c = constant('c')
+    d = constant('d')
+    p1 = lambda_abs(x, lambda_abs(y, x))
     assert p1(c)(d).fully_eval() == c.fully_eval()
-    t = stdlib.lambda_abs(y, y(c)(d))(p1)
+    t = lambda_abs(y, y(c)(d))(p1)
     assert t.fully_eval() == c.fully_eval()
 
 
-class Id(pgsn_term.ConstMixin, pgsn_term.Unary):
-    arity = 1
+class Id(ConstMixin, Unary):
 
     def _applicable(self, args):
         return True
@@ -62,44 +56,44 @@ class Id(pgsn_term.ConstMixin, pgsn_term.Unary):
 
 
 def test_builtin():
-    id_f = Id.named().eval()
-    c = stdlib.constant('c').eval()
+    id_f = Id.named().fully_eval()
+    c = constant('c').fully_eval()
     assert id_f.applicable_args((c,))
     assert id_f.apply_args((c,)) == (c, tuple())
-    assert id_f(c).eval() == c
+    assert id_f(c).fully_eval() == c
 
 
 def test_higher_order2():
-    x = stdlib.variable('x')
-    y = stdlib.variable('y')
-    f = stdlib.variable('f')
-    a = stdlib.constant('a')
+    x = variable('x')
+    y = variable('y')
+    f = variable('f')
+    a = constant('a')
     id = lambda_abs(x, x)
-    g = stdlib.lambda_abs_vars((f, y), f(y))
+    g = lambda_abs_vars((f, y), f(y))
     assert g(id)(a).fully_eval() == a.fully_eval()
-    h = stdlib.lambda_abs(f, f(a))
+    h = lambda_abs(f, f(a))
     assert h(id).fully_eval() == a.fully_eval()
 
 
 def test_eta_expansion():
-    x = stdlib.variable('x')
-    y = stdlib.variable('y')
-    one = stdlib.integer(1)
-    two = stdlib.integer(2)
-    assert stdlib.plus(one)(two).fully_eval().value == 3
-    f = lambda_abs_vars((x, y), stdlib.plus(x)(y))
+    x = variable('x')
+    y = variable('y')
+    one = integer(1)
+    two = integer(2)
+    assert plus(one)(two).fully_eval().value == 3
+    f = lambda_abs_vars((x, y), plus(x)(y))
     assert f(one)(two).fully_eval().value == 3
 
 
 def test_self_reference():
-    x = stdlib.variable('x')
-    y = stdlib.variable('y')
-    one = stdlib.integer(1)
-    two = stdlib.integer(2)
+    x = variable('x')
+    y = variable('y')
+    one = integer(1)
+    two = integer(2)
     f = lambda_abs_vars((x, y),
                         let(
-                            x, stdlib.plus(x)(y),
-                            stdlib.plus(x)(y)
+                            x, plus(x)(y),
+                            plus(x)(y)
                         ))
     assert f(one)(two).fully_eval().value == 5
 

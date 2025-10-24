@@ -1,5 +1,4 @@
 import pgsn.dsl
-from src.pgsn import pgsn_term
 from pgsn.gsn import goal, evidence, immediate
 from pgsn.dsl import lambda_abs, variable, define_class, base_class, list_term, record
 
@@ -11,9 +10,9 @@ goal_template = lambda_abs(variable("desc"),
          support=evidence(description=variable("desc")))
 )
 
-goals = stdlib.map_term(goal_template, requirements)
+goals = pgsn.dsl.map_term(goal_template, requirements)
 
-secure_goal = gsn_term.goal(
+secure_goal = pgsn.gsn.goal(
     description="Security requirements fulfilled",
     support=immediate(goals)
 )
