@@ -46,11 +46,12 @@ def let_vars(assigns: tuple[tuple[Variable, Term],...], t: Term):
     return t
 
 
+# fixed point operator
+# fixed point operator
 def lambda_abs(v: Variable, t: Term) -> Term:
     return Abs.named(v=v, t=t)
 
 
-# fixed point operator
 fix = lambda_abs(_f,
                  lambda_abs(_x, _f(_x(_x)))(lambda_abs(_x, _f(_x(_x))))
                  )
@@ -87,78 +88,22 @@ equal = Equal.named()
 
 
 # Integer related
-
-
-def integer(i: int) -> Integer:
-    return Integer.named(value=i)
-
-plus = make_binary_function(lambda t1, t2: integer(t1.value + t2.value),
-                            input_types=(Integer, Integer),
-                            output_type=Integer)
-
-
-times = make_binary_function(lambda t1, t2: integer(t1.value * t2.value),
-                            input_types=(Integer, Integer),
-                            output_type=Integer)
-
-subtract = make_binary_function(lambda t1, t2: integer(t1.value - t2.value),
-                            input_types=(Integer, Integer),
-                            output_type=Integer)
-
-minus = make_unary_function(lambda t: integer(- t.value), input_type=Integer, output_type=Integer)
-
-div = make_binary_function(lambda t1, t2: integer(t1.value // t2.value),
-                            input_types=(Integer, Integer),
-                            output_type=Integer)
-
-mod = make_binary_function(lambda t1, t2: integer(t1.value % t2.value),
-                            input_types=(Integer, Integer),
-                            output_type=Integer)
-
-_repeat = variable("repeat")
-_num = variable("num")
-_acc = variable("accumulator")
-
-_F = lambda_abs_vars((_repeat, _f, _acc, _num),
-                     if_then_else(equal(_num)(0))
-                     (_acc)
-                     (_f(_acc))
-                     )
-repeat = fix(_F)
+plus = Plus.named()
 
 
 # List related
-def list_term(terms: tuple[Term,...]) -> List:
-    return List.named(terms=terms)
-
-empty = list_term(tuple())
-
-cons = make_binary_function(lambda t1, t2: list_term((t1,) + t2.terms),
-                            input_types=(Term, List),
-                            output_type=List)
-
-head = make_unary_function(lambda t: list_term(t.terms[0]),
-                           input_type=List,
-                           output_type=Term)
-
-tail = make_unary_function(lambda t: list_term(t.terms[1:]),
-                           input_type=List,
-                           output_type=Term)
-
-index = make_binary_function(lambda t, i: t.terms[i.value],
-                             input_types=(List, Integer),
-                             output_type=Term)
-
-map_term = make_binary_function(lambda func, t: list_term(tuple((func(r) for r in t.terms))),
-                               input_types=(Term, List),
-                               output_type=List)
+cons = Cons.named()
+head = Head.named()
+tail = Tail.named()
+index = Index.named()
+#fold = Fold.named()
+map_term = Map.named()
 
 _elem = variable('elem')
 _list = variable('list')
 _acc = variable('acc')
 _foldr = variable('_foldr')
-
-
+empty: List = List.named(terms=tuple())
 _F = lambda_abs_vars((_foldr, _f, _acc, _list),
                      if_then_else(equal(_list)(empty))
                      (_acc)
@@ -182,7 +127,13 @@ list_all = lambda_abs_vars(
     )
 )
 
+
+def integer(i: int) -> Integer:
+    return Integer.named(value=i)
+
+
 integer_sum = fold(plus)(integer(0))
+
 
 # Record
 def record(d: dict[str, Term]):
@@ -190,19 +141,10 @@ def record(d: dict[str, Term]):
 
 
 empty_record = record({})
-
-has_label = make_binary_function(lambda t1, t2: boolean(t2.value in t1.attributes()),
-                                 input_types=(Record, String),
-                                 output_type=Boolean)
-
-list_labels = make_unary_function(lambda t: list_term(tuple(string(k) for k in t.attributes().keys())),
-                                  input_type=Record,
-                                  output_type=List)
-
+has_label = HasLabel.named()
+list_labels = ListLabels.named()
 add_attribute = AddAttribute.named()
-
 remove_attribute = RemoveAttribute.named()
-
 overwrite_record = OverwriteRecord.named()
 
 
@@ -222,6 +164,12 @@ def lambda_abs_keywords(arguments: dict[str,Variable],
 
 def string(s: str) -> String:
     return String.named(value=s)
+
+
+def list_term(terms: tuple[Term,...]) -> List:
+    return List.named(terms=terms)
+
+
 ### internal variables
 _obj = variable("_obj")
 _class = variable("_class")

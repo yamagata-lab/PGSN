@@ -4,7 +4,7 @@ import functools
 from abc import ABC, abstractmethod
 from typing import Any
 from typing import TypeAlias
-from typing import Callable
+from typing import TypeVar
 
 import cattrs.preconf.json
 from attrs import field, frozen, evolve
@@ -890,74 +890,6 @@ class Instance(ConstMixin, Unary):
 
 
 ## Builtin Functions
-builtin_funcs = {}
-
-@frozen
-class BuildInFunction(ConstMixin, Builtin):
-    name = field(validator=helpers.not_none)
-    func: Callable[[tuple[Term,...]], Term] = field()
-    input_types: tuple[type,...] = field(default=None)
-    output_type: type = field(default=Term)
-
-    def __attrs_post_init__(self):
-        assert len(self.input_types) == self.arity
-        if not self.input_types is None:
-            assert all(isinstance(t, Term) for t in self.input_types)
-        assert isinstance(self.output_type, Term)
-        builtin_funcs[self.name] = self
-
-    @classmethod
-    def build_function(cls,
-                       is_named: bool,
-                       name: str,
-                       func: Callable,
-                       arity: int,
-                       input_types=None,
-                       output_type=Term):
-        return cls.build(is_named=is_named,
-                         name=name,
-                         func= func,
-                         arity=arity,
-                         input_types=input_types,
-                         output_type=output_type)
-
-    def _applicable_args(self, args: tuple[Term,...]):
-        if len(args) < self.arity:
-            return False
-        if self.input_types is None:
-            return True
-        for i in range(self.arity):
-            if not isinstance(args[i], self.input_types[i]):
-                return False
-        return True
-
-    def _apply_args(self, args: tuple[Term, ...]) -> Term:
-        return self.func(args)
-
-
-def make_unary_function(name: str,
-                        func: Callable[[Term], Term],
-                        input_type=Term,
-                        output_type=Term):
-    return BuildInFunction.build_function(is_named=True,
-                                          name=name,
-                                          func=func,
-                                          arity=1,
-                                          input_types=tuple[input_type,],
-                                          output_type=output_type)
-
-
-def make_binary_function(name: str,
-                        func: Callable[[Term, Term], Term],
-                        input_types=tuple[Term, Term],
-                        output_type=Term):
-    return BuildInFunction.build_function(is_named=True,
-                                          name=name,
-                                          func=func,
-                                          arity=2,
-                                          input_types=input_types,
-                                          output_type=output_type)
-
 
 # List functions
 
@@ -973,7 +905,6 @@ class Cons(ConstMixin, Builtin):
 
     def _apply_args(self, args: tuple[Term, List]):
         return evolve(args[1], terms=(args[0],) + args[1].terms)
-
 
 @frozen
 class Head(ConstMixin, Unary):
@@ -1069,22 +1000,6 @@ class Plus(ConstMixin, Builtin):
         i1 = args[0].value
         i2 = args[1].value
         return Integer.nameless(value=i1 + i2)
-
-
-@frozen
-class Times(ConstMixin, Builtin):
-
-    @classmethod
-    def build(cls, is_named: bool, **kwarg) -> Term:
-        return super().build(arity=2, is_named=is_named, **kwarg)
-
-    def _applicable_args(self, args: tuple[Term, ...]):
-        return len(args) >= 2 and isinstance(args[0], Integer) and isinstance(args[1], Integer)
-
-    def _apply_args(self, args: tuple[Term, ...]):
-        i1 = args[0].value
-        i2 = args[1].value
-        return Integer.nameless(value=i1 * i2)
 
 
 # Control flow
