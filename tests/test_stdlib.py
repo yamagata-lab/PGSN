@@ -37,6 +37,25 @@ def test_integer():
     i2 = integer(1)
     i = plus(i1)(i2)
     assert i.fully_eval().value == 2
+    i = minus(i1)(i2)
+    assert i.fully_eval().value == 0
+    i = times(i1)(i2)
+    assert i.fully_eval().value == 1
+    i = div(i1)(i2)
+    assert i.fully_eval().value == 1
+    i = mod(i1)(i2)
+    assert i.fully_eval().value == 0
+
+
+def test_repeat():
+    x = variable("x")
+    plus_1 = lambda_abs(x, plus(x)(1))
+    i = repeat(plus_1)(0)(0)
+    assert i.fully_eval().value == 0
+    i = repeat(plus_1)(0)(1)
+    assert i.fully_eval().value == 1
+    i = repeat(plus_1)(0)(2)
+    assert i.fully_eval().value == 2
 
 
 def test_fold():

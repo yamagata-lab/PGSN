@@ -89,7 +89,21 @@ equal = Equal.named()
 
 # Integer related
 plus = Plus.named()
+minus = Minus.named()
+times = Times.named()
+div = Div.named()
+mod = Mod.named()
 
+_repeat = variable("repeat")
+_num = variable("num")
+_acc = variable("accumulator")
+
+_F = lambda_abs_vars((_repeat, _f, _acc, _num),
+                     if_then_else(equal(_num)(0))
+                     (_acc)
+                     (_f(_repeat(_f, _acc, minus(_num, 1))))
+                     )
+repeat = fix(_F)
 
 # List related
 cons = Cons.named()

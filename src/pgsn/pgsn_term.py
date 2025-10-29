@@ -1002,6 +1002,70 @@ class Plus(ConstMixin, Builtin):
         return Integer.nameless(value=i1 + i2)
 
 
+@frozen
+class Minus(ConstMixin, Builtin):
+
+    @classmethod
+    def build(cls, is_named: bool, **kwarg) -> Term:
+        return super().build(arity=2, is_named=is_named, **kwarg)
+
+    def _applicable_args(self, args: tuple[Term, ...]):
+        return len(args) >= 2 and isinstance(args[0], Integer) and isinstance(args[1], Integer)
+
+    def _apply_args(self, args: tuple[Term, ...]):
+        i1 = args[0].value
+        i2 = args[1].value
+        return Integer.nameless(value=i1 - i2)
+
+
+@frozen
+class Times(ConstMixin, Builtin):
+
+    @classmethod
+    def build(cls, is_named: bool, **kwarg) -> Term:
+        return super().build(arity=2, is_named=is_named, **kwarg)
+
+    def _applicable_args(self, args: tuple[Term, ...]):
+        return len(args) >= 2 and isinstance(args[0], Integer) and isinstance(args[1], Integer)
+
+    def _apply_args(self, args: tuple[Term, ...]):
+        i1 = args[0].value
+        i2 = args[1].value
+        return Integer.nameless(value=i1 * i2)
+
+
+@frozen
+class Div(ConstMixin, Builtin):
+
+    @classmethod
+    def build(cls, is_named: bool, **kwarg) -> Term:
+        return super().build(arity=2, is_named=is_named, **kwarg)
+
+    def _applicable_args(self, args: tuple[Term, ...]):
+        return len(args) >= 2 and isinstance(args[0], Integer) and isinstance(args[1], Integer)
+
+    def _apply_args(self, args: tuple[Term, ...]):
+        i1 = args[0].value
+        i2 = args[1].value
+        return Integer.nameless(value=i1 // i2)
+
+
+@frozen
+class Mod(ConstMixin, Builtin):
+
+    @classmethod
+    def build(cls, is_named: bool, **kwarg) -> Term:
+        return super().build(arity=2, is_named=is_named, **kwarg)
+
+    def _applicable_args(self, args: tuple[Term, ...]):
+        return len(args) >= 2 and isinstance(args[0], Integer) and isinstance(args[1], Integer)
+
+    def _apply_args(self, args: tuple[Term, ...]):
+        i1 = args[0].value
+        i2 = args[1].value
+        return Integer.nameless(value=i1 % i2)
+
+
 # Control flow
 @frozen
 class IfThenElse(ConstMixin, Builtin):
