@@ -137,7 +137,7 @@ def gsn_tree(root_term: pgsn.pgsn_term.Term) -> Tree:
 
 GSN_SHAPES = {
         'Goal': 'box',
-        'Strategy': 'parallelogram',
+        'Strategy': 'polygon',
         'Evidence': 'ellipse',  # Evidenceは円で表現することが多い
         'Solution': 'ellipse',  # Solutionも円で
         'Context': 'box',  # 本来は角丸だけど、まずは四角で
@@ -157,7 +157,7 @@ def gsn_dot(gsn: pgsn.pgsn_term.Term, layout_attrs: dict[str]=None) -> graphviz.
     # GSNのタイプとgraphvizのshapeを対応付ける辞書
     default_layout = {
         "rankdir": "TB",
-        "splines": "spline",
+        "splines": "line",
         "nodesep": "0.6",
         "ranksep": "1.2"
     }
@@ -189,30 +189,45 @@ def gsn_dot(gsn: pgsn.pgsn_term.Term, layout_attrs: dict[str]=None) -> graphviz.
         # GSNタイプに基づいて形を決定する
         shape = GSN_SHAPES.get(node_type, 'box')  # GSNタイプでなければデフォルトで四角
         style = ''
+        node_attrs = {}
         if node_type == 'Context':
             # Contextのときだけ、styleを'rounded'に設定する
             style = 'rounded'
+
+        if node_type == 'Strategy':
+            node_attrs['sides'] = '4'
+            node_attrs['skew'] = '0.4'  # 傾斜の度合い。0に近づけるほど長方形に。デフォルトは0.5くらい
+            node_attrs['margin'] = '0'
 
         # ノードをdotオブジェクトに追加するときに、styleも渡してあげる
         dot.node(
             name=node_obj.identifier,
             label=f"{node_type}\n{node_label}",
             shape=shape,
-            style=style  # styleを追加
+            style=style,  # styleを追加
+            **node_attrs
         )
 
-
+        edge_attrs = {}
         if not node_obj.is_root():
             parent_id = node_obj.predecessor(tree.identifier)
+            parent_node_obj = tree.get_node(parent_id)  # ★親ノードオブジェクトを取得
+            parent_tag_parts = parent_node_obj.tag.split(': ', 1)
+            parent_node_type = parent_tag_parts[0] if len(parent_tag_parts) > 1 else 'Default'
 
             if node_type in ('Assumption', 'Context'):
                 # 矢印の向きを逆にする魔法だけをかける
-                dot.edge(parent_id, node_obj.identifier, dir='back')
+                edge_attrs['dir'] = 'back'
 
                 # 水平にしたいペアとして、親と自分を記録しておく
                 horizontal_pairs.append((parent_id, node_obj.identifier))
-            else:
-                dot.edge(parent_id, node_obj.identifier)
+
+            if parent_node_type == 'Goal' and node_type == 'Evidence':
+                edge_attrs['tailport'] = 's'
+                edge_attrs['headport'] = 'n'
+                edge_attrs['weight'] = '10'
+
+            dot.edge(parent_id, node_obj.identifier, **edge_attrs)
 
     # --- ここからが、新しい言霊を紡ぐ部分 ---
     # ループが終わった後で、記録しておいたペアに、まとめて魔法をかける
