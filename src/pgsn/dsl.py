@@ -208,8 +208,8 @@ is_instance = lambda_abs_vars((_obj, _class), is_subclass(instance(_obj))(_class
 instantiate = lambda_abs_vars((_class, _attrs), _class(_attrs))
 
 
-def python_value(obs: Term):
-    return to_python(obs)
+def python_value(obs: Term, with_inherit_chain=False):
+    return to_python(obs, with_inherit_chain=with_inherit_chain)
 
 
 def json_dumps(t: Term, **kwargs) -> str:

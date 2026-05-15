@@ -760,12 +760,20 @@ class DefineClass(ConstMixin, Unary):
         return PGSNClass.nameless(inherit=inherit, name=name, defaults=defaults, attributes=set(attributes),
                                           methods=methods)
 
+
 def _is_subclass(cls1: PGSNClass, cls2: PGSNClass):
     if cls1.inherit is None:
         return False
     if cls1 == cls2:
         return True
     return _is_subclass(cls1.inherit, cls2)
+
+
+def _inherit_chain(cls: PGSNClass):
+    if PGSNClass.inherit is None:
+        return [cls]
+    else:
+        return [cls] + _inherit_chain(cls.inherit)
 
 
 @frozen
@@ -1225,7 +1233,7 @@ def value_of(term: Term, steps=1000) -> Any:
     return to_python(t)
 
 
-def to_python(t: Term) -> Any:
+def to_python(t: Term, with_inherit_chain=False) -> Any:
     match t:
         case String():
             return t.value
@@ -1244,6 +1252,8 @@ def to_python(t: Term) -> Any:
             cls_name = t.instance.name
             attrs =  {k: value_of(t1) for k, t1 in attr.items()}
             attrs["__" + cls_name + "__"] = True
+            if with_inherit_chain:
+                attrs["__parent_classes__"] = [cls.name for cls in _inherit_chain(t.instance)]
             return attrs
         case _:
             raise ValueError(f'PGSN term {type(t)} does not normalizes a Python value')
