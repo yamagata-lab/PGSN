@@ -559,7 +559,7 @@ class Record(Unary):
         shifted_or_none = dict((label, t.shift_or_none(d, c)) for label, t in self.attributes().items())
         if all(s is None for s in shifted_or_none.values()):
             return None
-        shifted = {k: helpers.default(v, self.attributes()[k]) for k, v in self.attributes().items()}
+        shifted = {k: helpers.default(v, self.attributes()[k]) for k, v in shifted_or_none.items()}
         return self.evolve(attributes=shifted)
 
     def _subst_or_none(self, num, term):
