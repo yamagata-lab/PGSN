@@ -376,7 +376,7 @@ class App(Term):
 
     def _shift_or_none(self, num: int, cutoff: int) -> Term | None:
         t1_shifted_or_none = self.t1.shift_or_none(num, cutoff)
-        t2_shifted_or_none = self.t1.shift_or_none(num, cutoff)
+        t2_shifted_or_none = self.t2.shift_or_none(num, cutoff)
         if t1_shifted_or_none is None and t2_shifted_or_none is None:
             return None
         t1_shifted = helpers.default(t1_shifted_or_none, self.t1)
@@ -556,7 +556,7 @@ class Record(Unary):
             return self.evolve(attributes=evaluated_expand)
 
     def _shift_or_none(self, d, c):
-        shifted_or_none = dict((label, t.shift(d, c)) for label, t in self.attributes().items())
+        shifted_or_none = dict((label, t.shift_or_none(d, c)) for label, t in self.attributes().items())
         if all(s is None for s in shifted_or_none.values()):
             return None
         shifted = {k: helpers.default(v, self.attributes()[k]) for k, v in self.attributes().items()}
