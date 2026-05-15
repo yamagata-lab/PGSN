@@ -20,10 +20,8 @@
         <zeroOrMore>
           <element name="dt">
             <choice>
-              <attribute name="name"/>
-              <element name="key">
-                <ref name="val_pat"/>
-              </element>
+              <attribute name="key"/>
+              <ref name="val_pat"/>
             </choice>
           </element>
           <element name="dd">
@@ -42,14 +40,23 @@
     </choice>
     <zeroOrMore>
       <choice>
-      <element name="context">
-        <ref name="val_pat"/>
+      <element name="Context">
+        <choice>
+          <element name="description"><ref name="val_pat"/></element>
+          <ref name="val_pat"/>
+        </choice>
       </element>
-        <element name="assumption">
+        <element name="Assumption">
           <optional>
-            <element name="description"><ref name="val_pat"/></element>
+            <choice>
+              <element name="description"><ref name="val_pat"/></element>
+              <text/>
+            </choice>
           </optional>
-          <element name="var"><attribute name="name"/></element>
+          <choice>
+            <attribute name="var"/>
+            <ref name="var_pat"/>
+          </choice>
         </element>
       </choice>
     </zeroOrMore>
@@ -105,6 +112,38 @@
   </define>
 
 
+  <define name="param_pat">
+    <element name="param">
+      <attribute name="name"/>
+        <optional>
+          <attribute name="instanceOf"/>
+        </optional>
+        <optional>
+          <ref name="val_pat"/>
+        </optional>
+      </element>
+  </define>
+
+
+  <define name="defun_pat">
+    <zeroOrMore>
+      <ref name="param_pat"/>
+    </zeroOrMore>
+    <ref name="base_val_pat"/>
+  </define>
+
+
+  <define name="call_pat">
+    <ref name="val_pat"/>
+    <zeroOrMore>
+      <element name="arg">
+        <attribute name="name"/>
+        <ref name="val_pat"/>
+      </element>
+    </zeroOrMore>
+  </define>
+
+
   <define name="class_pat">
     <element name="class">
       <optional>
@@ -123,7 +162,7 @@
     <zeroOrMore>
       <element name="method">
         <attribute name="name"/>
-        <ref name="val_pat" />
+        <ref name="defun_pat"/>
       </element>
     </zeroOrMore>
     </element>
@@ -132,7 +171,7 @@
 
   <define name="object_pat">
       <element name="object">
-        <element name="instance">
+        <element name="instanceOf">
           <ref name="val_pat"/>
         </element>
       <zeroOrMore>
@@ -148,33 +187,24 @@
   </define>
 
 
-  <define name="assign_pat">
-    <element name="assign">
-      <ref name="val_pat"/>
-      <zeroOrMore>
-        <element name="arg">
-          <ref name="val_pat"/>
-        </element>
-      </zeroOrMore>
+  <define name="apply_pat">
+    <element name="apply">
+      <ref name="call_pat"/>
     </element>
   </define>
 
 
 <define name="send_pat">
   <element name="send">
-    <ref name="val_pat"/>
-    <zeroOrMore>
-      <element name="arg">
-        <ref name="val_pat"/>
-      </element>
-    </zeroOrMore>
+    <attribute name="name"/>
+    <ref name="call_pat"/>
   </element>
 </define>
 
 
 <define name="get_pat">
   <element name="get">
-    <attribute name="attribute"/>
+    <attribute name="name"/>
     <ref name="val_pat"/>
   </element>
 </define>
@@ -182,15 +212,7 @@
 
 <define name="template_pat">
   <element name="template">
-    <zeroOrMore>
-      <element name="param">
-        <attribute name="name"/>
-        <optional>
-          <ref name="val_pat"/>
-        </optional>
-      </element>
-    </zeroOrMore>
-    <ref name="base_val_pat"/>
+    <ref name="defun_pat"/>
   </element>
 </define>
 
@@ -198,7 +220,7 @@
 <define name="var_pat">
   <element name="var">
       <optional>
-        <attribute name="instance_of"/>
+        <attribute name="instanceOf"/>
       </optional>
       <attribute name="name"/>
     </element>
@@ -210,7 +232,7 @@
     <text/>
     <ref name="class_pat"/>
     <ref name="object_pat"/>
-    <ref name="assign_pat"/>
+    <ref name="apply_pat"/>
     <ref name="template_pat"/>
     <ref name="get_pat"/>
     <ref name="send_pat"/>
@@ -249,21 +271,57 @@
         <attribute name="as"/>
       </optional>
       <optional>
-        <attribute name="instance_of"/>
+        <attribute name="instanceOf"/>
       </optional>
       <ref name="val_pat"/>
     </element>
   </define>
 
 
-  <start>
-    <element name="PGSN">
-      <zeroOrMore>
-        <ref name="def_pat"/>
-      </zeroOrMore>
-      <ref name="val_pat"/>
-    </element>
-  </start>
+  <define name="import_pat">
+  <element name="from">
+    <attribute name="file"/>
+    <choice>
+      <!-- single -->
+      <group>
+        <attribute name="import"/>
+        <optional>
+          <attribute name="as"/>
+        </optional>
+      </group>
+      <!-- multiple -->
+      <oneOrMore>
+        <element name="import">
+          <attribute name="name"/>
+          <optional>
+            <attribute name="as"/>
+          </optional>
+        </element>
+      </oneOrMore>
+    </choice>
+    <zeroOrMore>
+      <element name="arg">
+        <attribute name="name"/>
+        <ref name="val_pat"/>
+      </element>
+    </zeroOrMore>
+  </element>
+</define>
 
+
+<start>
+  <element name="PGSN">
+    <zeroOrMore>
+      <ref name="param_pat"/>
+    </zeroOrMore>
+    <zeroOrMore>
+      <choice>
+        <ref name="import_pat"/>
+        <ref name="def_pat"/>
+      </choice>
+    </zeroOrMore>
+    <ref name="val_pat"/>
+  </element>
+</start>
 
 </grammar>
