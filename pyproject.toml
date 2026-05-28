@@ -6,9 +6,9 @@ build-backend = "setuptools.build_meta"
 # パッケージの基本的な情報（メタデータ）
 [project]
 name = "pgsn"
-version = "0.0.2"
+version = "0.0.3"
 authors = [
-  { name="Yoriyuki Yamagata", email="yoriyuki.y@gmail.com" },
+  { name="Yoriyuki Yamagata", email="yoriyuki@u-fukui.ac.jp" },
 ]
 description = "PGSN: a programming language for GSN generation and manipulation"
 readme = "README.md"
@@ -28,8 +28,8 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/yoriyuki/pgsn"
-Repository = "https://github.com/yoriyuki/pgsn"
+Homepage = "https://github.com/yamagata-lab/pgsn"
+Repository = "https://github.com/yamagata-lab/pgsn"
 
 ## ここが、コマンドラインツールを定義する場所
 #[project.scripts]

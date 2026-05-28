@@ -376,7 +376,7 @@ class App(Term):
 
     def _shift_or_none(self, num: int, cutoff: int) -> Term | None:
         t1_shifted_or_none = self.t1.shift_or_none(num, cutoff)
-        t2_shifted_or_none = self.t1.shift_or_none(num, cutoff)
+        t2_shifted_or_none = self.t2.shift_or_none(num, cutoff)
         if t1_shifted_or_none is None and t2_shifted_or_none is None:
             return None
         t1_shifted = helpers.default(t1_shifted_or_none, self.t1)
@@ -556,10 +556,10 @@ class Record(Unary):
             return self.evolve(attributes=evaluated_expand)
 
     def _shift_or_none(self, d, c):
-        shifted_or_none = dict((label, t.shift(d, c)) for label, t in self.attributes().items())
+        shifted_or_none = dict((label, t.shift_or_none(d, c)) for label, t in self.attributes().items())
         if all(s is None for s in shifted_or_none.values()):
             return None
-        shifted = {k: helpers.default(v, self.attributes()[k]) for k, v in self.attributes().items()}
+        shifted = {k: helpers.default(v, self.attributes()[k]) for k, v in shifted_or_none.items()}
         return self.evolve(attributes=shifted)
 
     def _subst_or_none(self, num, term):
@@ -676,7 +676,7 @@ class PGSNClass(Unary):
         return self._traverse(lambda t: t.shift_or_none(num, cutoff))
 
     def _subst_or_none(self, variable: int, term: Term) -> Term | None:
-        return self._traverse(lambda t: t.subst_or_none())
+        return self._traverse(lambda t: t.subst_or_none(variable, term))
 
     def _free_variables(self) -> set[str]:
         vars_inherit = self.inherit.free_variables() if self.inherit is not None else set()
@@ -844,13 +844,13 @@ class PGSNObject(Unary):
         return self._traverse(lambda t: helpers.default(t.shift(num, cutoff), t))
 
     def _subst_or_none(self, variable: int, term: Term) -> Term | None:
-        return self._traverse(lambda t: t.subst_or_none())
+        return self._traverse(lambda t: t.subst_or_none(variable, term))
 
     def _free_variables(self) -> set[str]:
         vars_instance = self.instance.free_variables()
-        vars_defaults = set(t.free_variables() for t in self.defaults().values())
+        vars_attributes = set(t.free_variables() for t in self.attributes().values())
         vars_methods = set(t.free_variables() for t in self.methods().values())
-        return vars_instance | vars_defaults | vars_methods
+        return vars_instance | vars_attributes | vars_methods
 
     def _applicable(self, arg: Term):
         if not isinstance(arg, String):
@@ -872,7 +872,7 @@ class PGSNObject(Unary):
     def _remove_name_with_context(self, context: list[str]) -> Term:
         reduced = self._traverse(lambda t: t.remove_name_with_context(context=context))
         if reduced is None:
-            return self.evolve(is_named)
+            return self.evolve(is_named=False)
         return reduced.evolve(is_named=False)
 
 
