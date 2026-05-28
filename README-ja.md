@@ -30,19 +30,19 @@ PGSNは現在、**Pythonに埋め込まれたDSL（ドメイン特化言語）**
 
 インストール方法
 ```shell
-pip install git+https://github.com/yoriyuki/pgsn.git
+pip install git+https://github.com/yamagata-lab/pgsn.git
 ```
 
 ライブラリの開発も行う場合
 ```bash
-git clone https://github.com/yoriyuki/PGSN.git
+git clone https://github.com/yamagata-lab/PGSN.git
 cd PGSN
 pip install -e .
 ```
 
 condaを使ってライブラリの開発を行う場合
 ```bash
-git clone https://github.com/yoriyuki/PGSN.git
+git clone https://github.com/yamagata-lab/PGSN.git
 cd PGSN
 conda env create -f environment.yml -n PGSN
 ```
@@ -231,5 +231,5 @@ gsn_tree(g.fully_eval()).show()
 MITライセンス – 詳細は [LICENSE](LICENSE) をご覧ください。
 
 © 国立研究開発法人産業技術総合研究所 (AIST) 2023–2024  
-山形頼之 2025
+山形頼之 2025-
 ```
