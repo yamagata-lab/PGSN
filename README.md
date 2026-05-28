@@ -1,3 +1,5 @@
+This repo. is obsolute.  The up-to-date one is https://github.com/yamagata-lab/PGSN
+
 
 # PGSN: Programmable Goal Structuring Notation
 
