@@ -24,14 +24,19 @@ goal_class = pgsn.dsl.define_class(inherit=gsn_class,
                                       attributes=["assumptions", "contexts", "support"],
                                       defaults={"assumptions":[], "contexts": [], "support": undeveloped}
                                       )
-assumption_class = pgsn.dsl.define_class(inherit=gsn_class, name='Assumption')
-context_class = pgsn.dsl.define_class(inherit=gsn_class, name='Context')
+assumption_class = pgsn.dsl.define_class(inherit=gsn_class, name='Assumption',
+                                          attributes=["value"],
+                                          defaults={"value": pgsn.dsl.string("")})
+context_class = pgsn.dsl.define_class(inherit=gsn_class, name='Context',
+                                       attributes=["value"],
+                                       defaults={"value": pgsn.dsl.string("")})
 
 _d = pgsn.dsl.variable('x')
 _support = pgsn.dsl.variable('support')
 _assumptions = pgsn.dsl.variable('assumptions')
 _contexts = pgsn.dsl.variable('contexts')
 _sub_goals = pgsn.dsl.variable('sub_goals')
+_value = pgsn.dsl.variable('value')
 
 evidence = pgsn.dsl.lambda_abs_keywords(arguments={'description': _d},
                                            body=evidence_class(description=_d))
@@ -49,10 +54,14 @@ goal = pgsn.dsl.lambda_abs_keywords(arguments={'description': _d,
                                                        contexts=_contexts,
                                                        assumptions=_assumptions,
                                                        support=_support))
-assumption = pgsn.dsl.lambda_abs_keywords(arguments={'description': _d},
-                                             body=assumption_class(description=_d))
-context = pgsn.dsl.lambda_abs_keywords(arguments={'description': _d},
-                                          body=context_class(description=_d))
+assumption = pgsn.dsl.lambda_abs_keywords(
+    arguments={'description': _d, 'value': _value},
+    defaults=pgsn.dsl.record({'value': pgsn.dsl.string("")}),
+    body=assumption_class(description=_d, value=_value))
+context = pgsn.dsl.lambda_abs_keywords(
+    arguments={'description': _d, 'value': _value},
+    defaults=pgsn.dsl.record({'value': pgsn.dsl.string("")}),
+    body=context_class(description=_d, value=_value))
 
 _goals = pgsn.dsl.variable('goals')
 immediate = pgsn.dsl.lambda_abs(_goals, strategy(description="immediate", sub_goals=_goals))
@@ -269,4 +278,3 @@ def save_gsn(gsn: pgsn.pgsn_term.Term,
 
     dot = gsn_dot(gsn)
     dot.render(filename, view=view, format=image_format, cleanup=cleanup)
-

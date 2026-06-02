@@ -46,18 +46,12 @@
           <ref name="val_pat"/>
         </choice>
       </element>
-        <element name="Assumption">
-          <optional>
-            <choice>
-              <element name="description"><ref name="val_pat"/></element>
-              <text/>
-            </choice>
-          </optional>
-          <choice>
-            <attribute name="var"/>
-            <ref name="var_pat"/>
-          </choice>
-        </element>
+      <element name="Assumption">
+        <choice>
+          <element name="description"><ref name="val_pat"/></element>
+          <ref name="val_pat"/>
+        </choice>
+      </element>
       </choice>
     </zeroOrMore>
   </define>
@@ -308,9 +302,27 @@
   </element>
 </define>
 
-
 <start>
+  <choice>
+    <ref name="pgsn_pat"/>
+    <ref name="pgsn_module_pat"/>
+  </choice>
+</start>
+
+<define name="pgsn_pat">
   <element name="PGSN">
+    <zeroOrMore>
+      <choice>
+        <ref name="import_pat"/>
+        <ref name="def_pat"/>
+      </choice>
+    </zeroOrMore>
+    <ref name="val_pat"/>
+  </element>
+</define>
+
+<define name="pgsn_module_pat">
+  <element name="PGSNModule">
     <zeroOrMore>
       <ref name="param_pat"/>
     </zeroOrMore>
@@ -320,8 +332,6 @@
         <ref name="def_pat"/>
       </choice>
     </zeroOrMore>
-    <ref name="val_pat"/>
   </element>
-</start>
-
+</define>
 </grammar>

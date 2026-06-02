@@ -770,7 +770,7 @@ def _is_subclass(cls1: PGSNClass, cls2: PGSNClass):
 
 
 def _inherit_chain(cls: PGSNClass):
-    if PGSNClass.inherit is None:
+    if cls.inherit is None:
         return [cls]
     else:
         return [cls] + _inherit_chain(cls.inherit)
