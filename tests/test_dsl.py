@@ -257,3 +257,5 @@ def test_value_of():
 def test_format():
     f_string = string('{x}, {y}, {z}')
     assert pgsn_term.value_of(format_string(f_string, {'x':1, 'y': 'hoge', 'z': [1, 2]})) == '1, hoge, [1, 2]'
+
+

@@ -555,11 +555,14 @@ class Record(Unary):
                     evaluated_expand[k] = self.attributes()[k]
             return self.evolve(attributes=evaluated_expand)
 
+
     def _shift_or_none(self, d, c):
-        shifted_or_none = dict((label, t.shift(d, c)) for label, t in self.attributes().items())
-        if all(s is None for s in shifted_or_none.values()):
+        shifted = dict((label, t.shift_or_none(d, c)) for label, t in self.attributes().items())
+        if all(s is None for s in shifted.values()):
             return None
-        shifted = {k: helpers.default(v, self.attributes()[k]) for k, v in self.attributes().items()}
+        for k in shifted.keys():
+            if shifted[k] is None:
+                shifted[k] = self._attributes[k]
         return self.evolve(attributes=shifted)
 
     def _subst_or_none(self, num, term):

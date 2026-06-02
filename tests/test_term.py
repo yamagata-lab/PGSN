@@ -97,3 +97,22 @@ def test_self_reference():
                         ))
     assert f(one)(two).fully_eval().value == 5
 
+
+def test_record_shift_under_unused_lambda():
+    """Regression: Record fields must be shifted during beta-reduction.
+
+    Applying a lambda whose body returns a record left a free variable
+    pointing at the wrong binder (a self-referential Abs) instead of the
+    value, because Record shifting discarded its results. Here the bound
+    variable is unused, which is the minimal trigger.
+    """
+    from pgsn.dsl import lambda_abs, let, record, string, variable, python_value
+
+    _args = variable("args")
+    # (λargs. let g = "hello" in {k: g})  applied to {}   — args is unused
+    t = lambda_abs(_args, let(variable("greeting"), string("hello"),
+                              record({"k": variable("greeting")})))
+    # Before the fix this raised ValueError (an Abs cannot be normalized).
+    result = t(record({})).fully_eval()
+    assert python_value(result) == {"k": "hello"}
+
