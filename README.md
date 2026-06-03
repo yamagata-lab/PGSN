@@ -1,3 +1,5 @@
+This repo. is obsolute.  The up-to-date one is https://github.com/yamagata-lab/PGSN
+
 
 # PGSN: Programmable Goal Structuring Notation
 
@@ -27,19 +29,19 @@ Unlike standard GSN, which primarily consists of static diagrams, PGSN allows dy
 For users
 
 ```shell
-pip install git+https://github.com/yoriyuki/pgsn.git
+pip install git+https://github.com/yamagata-lab/pgsn.git
 ```
 
 For developers who want modify the library
 ```bash
-git clone https://github.com/yoriyuki/PGSN.git
+git clone https://github.com/yamagata-lab/PGSN.git
 cd PGSN
 pip install -e .
 ```
 
 Or using conda
 ```bash
-git clone https://github.com/yoriyuki/PGSN.git
+git clone https://github.com/yamagata-lab/PGSN.git
 cd PGSN
 conda env create -f environment.yml -n PGSN
 ```
@@ -214,4 +216,4 @@ You can adapt these techniques to build domain-specific GSN templates, automate 
 MIT License – see [LICENSE](LICENSE).
 
 Copyright: National Institute of Advanced Industrial Science and Technology (AIST) 2023-2024,
-Yoriyuki Yamagata 2025
+Yoriyuki Yamagata 2025-
