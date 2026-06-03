@@ -33,6 +33,57 @@ class PGSNError(Exception):
     pass
 
 
+# ------------------------------------------------------------------ #
+# Shorthand preprocessor
+#
+# Expands shorthands in place on the ElementTree, before compilation,
+# so the compiler proper never sees them:
+#   1. def-as:        <def as="T">..</def>  ->  <def><T>..</T></def>
+#   2. var-attribute: <tag var="x"/>        ->  <tag><var name="x"/></tag>
+#   3. GSN text:      <Goal>txt<Strategy/>  ->  <Goal><description>txt</description><Strategy/>
+# ------------------------------------------------------------------ #
+
+_GSN_HEADER_TAGS = {"Goal", "Strategy", "Evidence", "Context", "Assumption"}
+
+
+def _preprocess(elem: ET.Element) -> None:
+    """Recursively expand shorthand notations in place."""
+    # def-as: wrap the def body in an element named by the `as` attribute
+    if elem.tag == "def" and "as" in elem.attrib:
+        tag = elem.attrib.pop("as")
+        wrapper = ET.Element(tag)
+        # Move def's text and children into the wrapper
+        wrapper.text = elem.text
+        elem.text = None
+        for child in list(elem):
+            elem.remove(child)
+            wrapper.append(child)
+        elem.append(wrapper)
+
+    # var-attribute: <tag var="x"/> -> <tag><var name="x"/></tag>
+    if "var" in elem.attrib:
+        if len(elem) > 0:
+            raise PGSNError(
+                f"<{elem.tag}> has both a 'var' attribute and child elements")
+        name = elem.attrib.pop("var")
+        var_elem = ET.SubElement(elem, "var")
+        var_elem.set("name", name)
+
+    # GSN leading text -> <description>: only for GSN header elements that
+    # have other children (so the text is the header's description, not the
+    # element's whole value). A text-only GSN element keeps its text as-is.
+    if (elem.tag in _GSN_HEADER_TAGS and elem.find("description") is None
+            and elem.text and elem.text.strip() and len(elem) > 0):
+        desc = ET.Element("description")
+        desc.text = elem.text.strip()
+        elem.text = None
+        elem.insert(0, desc)
+
+    # Recurse into children (after potential restructuring above)
+    for child in elem:
+        _preprocess(child)
+
+
 # Builtins substituted inline during compilation (not at evaluation time)
 _BUILTINS: dict[str, _term.Term] = {
     "fix": fix, "map_term": map_term, "fold": fold, "concat": concat,
@@ -57,6 +108,26 @@ _BUILTINS: dict[str, _term.Term] = {
 }
 
 _SUPPORT_TAGS = {"Strategy", "Evidence", "Goal", "supportedBy", "undeveloped"}
+
+
+def _text_fields(s: str) -> list[str]:
+    """Return the {name} field names in s, honouring Python's {{ }} escaping."""
+    import string as _stringmod
+    return [fname for _, fname, _, _ in _stringmod.Formatter().parse(s)
+            if fname is not None and fname != ""]
+
+
+def _text_to_term(s: str) -> _term.Term:
+    """
+    Turn user text into a Term. If it contains {name} fields, build a
+    format_string application binding each field to the variable of that name;
+    otherwise a plain String. Escaping follows Python's str.format ({{ -> {).
+    """
+    fields = _text_fields(s)
+    if not fields:
+        return string(s)
+    args = record({name: variable(name) for name in fields})
+    return format_string(string(s))(args)
 
 
 def _resolve(name: str, instance_of: str | None = None) -> _term.Term:
@@ -104,7 +175,7 @@ def _split_args(arg_elems: list[ET.Element], base_dir: Path | None,
 def compile_pgsn(path: str | Path) -> _term.Term:
     """Compile a <PGSN> document file into a single Term (no evaluation)."""
     p = Path(path).resolve()
-    return _compile_root(ET.parse(p).getroot(), p.parent)
+    return _compile_root(ET.parse(p).getroot(), p.parent, entry=p)
 
 
 def compile_pgsn_string(xml: str, base_dir: str | Path | None = None) -> _term.Term:
@@ -113,22 +184,29 @@ def compile_pgsn_string(xml: str, base_dir: str | Path | None = None) -> _term.T
     Imports are disallowed unless base_dir is given to resolve relative paths.
     """
     bd = Path(base_dir).resolve() if base_dir is not None else None
-    return _compile_root(ET.fromstring(xml), bd)
+    return _compile_root(ET.fromstring(xml), bd, entry=None)
 
 
-def _compile_root(root: ET.Element, base_dir: Path | None) -> _term.Term:
-    """Compile a parsed <PGSN> root element against a base directory."""
+def _compile_root(root: ET.Element, base_dir: Path | None,
+                  entry: Path | None = None) -> _term.Term:
+    """Compile a parsed <PGSN> root element against a base directory.
+
+    The entry file path (when known) seeds the visiting set so that an
+    import cycle returning to the entry document is detected as such.
+    """
     if root.tag != "PGSN":
         raise PGSNError(f"Expected <PGSN>, got <{root.tag}>")
+    _preprocess(root)
     children = list(root)
     # The final value may be a bare text node (no child elements)
     if not children:
         text = (root.text or "").strip()
         if text:
-            return string(text)
+            return _text_to_term(text)
         raise PGSNError("<PGSN> has no value")
-    final = _expr(children[-1], base_dir, frozenset())
-    bindings = _bindings(children[:-1], base_dir, frozenset())
+    visiting = frozenset({entry}) if entry is not None else frozenset()
+    final = _expr(children[-1], base_dir, visiting)
+    bindings = _bindings(children[:-1], base_dir, visiting)
     return _thread_lets(bindings, final)
 
 
@@ -213,6 +291,7 @@ def _compile_from(elem: ET.Element, base_dir: Path | None,
     root = ET.parse(full).getroot()
     if root.tag != "PGSNModule":
         raise PGSNError(f"Expected <PGSNModule> in {file_path!r}")
+    _preprocess(root)
 
     module_term = _compile_module(root, full.parent, visiting | {full})
 
@@ -242,7 +321,7 @@ def _content(parent: ET.Element, base_dir: Path | None,
         raise PGSNError(f"Multiple value children in <{parent.tag}>")
     text = (parent.text or "").strip()
     if text:
-        return string(text)
+        return _text_to_term(text)
     raise PGSNError(f"No value in <{parent.tag}>")
 
 
@@ -282,7 +361,7 @@ def _e_template(elem: ET.Element, base_dir: Path | None,
     if body_elems:
         body = _expr(body_elems[0], base_dir, visiting)
     elif elem.text and elem.text.strip():
-        body = string(elem.text.strip())
+        body = _text_to_term(elem.text.strip())
     else:
         raise PGSNError("<template> has no body")
 
@@ -295,7 +374,7 @@ def _e_template(elem: ET.Element, base_dir: Path | None,
         if pchildren:
             defaults_dict[name] = _expr(pchildren[0], base_dir, visiting)
         elif pelem.text and pelem.text.strip():
-            defaults_dict[name] = string(pelem.text.strip())
+            defaults_dict[name] = _text_to_term(pelem.text.strip())
 
     return lambda_abs_keywords(
         {name: variable(name) for name, _ in params},
@@ -406,7 +485,7 @@ def _gsn_header(elem: ET.Element, base_dir: Path | None,
                 visiting: frozenset[Path]) -> tuple[_term.Term, list, list]:
     desc_elem = elem.find("description")
     desc = (_content(desc_elem, base_dir, visiting) if desc_elem is not None
-            else string((elem.text or "").strip()))
+            else _text_to_term((elem.text or "").strip()))
     contexts = [_e_annotation(c, base_dir, visiting, context)
                 for c in elem if c.tag == "Context"]
     assumptions = [_e_annotation(c, base_dir, visiting, assumption)
@@ -427,9 +506,9 @@ def _e_annotation(elem: ET.Element, base_dir: Path | None, visiting: frozenset[P
         val = _expr(val_children[0], base_dir, visiting) if val_children else string("")
     elif val_children:
         val = _expr(val_children[0], base_dir, visiting)
-        desc = string((elem.text or "").strip())
+        desc = _text_to_term((elem.text or "").strip())
     else:
-        desc = string((elem.text or "").strip())
+        desc = _text_to_term((elem.text or "").strip())
         val = string("")
     return ctor(description=desc, value=val)
 
