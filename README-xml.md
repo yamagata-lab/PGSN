@@ -253,10 +253,17 @@ Applies a template to arguments.
 </object>
 ```
 
-### Attribute Access (get)
+### Key Access (get)
+
+`get` works on both `Record` and `PGSNObject`. Internally it applies `expr` to the string key `name` as a positional argument, so it is completely equivalent to an `apply` with a plain-text `arg`.
 
 ```xml
-<get name="attr">expr</get>
+<!-- PGSNObject attribute access -->
+<get name="description"><var name="myGoal"/></get>
+
+<!-- Record key access (the two forms below are equivalent) -->
+<get name="x"><var name="myRecord"/></get>
+<apply><var name="myRecord"/><arg>x</arg></apply>
 ```
 
 ### Method Invocation (send)

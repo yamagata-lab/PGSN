@@ -1,0 +1,46 @@
+<PGSN>
+  <!-- Hazard list: add/remove hazards here (and in component.xml) -->
+  <def name="hazards" as="ol">
+    <li>H1</li>
+    <li>H2</li>
+<!--    <li>H3</li>-->
+  </def>
+
+  <!-- Add/remove components here -->
+  <from file="C1.xml" import="componentGoal" as="C1goal"/>
+  <from file="C2.xml" import="componentGoal" as="C2goal"/>
+  <from file="C3.xml" import="componentGoal" as="C3goal"/>
+
+  <def name="components" as="ol">
+    <li var="C1goal"/>
+    <li var="C2goal"/>
+    <li var="C3goal"/>
+  </def>
+
+  <def name="makeComponentGoal" as="template">
+    <param name="c" positional="true"/>
+    <div>
+      <def name="cName"><apply><var name="c"/><arg>name</arg></apply></def>
+      <Goal>
+        <description>{cName} is safe</description>
+        <Strategy>
+          Argument over each hazard
+          <subGoals>
+            <apply><var name="map_term"/><arg var="c"/><arg var="hazards"/></apply>
+          </subGoals>
+        </Strategy>
+      </Goal>
+    </div>
+  </def>
+
+  <Goal>
+    The system is safe
+    <Strategy>
+      Argument over each component
+      <subGoals>
+        <apply><var name="map_term"/><arg var="makeComponentGoal"/><arg var="components"/></apply>
+      </subGoals>
+    </Strategy>
+  </Goal>
+
+</PGSN>
