@@ -1,0 +1,38 @@
+<PGSN>
+  <from file="requirements.xml" import="requirements"/>
+  <from file="evidence.xml" import="evidenceMap"/>
+
+  <!--
+    makeTraceGoal: requirement record -> Goal.
+    has_label checks whether evidence exists for this requirement.
+    If covered: Goal supported by the evidence.
+    If not:     Goal is undeveloped (gap visible in the safety case).
+  -->
+  <def name="makeTraceGoal" as="template">
+    <param name="req" positional="true"/>
+    <div>
+      <def name="rid">  <apply><var name="req"/><arg>id</arg></apply></def>
+      <def name="rtext"><apply><var name="req"/><arg>text</arg></apply></def>
+      <apply>
+        <var name="if_then_else"/>
+        <arg><apply><var name="has_label"/><arg var="evidenceMap"/><arg var="rid"/></apply></arg>
+        <arg>
+          <Goal><description>{rtext}</description>
+            <supportedBy><apply><var name="evidenceMap"/><arg var="rid"/></apply></supportedBy>
+          </Goal>
+        </arg>
+        <arg><Goal><description>{rtext}</description><undeveloped/></Goal></arg>
+      </apply>
+    </div>
+  </def>
+
+  <Goal>
+    All requirements are satisfied
+    <Strategy>
+      Argument over each requirement
+      <subGoals>
+        <apply><var name="map_term"/><arg var="makeTraceGoal"/><arg var="requirements"/></apply>
+      </subGoals>
+    </Strategy>
+  </Goal>
+</PGSN>

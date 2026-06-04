@@ -1,0 +1,9 @@
+<PGSNModule>
+  <!-- C2: H2 mitigation is still under development -->
+  <def name="componentGoal" as="dl">
+    <dt key="name"/><dd>C2</dd>
+    <dt key="H1"/><dd><Goal>C2 is safe against H1<Evidence>C2-H1 test report</Evidence></Goal></dd>
+    <dt key="H2"/><dd><Goal>C2 is safe against H2<undeveloped/></Goal></dd>
+    <dt key="H3"/><dd><Goal>C2 is safe against H3<Evidence>C2-H3 test report</Evidence></Goal></dd>
+  </def>
+</PGSNModule>

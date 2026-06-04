@@ -1,0 +1,9 @@
+<PGSNModule>
+  <!-- C1: all hazards fully addressed with evidence -->
+  <def name="componentGoal" as="dl">
+    <dt key="name"/><dd>C1</dd>
+    <dt key="H1"/><dd><Goal>C1 is safe against H1<Evidence>C1-H1 test report</Evidence></Goal></dd>
+    <dt key="H2"/><dd><Goal>C1 is safe against H2<Evidence>C1-H2 test report</Evidence></Goal></dd>
+    <dt key="H3"/><dd><Goal>C1 is safe against H3<Evidence>C1-H3 test report</Evidence></Goal></dd>
+  </def>
+</PGSNModule>

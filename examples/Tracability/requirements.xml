@@ -1,0 +1,17 @@
+<PGSNModule>
+  <!-- Requirements list managed by the requirements team -->
+  <def name="requirements" as="ol">
+    <li><dl>
+      <dt key="id"/><dd>R1</dd>
+      <dt key="text"/><dd>Faults are detected within 100ms</dd>
+    </dl></li>
+    <li><dl>
+      <dt key="id"/><dd>R2</dd>
+      <dt key="text"/><dd>All safety events are logged</dd>
+    </dl></li>
+    <li><dl>
+      <dt key="id"/><dd>R3</dd>
+      <dt key="text"/><dd>System recovers from faults within 1s</dd>
+    </dl></li>
+  </def>
+</PGSNModule>

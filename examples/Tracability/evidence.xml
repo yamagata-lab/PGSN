@@ -1,0 +1,9 @@
+<PGSNModule>
+  <!-- Evidence map managed by the test team.
+       R3 is intentionally absent — no evidence yet.
+       Its goal will automatically appear as undeveloped in trace.xml. -->
+  <def name="evidenceMap" as="dl">
+    <dt key="R1"/><dd><Evidence>Fault detection timing test</Evidence></dd>
+    <dt key="R2"/><dd><Evidence>Safety event log audit</Evidence></dd>
+  </def>
+</PGSNModule>
