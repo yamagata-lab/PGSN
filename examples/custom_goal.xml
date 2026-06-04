@@ -1,0 +1,13 @@
+<PGSN>
+    <def name="GoalWithProject" as="class">
+        <inherit>Goal</inherit>
+        <attribute name="project"/>
+    </def>
+
+    <object>
+        <instanceOf>GoalWithProject</instanceOf>
+        <attribute name="description">Secure connection established</attribute>
+        <attribute name="project">Alpha</attribute>
+        <attribute name="support"><Evidence>Verified by audit</Evidence></attribute>
+    </object>
+</PGSN>

@@ -44,7 +44,7 @@ This is expanded by a preprocessor before evaluation.
 ## Parameters (param)
 
 `param` declares variables that this PGSN module receives from the outside.
-Parameters must appear at the top of `<PGSN>`, before any imports or definitions.
+Parameters must appear at the top of the module.
 
 ```xml
 <param name="A1" instanceOf="Assumption"/>
@@ -96,7 +96,7 @@ Brings names from external PGSN files into scope. For security reasons, only rel
 
 ### `as` Attribute (Shorthand)
 
-The `as` attribute on `def` allows the wrapping element type (tag name) to be omitted.
+The `as` attribute on `def` lets you omit the wrapping element type (tag name).
 This is also expanded by the preprocessor.
 
 ```xml
@@ -106,6 +106,14 @@ This is also expanded by the preprocessor.
 <!-- shorthand -->
 <def name="myGoal" as="Goal">...</def>
 ```
+
+`as` accepts only **built-in tag names** (`Goal`, `Strategy`, `Evidence`, `template`, `class`, `object`, `div`, `apply`, `ul`, `ol`, `dl`).
+User-defined class names (e.g. `GoalWithURL`) cannot be used with `as`
+(see "Extending GSN via Classes" below).
+
+> **Design invariant**
+> `<def name="x" as="T">C</def>` is valid if and only if its desugared form `<def name="x"><T>C</T></def>` is valid.
+> Consequently, tags whose element carries a required attribute (`name`) — namely `var`, `get`, and `send` — cannot be used with `as`, because the desugared `<send>C</send>` would be missing its required attribute.
 
 ### `instanceOf` Attribute
 
@@ -140,6 +148,29 @@ References a previously defined name.
 <var name="x" instanceOf="MyClass"/>
 ```
 
+### Built-ins
+
+The following names are predefined; reference them with `<var name="..."/>` and apply them via `apply`.
+
+- List operations: `cons`, `head`, `tail`, `index`, `concat`, `map_term`, `fold`
+- Booleans: `true`, `false`, `if_then_else`, `boolean_and`, `boolean_or`, `boolean_not`, `equal`, `guard`
+- Integers: `plus`, `minus`, `times`, `div`, `mod`
+- Records: `has_label`, `list_labels`, `add_attribute`, `remove_attribute`, `overwrite_record`
+- Strings: `format_string`
+- Classes / objects: `define_class`, `instantiate`, `is_instance`, `is_subclass`, `base_class`
+- Misc: `fix`, `undefined`
+- GSN: `goal`, `strategy`, `evidence`, `context`, `assumption`, `undeveloped`, `immediate`, `evidence_as_goal`, and the classes (`goal_class`, etc.)
+
+Example (mapping a template over a list):
+
+```xml
+<apply>
+    <var name="map_term"/>
+    <arg var="someTemplate"/>     <!-- first argument (the template) -->
+    <arg><ol><li>a</li><li>b</li></ol></arg>  <!-- second argument (the list) -->
+</apply>
+```
+
 ---
 
 ## Templates and Application
@@ -147,15 +178,35 @@ References a previously defined name.
 ### Template Definition (template)
 
 Defines a function as a value (equivalent to a lambda expression).
+Parameters (`param`) come in two kinds: **positional** and **keyword**.
+
+- A `param` marked `positional="true"` is **positional**.
+- A `param` without it is a **keyword** parameter.
+- As in Python, all positional parameters are declared **before** any keyword parameters (a positional parameter may not follow a keyword parameter).
+- **Positional parameters may not have a default value** (defaults are a keyword-only feature).
+- A given parameter is not meant to be passed both positionally and by keyword; each parameter is fixed to one kind at declaration time.
 
 ```xml
 <!-- no parameters -->
 <template>expr</template>
 
-<!-- with parameters; default values are optional -->
+<!-- positional parameter -->
+<template>
+    <param name="x" positional="true"/>
+    body_expr
+</template>
+
+<!-- keyword parameters (defaults optional) -->
 <template>
     <param name="arg1">default_expr</param>
     <param name="arg2"/>
+    body_expr
+</template>
+
+<!-- mixed: positional first, then keyword -->
+<template>
+    <param name="x" positional="true"/>
+    <param name="opt">default_expr</param>
     body_expr
 </template>
 ```
@@ -163,12 +214,14 @@ Defines a function as a value (equivalent to a lambda expression).
 ### Template Application (apply)
 
 Applies a template to arguments.
+`arg` elements come as **positional** (no `name`) and **keyword** (with `name`); list all positional arguments first, then the keyword arguments.
 
 ```xml
 <apply>
-    expr               <!-- the template to apply -->
-    <arg name="arg1">expr1</arg>
-    <arg name="arg2">expr2</arg>
+    expr                      <!-- the template to apply -->
+    <arg>expr1</arg>          <!-- positional (interpreted by declaration order) -->
+    <arg>expr2</arg>
+    <arg name="opt">expr3</arg>  <!-- keyword argument -->
 </apply>
 ```
 
@@ -233,6 +286,8 @@ Applies a template to arguments.
 </ol>
 ```
 
+`ul` and `ol` are structurally identical in XML, but use `ol` when order matters (e.g. a list passed to `map_term`).
+
 ### Dictionary (dl)
 
 Keys can be arbitrary expressions or string literals via the `key` attribute.
@@ -242,6 +297,18 @@ Keys can be arbitrary expressions or string literals via the `key` attribute.
     <dt>key_expr</dt><dd>value_expr</dd>   <!-- expression key -->
     <dt key="name"/><dd>value_expr</dd>    <!-- string key -->
 </dl>
+```
+
+### Format Strings in Text
+
+Wherever text is allowed, you can embed in-scope variables with the `{name}` notation.
+This is expanded by the preprocessor into a `format_string` application. To write a literal brace, escape it as `{{` `}}`.
+
+```xml
+<template>
+    <param name="c" positional="true"/>
+    <Evidence>Test result for component {c}</Evidence>
+</template>
 ```
 
 ---
@@ -264,16 +331,18 @@ Goal, Strategy, and Evidence all share the same header structure.
 <Context var="someObject"/>                            <!-- variable reference -->
 <Context><get name="version">expr</get></Context>      <!-- expression -->
 
-<!-- Assumption: a named proposition accepted without proof.
-     A variable reference is required. -->
-<Assumption>description text<var name="A1"/></Assumption>
-<Assumption var="A1"/>    <!-- shorthand -->
+<!-- Assumption: an assumption the argument relies on.
+     Like Context, accepts any expression as a value. -->
+<Assumption>no zero-day attacks</Assumption>
+<Assumption var="someObject"/>                         <!-- variable reference -->
 ```
 
 **Context vs Assumption**
 
-- `Context` describes the situation or subject matter in which the argument is made. It accepts any expression as its value — variable references, objects, lists, and so on — making it suitable for referencing external data or runtime information.
-- `Assumption` introduces a free variable that must be bound somewhere in the document by `def` or `param`. The value bound to that variable may be `undeveloped`, indicating that the justification for the assumption is acknowledged but deferred. This is an intentional design choice: every assumption must have an explicit owner in the argument structure.
+`Context` and `Assumption` are both documentation elements attached to the header; each holds a single value (text, a variable reference, an object, a list, and so on).
+
+- `Context` describes the setting or subject matter in which the argument is made.
+- `Assumption` states an assumption the argument relies on.
 
 ### Goal
 
@@ -281,7 +350,7 @@ Goal, Strategy, and Evidence all share the same header structure.
 <Goal>
     <description>System X is secure</description>
     <Context>certified under standard XXXX</Context>
-    <Assumption>no zero-day attacks<var name="A1"/></Assumption>
+    <Assumption>no zero-day attacks</Assumption>
 
     <!-- body: exactly one of the following -->
     <Strategy>...</Strategy>              <!-- supported by a Strategy -->
@@ -291,6 +360,20 @@ Goal, Strategy, and Evidence all share the same header structure.
     <undeveloped/>                        <!-- not yet developed -->
 </Goal>
 ```
+
+> **Note: writing sub-goals directly is sugar**
+> Listing several `<Goal>` elements directly under a Goal is expanded by the preprocessor into a wrap by `immediate` (a special Strategy that bundles sub-goals).
+> In the PGSN core, a Goal's support must be either a Strategy or Evidence.
+> To support a Goal with a list of goals computed at runtime, apply `immediate` explicitly to turn it into a Strategy.
+>
+> ```xml
+> <Goal>
+>     Security requirements fulfilled
+>     <supportedBy>
+>         <apply><var name="immediate"/><arg var="goals"/></apply>
+>     </supportedBy>
+> </Goal>
+> ```
 
 ### Strategy
 
@@ -303,7 +386,7 @@ Goal, Strategy, and Evidence all share the same header structure.
 </Strategy>
 ```
 
-A set (`ul`) can be passed to `subGoals` to specify sub-goals dynamically.
+A set (`ul`) or list (`ol`) can be passed to `subGoals` to specify sub-goals dynamically.
 
 ```xml
 <Strategy>
@@ -331,21 +414,26 @@ A set (`ul`) can be passed to `subGoals` to specify sub-goals dynamically.
 ## Extending GSN via Classes
 
 GSN nodes can be extended through class inheritance.
+Instantiate the extended class with `<object>` (listing its attributes explicitly).
 
 ```xml
-<def name="GoalWithURL">
-    <class>
-        <inherit>Goal</inherit>
-        <attribute name="URL"/>
-    </class>
+<!-- a class inheriting Goal, adding a URL attribute -->
+<def name="GoalWithURL" as="class">
+    <inherit>Goal</inherit>
+    <attribute name="URL"/>
 </def>
 
-<def name="myGoal" as="GoalWithURL">
-    System X is secure
+<!-- instantiation (object form) -->
+<object>
+    <instanceOf>GoalWithURL</instanceOf>
+    <attribute name="description">System X is secure</attribute>
     <attribute name="URL">https://example.com/evidence</attribute>
-    <undeveloped/>
-</def>
+    <attribute name="support" var="undeveloped"/>
+</object>
 ```
+
+> The shorthand of writing a user-defined class name in the `as` attribute (e.g. `<def name="myGoal" as="GoalWithURL">...`) is not supported.
+> Since `as` is limited to built-in tag names, use the `<object>` form above to instantiate an extended class.
 
 ---
 
@@ -354,14 +442,13 @@ GSN nodes can be extended through class inheritance.
 A complete example combining parameters and imports.
 
 ```xml
-<PGSN>
-    <!-- receive an assumption from the caller -->
-    <param name="A1" instanceOf="Assumption"/>
+<PGSNModule>
+    <!-- receive a threshold from the caller -->
+    <param name="threshold">100</param>
 
     <!-- bring in a goal from another file -->
     <from file="security.pgsn" import="secureGoal" as="G1"/>
 
-    <!-- bind the Assumption via supportedBy -->
     <def name="mainStrategy" as="Strategy">
         verified through testing and review
         <subGoals>
@@ -371,10 +458,13 @@ A complete example combining parameters and imports.
         </subGoals>
     </def>
 
-    <Goal>
+    <def name="main" as="Goal">
         <description>the system is secure</description>
-        <Assumption>no zero-day attacks<var name="A1"/></Assumption>
-        <Strategy var="mainStrategy"/>
-    </Goal>
-</PGSN>
+        <Assumption>no zero-day attacks</Assumption>
+        <supportedBy var="mainStrategy"/>
+    </def>
+</PGSNModule>
+```
+
+A module that receives `param` values uses `<PGSNModule>` rather than `<PGSN>` (which ends with a single value); `param` may appear only at the top of `<PGSNModule>`.
 ```

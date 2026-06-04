@@ -3,7 +3,7 @@ from pprint import pprint
 from pgsn.gsn import *
 from pgsn.dsl import python_value
 
-g = goal(
+main = goal(
     description="System is secure",
     support=strategy(
         description="Break into sub-goals",
@@ -15,5 +15,3 @@ g = goal(
         ]
     )
 )
-
-gsn_tree(g.fully_eval()).show()

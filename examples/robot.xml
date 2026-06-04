@@ -1,0 +1,34 @@
+<PGSN>
+    <def name="robot" as="Goal">
+        There is no known vulnerability in the robot
+        <Strategy>
+            Argument over each vulnerability
+            <Goal>Vulnerability A is not exploited<Evidence>Test results</Evidence></Goal>
+            <Goal>Vulnerability B is not exploited<Evidence>Test results</Evidence></Goal>
+        </Strategy>
+    </def>
+
+    <def name="webServer" as="Goal">
+        The server can deal with DoS attacks on the server
+        <Evidence>Access restriction</Evidence>
+    </def>
+
+    <Goal>
+        The robot does not make unintended movements
+        <Strategy>
+            Argument over the robot and the server
+            <Goal>
+                The robot behaves according to commands
+                <Strategy>Argument over each threat
+                    <subGoals><ul><li var="robot"/></ul></subGoals>
+                </Strategy>
+            </Goal>
+            <Goal>
+                The server gives correct commands to the robot
+                <Strategy>Argument over each threat
+                    <subGoals><ul><li var="webServer"/></ul></subGoals>
+                </Strategy>
+            </Goal>
+        </Strategy>
+    </Goal>
+</PGSN>

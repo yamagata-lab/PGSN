@@ -1232,9 +1232,9 @@ class Formatter(ConstMixin, Builtin):
 
 
 
-def value_of(term: Term, steps=1000) -> Any:
+def value_of(term: Term, steps=1000, with_inherit_chain=False) -> Any:
     t = term.fully_eval(steps)
-    return to_python(t)
+    return to_python(t, with_inherit_chain=with_inherit_chain)
 
 
 def to_python(t: Term, with_inherit_chain=False) -> Any:
@@ -1247,14 +1247,15 @@ def to_python(t: Term, with_inherit_chain=False) -> Any:
             return t.value
         case List():
             terms = t.terms
-            return [value_of(t1) for t1 in terms]
+            # propagate the flag so nested objects keep their inheritance chain
+            return [value_of(t1, with_inherit_chain=with_inherit_chain) for t1 in terms]
         case Record():
             attr = t.attributes()
-            return {k: value_of(t1) for k, t1 in attr.items()}
+            return {k: value_of(t1, with_inherit_chain=with_inherit_chain) for k, t1 in attr.items()}
         case PGSNObject():
             attr = t.attributes()
             cls_name = t.instance.name
-            attrs =  {k: value_of(t1) for k, t1 in attr.items()}
+            attrs =  {k: value_of(t1, with_inherit_chain=with_inherit_chain) for k, t1 in attr.items()}
             attrs["__" + cls_name + "__"] = True
             if with_inherit_chain:
                 attrs["__parent_classes__"] = [cls.name for cls in _inherit_chain(t.instance)]

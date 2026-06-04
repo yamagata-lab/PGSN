@@ -1,0 +1,18 @@
+<PGSN>
+    <def name="mkGoalWithEvidence" as="template">
+        <param name="desc"/>
+        <Goal><description var="desc"/><Evidence><description var="desc"/></Evidence></Goal>
+    </def>
+
+    <def name="g1" as="apply"><var name="mkGoalWithEvidence"/><arg name="desc">No hardcoded passwords</arg></def>
+    <def name="g2" as="apply"><var name="mkGoalWithEvidence"/><arg name="desc">Input sanitized</arg></def>
+    <def name="g3" as="apply"><var name="mkGoalWithEvidence"/><arg name="desc">Logging enabled</arg></def>
+
+    <Goal>
+        System is secure
+        <Strategy>
+            Apply security principles
+            <subGoals><ul><li var="g1"/><li var="g2"/><li var="g3"/></ul></subGoals>
+        </Strategy>
+    </Goal>
+</PGSN>

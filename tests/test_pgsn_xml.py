@@ -3,7 +3,8 @@
 import pytest
 from pathlib import Path
 from pgsn.dsl import python_value
-from pgsn.pgsn_xml import compile_pgsn, PGSNError
+from pgsn.pgsn_xml import compile_pgsn, PGSNError, load_string
+from pgsn.gsn import gsn_tree
 
 
 def run(xml: str, tmp_path: Path):
@@ -415,3 +416,115 @@ def test_wrong_root(tmp_path):
     p.write_text("<PGSNModule><def name='x'>y</def></PGSNModule>")
     with pytest.raises(PGSNError, match="Expected <PGSN>"):
         compile_pgsn(p)
+
+
+    """Regression tests for positional vs keyword <template> parameters.
+
+    Background
+    ----------
+    `<template>` parameters are split into a positional group (marked
+    ``positional="true"``) and a keyword group (the default). Following Python's
+    convention, positional params must precede keyword params. The compiler emits a
+    two-layer lambda: an outer ``lambda_abs_vars`` for the positional params and an
+    inner ``lambda_abs_keywords`` for the keyword params. This matches
+    ``Term.__call__``, which applies positional args as ``f a b ...`` and passes
+    keyword args as one trailing Record.
+
+    Pipeline under test (mirrors examples/map_term.py):
+        load_string(xml) -> fully-evaluated Term
+        pgsn.gsn.gsn_tree(term) -> GSN tree (where a leftover App used to surface
+                                   the "does not normalize a Python value" error)
+    """
+
+    def _to_tree(xml: str):
+        """Compile + fully_eval, then build the GSN tree. Errors propagate."""
+        term = load_string(xml)
+        tree = gsn_tree(term)
+        tree.show()
+        return tree
+
+    # --- positional application via map_term (the original crash) ---------------
+    # A pure-positional template applied element-wise by map_term. Before the fix
+    # this left an un-normalized App and crashed at the gsn_tree step.
+    def test_positional_via_map_term(capsys):
+        xml = """
+        <PGSN>
+            <def name="goalTemplate" as="template">
+                <param name="desc" positional="true"/>
+                <Goal><description var="desc"/><Evidence><description var="desc"/></Evidence></Goal>
+            </def>
+            <def name="goals" as="apply">
+                <var name="map_term"/>
+                <arg var="goalTemplate"/>
+                <arg><ol><li>Firewall enabled</li><li>Encrypted communication</li></ol></arg>
+            </def>
+            <Goal>
+                Security requirements fulfilled
+                <supportedBy><apply><var name="immediate"/><arg var="goals"/></apply></supportedBy>
+            </Goal>
+        </PGSN>
+        """
+        _to_tree(xml)  # must not raise
+
+    # --- keyword application (must keep working) --------------------------------
+    # A pure-keyword template applied with a named <arg>.
+    def test_keyword_application(capsys):
+        xml = """
+        <PGSN>
+            <def name="mk" as="template">
+                <param name="desc"/>
+                <Goal><description var="desc"/><Evidence><description var="desc"/></Evidence></Goal>
+            </def>
+            <def name="g" as="apply"><var name="mk"/><arg name="desc">No hardcoded passwords</arg></def>
+            <var name="g"/>
+        </PGSN>
+        """
+        _to_tree(xml)  # must not raise
+
+    # --- mixed positional + keyword ---------------------------------------------
+    # Positional param stripped first, keyword param supplied as the trailing
+    # Record: f(pos, kw=...).
+    def test_mixed_positional_then_keyword(capsys):
+        xml = """
+        <PGSN>
+            <def name="mk" as="template">
+                <param name="desc" positional="true"/>
+                <param name="ev"/>
+                <Goal><description var="desc"/><Evidence><description var="ev"/></Evidence></Goal>
+            </def>
+            <def name="g" as="apply"><var name="mk"/><arg>System is secure</arg><arg name="ev">Audit passed</arg></def>
+            <var name="g"/>
+        </PGSN>
+        """
+        _to_tree(xml)  # must not raise
+
+    # --- error: keyword param declared before a positional param ----------------
+    def test_keyword_before_positional_rejected():
+        xml = """
+        <PGSN>
+            <def name="mk" as="template">
+                <param name="kw"/>
+                <param name="pos" positional="true"/>
+                <var name="pos"/>
+            </def>
+            <var name="mk"/>
+        </PGSN>
+        """
+        with pytest.raises(PGSNError):
+            load_string(xml)
+
+    # --- error: positional param carrying a default value -----------------------
+    def test_positional_with_default_rejected():
+        xml = """
+        <PGSN>
+            <def name="mk" as="template">
+                <param name="pos" positional="true">some default</param>
+                <var name="pos"/>
+            </def>
+            <var name="mk"/>
+        </PGSN>
+        """
+        with pytest.raises(PGSNError):
+            load_string(xml)
+
+

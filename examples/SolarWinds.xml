@@ -1,0 +1,191 @@
+<PGSN>
+    <!-- ===== leaf builder & shared leaf lists ===== -->
+    <def name="leaf" as="template">
+        <param name="d" positional="true"/>
+        <Goal><description var="d"/><Evidence>none</Evidence></Goal>
+    </def>
+
+    <def name="pp" as="ol">
+        <li><apply><var name="leaf"/><arg>P1</arg></apply></li>
+        <li><apply><var name="leaf"/><arg>P2</arg></apply></li>
+        <li><apply><var name="leaf"/><arg>P3</arg></apply></li>
+        <li><apply><var name="leaf"/><arg>P4</arg></apply></li>
+        <li><apply><var name="leaf"/><arg>P5</arg></apply></li>
+    </def>
+
+    <def name="ss" as="ol">
+        <li><apply><var name="leaf"/><arg>S1</arg></apply></li>
+        <li><apply><var name="leaf"/><arg>S2</arg></apply></li>
+        <li><apply><var name="leaf"/><arg>S3</arg></apply></li>
+    </def>
+
+    <def name="rr" as="ol">
+        <li><apply><var name="leaf"/><arg>R1</arg></apply></li>
+        <li><apply><var name="leaf"/><arg>R2</arg></apply></li>
+        <li><apply><var name="leaf"/><arg>R3</arg></apply></li>
+    </def>
+
+    <def name="aa" as="ol">
+        <li><apply><var name="leaf"/><arg>A1</arg></apply></li>
+        <li><apply><var name="leaf"/><arg>A2</arg></apply></li>
+        <li><apply><var name="leaf"/><arg>A3</arg></apply></li>
+    </def>
+
+    <!-- ===== "Uses ..." goal carrying the P1-P5 block ===== -->
+    <def name="usesP" as="template">
+        <param name="g" positional="true"/>
+        <param name="s" positional="true"/>
+        <Goal><description var="g"/>
+            <Strategy><description var="s"/><subGoals var="pp"/></Strategy>
+        </Goal>
+    </def>
+
+    <def name="usesResCICD" as="apply"><var name="usesP"/>
+        <arg>Uses Resourceが安全</arg><arg>CI/CD Controller Usesが安全であるためには？</arg></def>
+    <def name="usesResBallista" as="apply"><var name="usesP"/>
+        <arg>Uses Resourceが安全</arg><arg>Ballistaが安全であるためには？</arg></def>
+    <def name="usesJfrog" as="apply"><var name="usesP"/>
+        <arg>Uses Jfrog Artifactoryが安全</arg><arg>Developer Usesが安全であるためには？</arg></def>
+    <def name="usesResCloud" as="apply"><var name="usesP"/>
+        <arg>Uses Resources が安全である</arg><arg>CI/CD Controller Usesが安全であるためには?</arg></def>
+
+    <!-- ===== Validation Build Report branch ===== -->
+    <def name="tektlonSec" as="Goal">Tektlon Security CI/CD pipeline が安全
+        <Strategy>Uses Tektlon Security CI/CD pipeline が安全であるためには？
+            <subGoals><apply><var name="cons"/><arg var="usesResCICD"/><arg var="ss"/></apply></subGoals>
+        </Strategy>
+    </def>
+
+    <def name="jfrogXray" as="Goal">Jfrog Xray が安全
+        <Strategy>Uses Jfrog Xray が安全であるためには？<subGoals var="rr"/></Strategy>
+    </def>
+
+    <def name="carriesVDQ" as="Goal">Carries Out Vulunarbility data Queryが安全
+        <Strategy>resourceについて分解
+            <subGoals><ol><li var="tektlonSec"/><li var="jfrogXray"/></ol></subGoals>
+        </Strategy>
+    </def>
+
+    <def name="consumesFetchA" as="Goal">Consumes Fetchが安全
+        <Strategy>Repository Consumesが安全であるためには？<subGoals var="aa"/></Strategy>
+    </def>
+
+    <def name="carriesFetchBallista" as="Goal">Carries Out Fetchが安全
+        <Strategy>GitHub Carries Outが安全であるためには？
+            <subGoals><apply><var name="cons"/><arg var="usesResBallista"/><arg var="rr"/></apply></subGoals>
+        </Strategy>
+    </def>
+
+    <def name="produceSourcecode" as="Goal">Produce Sourcecodeが安全
+        <Strategy>Fetch Produce が安全であるためには？
+            <subGoals><apply><var name="cons"/><arg var="consumesFetchA"/>
+                <arg><apply><var name="cons"/><arg var="carriesFetchBallista"/><arg var="aa"/></apply></arg>
+            </apply></subGoals>
+        </Strategy>
+    </def>
+
+    <def name="consumesVDQ" as="Goal">Consumes Vulunarbility data Queryが安全
+        <Strategy>Sourcecode Consumes が安全であるためには？
+            <subGoals><ol><li var="produceSourcecode"/></ol></subGoals>
+        </Strategy>
+    </def>
+
+    <def name="validationBuildReport" as="Goal">Validation Build Reportが安全である
+        <Strategy>Vulunarbility data Queryが安全であるためには?
+            <subGoals><apply><var name="cons"/><arg var="carriesVDQ"/>
+                <arg><apply><var name="cons"/><arg var="consumesVDQ"/><arg var="ss"/></apply></arg>
+            </apply></subGoals>
+        </Strategy>
+    </def>
+
+    <!-- ===== shared "Produce Artifact" subtree (Build Binary == Build Container) ===== -->
+    <def name="carriesFetchJfrog" as="Goal">Carries Out Fetchが安全
+        <Strategy>Jfrog Artifactory Carries Outが安全であるためには？
+            <subGoals><apply><var name="cons"/><arg var="usesJfrog"/><arg var="rr"/></apply></subGoals>
+        </Strategy>
+    </def>
+
+    <def name="produceDependency" as="Goal">Produce Dependencyが安全
+        <Strategy>Fetch Produceが安全であるためには？
+            <subGoals><apply><var name="cons"/><arg var="carriesFetchJfrog"/><arg var="rr"/></apply></subGoals>
+        </Strategy>
+    </def>
+
+    <def name="sourceCodeConsumesBuild" as="Goal">Source Code Consumes Buildが安全
+        <Strategy>Source Code Dependancy Consumesが安全であるためには？
+            <subGoals><apply><var name="cons"/><arg var="produceDependency"/><arg var="rr"/></apply></subGoals>
+        </Strategy>
+    </def>
+
+    <def name="carriesOutBuild" as="Goal">Carries Out Buildが安全
+        <Strategy>Uses Tektlon standard CI/CD pipelineが安全であるためには？
+            <subGoals><apply><var name="cons"/><arg var="usesResCICD"/><arg var="rr"/></apply></subGoals>
+        </Strategy>
+    </def>
+
+    <def name="vdqProduceArtifact" as="Goal">Vulnarability Data Query Produce Artifactが安全
+        <Strategy>Vulnarability Data Queryが安全であるためには？
+            <subGoals><apply><var name="cons"/><arg var="sourceCodeConsumesBuild"/>
+                <arg><apply><var name="cons"/><arg var="carriesOutBuild"/><arg var="ss"/></apply></arg>
+            </apply></subGoals>
+        </Strategy>
+    </def>
+
+    <def name="buildArtifact" as="template">
+        <param name="g" positional="true"/>
+        <param name="s" positional="true"/>
+        <Goal><description var="g"/>
+            <Strategy><description var="s"/>
+                <subGoals><apply><var name="cons"/><arg var="vdqProduceArtifact"/><arg var="aa"/></apply></subGoals>
+            </Strategy>
+        </Goal>
+    </def>
+
+    <def name="buildBinary" as="apply"><var name="buildArtifact"/>
+        <arg>Build Binary が安全である</arg><arg>Produce Built Binaryの安全に必要なものは？</arg></def>
+    <def name="buildContainer" as="apply"><var name="buildArtifact"/>
+        <arg>Build Container Image が安全である</arg><arg>Produce Built Container imagesの安全に必要なものは？</arg></def>
+
+    <!-- ===== Resources Carries Out branch (AmazonECR == AmazonS3) ===== -->
+    <def name="cloud" as="template">
+        <param name="nm" positional="true"/>
+        <param name="s" positional="true"/>
+        <Goal><description var="nm"/>
+            <Strategy><description var="s"/>
+                <subGoals><apply><var name="cons"/><arg var="usesResCloud"/><arg var="rr"/></apply></subGoals>
+            </Strategy>
+        </Goal>
+    </def>
+
+    <def name="amazonECR" as="apply"><var name="cloud"/>
+        <arg>AmazonECR が安全である</arg><arg>Uses AmazonECRが安全であるためには?</arg></def>
+    <def name="amazonS3" as="apply"><var name="cloud"/>
+        <arg>AmazonS3 が安全である</arg><arg>Uses AmazonS3が安全であるためには?</arg></def>
+
+    <def name="resourcesCarriesOut" as="Goal">Resources Carries Out Pushが安全である
+        <Strategy>Resourceについて分解
+            <subGoals><ol><li var="amazonECR"/><li var="amazonS3"/></ol></subGoals>
+        </Strategy>
+    </def>
+
+    <!-- ===== top-level spine ===== -->
+    <def name="artifactConsumesPush" as="Goal">Artifact Consumes Push が安全である
+        <Goal>各ArtifactによるConsumesが安全である
+            <Strategy>artifactについて分解
+                <subGoals><ol>
+                    <li var="validationBuildReport"/>
+                    <li var="buildBinary"/>
+                    <li var="buildContainer"/>
+                </ol></subGoals>
+            </Strategy>
+        </Goal>
+    </def>
+
+    <Goal>Binary Repositoryが安全である
+        <Strategy>Pushが安全であるためには?
+            <subGoals><apply><var name="cons"/><arg var="artifactConsumesPush"/>
+                <arg><apply><var name="cons"/><arg var="resourcesCarriesOut"/><arg var="ss"/></apply></arg>
+            </apply></subGoals>
+        </Strategy>
+    </Goal>
+</PGSN>
