@@ -1,0 +1,10 @@
+<PGSN>
+    <Goal>
+        System is secure
+        <Strategy>
+            Break into sub-goals
+            <Goal>Input validated<Evidence>Static analysis passed</Evidence></Goal>
+            <Goal>Output sanitized<Evidence>Fuzzing test succeeded</Evidence></Goal>
+        </Strategy>
+    </Goal>
+</PGSN>

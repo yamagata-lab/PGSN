@@ -1,0 +1,39 @@
+<PGSN>
+    <def name="gd3" as="template">
+        <param name="xs" positional="true"/>
+        <div>
+            <def name="testDocs" as="apply">
+                <var name="map_term"/>
+                <arg>
+                    <template>
+                        <param name="c" positional="true"/>
+                        <apply><var name="evidence_as_goal"/><arg><Evidence>Test doc for {c}</Evidence></arg></apply>
+                    </template>
+                </arg>
+                <arg var="xs"/>
+            </def>
+            <def name="testResources" as="apply">
+                <var name="map_term"/>
+                <arg>
+                    <template>
+                        <param name="c" positional="true"/>
+                        <apply><var name="evidence_as_goal"/><arg><Evidence>Test resources for {c}</Evidence></arg></apply>
+                    </template>
+                </arg>
+                <arg var="xs"/>
+            </def>
+            <def name="evidences" as="apply">
+                <var name="cons"/>
+                <arg><apply><var name="evidence_as_goal"/><arg><Evidence>E3.1...</Evidence></arg></apply></arg>
+                <arg><apply><var name="concat"/><arg var="testDocs"/><arg var="testResources"/></apply></arg>
+            </def>
+            <Goal>
+                <description>GD3: Security test is ...</description>
+                <Context>N.D. devel. info. ...</Context>
+                <supportedBy><apply><var name="immediate"/><arg var="evidences"/></apply></supportedBy>
+            </Goal>
+        </div>
+    </def>
+
+    <apply><var name="gd3"/><arg><ol><li>C1</li><li>C2</li><li>C3</li></ol></arg></apply>
+</PGSN>

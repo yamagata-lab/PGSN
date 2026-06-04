@@ -13,9 +13,7 @@ goal_template = lambda_abs(variable("desc"),
 
 goals = map_term(goal_template, requirements)
 
-secure_goal = goal(
+main = goal(
     description="Security requirements fulfilled",
     support=immediate(goals)
 )
-
-gsn_tree(secure_goal.fully_eval()).show()

@@ -384,10 +384,12 @@ class App(Term):
         return self.evolve(t1=t1_shifted, t2=t2_shifted)
 
     def _subst_or_none(self, var: int, term: Term) -> Term | None:
-        t1_subst = self.t1.subst(var, term)
-        t2_subst = self.t2.subst(var, term)
-        if t1_subst is None and t2_subst is None:
+        t1_subst_or_none = self.t1.subst_or_none(var, term)
+        t2_subst_or_none = self.t2.subst_or_none(var, term)
+        if t1_subst_or_none is None and t2_subst_or_none is None:
             return None
+        t1_subst = helpers.default(t1_subst_or_none, self.t1)
+        t2_subst = helpers.default(t2_subst_or_none, self.t2)
         return self.evolve(t1=t1_subst, t2=t2_subst)
 
     def _free_variables(self) -> set[str]:
@@ -556,10 +558,12 @@ class Record(Unary):
             return self.evolve(attributes=evaluated_expand)
 
     def _shift_or_none(self, d, c):
-        shifted_or_none = dict((label, t.shift_or_none(d, c)) for label, t in self.attributes().items())
-        if all(s is None for s in shifted_or_none.values()):
+        shifted = dict((label, t.shift_or_none(d, c)) for label, t in self.attributes().items())
+        if all(s is None for s in shifted.values()):
             return None
-        shifted = {k: helpers.default(v, self.attributes()[k]) for k, v in shifted_or_none.items()}
+        for k in shifted.keys():
+            if shifted[k] is None:
+                shifted[k] = self._attributes[k]
         return self.evolve(attributes=shifted)
 
     def _subst_or_none(self, num, term):
@@ -760,12 +764,20 @@ class DefineClass(ConstMixin, Unary):
         return PGSNClass.nameless(inherit=inherit, name=name, defaults=defaults, attributes=set(attributes),
                                           methods=methods)
 
+
 def _is_subclass(cls1: PGSNClass, cls2: PGSNClass):
     if cls1.inherit is None:
         return False
     if cls1 == cls2:
         return True
     return _is_subclass(cls1.inherit, cls2)
+
+
+def _inherit_chain(cls: PGSNClass):
+    if cls.inherit is None:
+        return [cls]
+    else:
+        return [cls] + _inherit_chain(cls.inherit)
 
 
 @frozen
@@ -1220,12 +1232,12 @@ class Formatter(ConstMixin, Builtin):
 
 
 
-def value_of(term: Term, steps=1000) -> Any:
+def value_of(term: Term, steps=1000, with_inherit_chain=False) -> Any:
     t = term.fully_eval(steps)
-    return to_python(t)
+    return to_python(t, with_inherit_chain=with_inherit_chain)
 
 
-def to_python(t: Term) -> Any:
+def to_python(t: Term, with_inherit_chain=False) -> Any:
     match t:
         case String():
             return t.value
@@ -1235,15 +1247,18 @@ def to_python(t: Term) -> Any:
             return t.value
         case List():
             terms = t.terms
-            return [value_of(t1) for t1 in terms]
+            # propagate the flag so nested objects keep their inheritance chain
+            return [value_of(t1, with_inherit_chain=with_inherit_chain) for t1 in terms]
         case Record():
             attr = t.attributes()
-            return {k: value_of(t1) for k, t1 in attr.items()}
+            return {k: value_of(t1, with_inherit_chain=with_inherit_chain) for k, t1 in attr.items()}
         case PGSNObject():
             attr = t.attributes()
             cls_name = t.instance.name
-            attrs =  {k: value_of(t1) for k, t1 in attr.items()}
+            attrs =  {k: value_of(t1, with_inherit_chain=with_inherit_chain) for k, t1 in attr.items()}
             attrs["__" + cls_name + "__"] = True
+            if with_inherit_chain:
+                attrs["__parent_classes__"] = [cls.name for cls in _inherit_chain(t.instance)]
             return attrs
         case _:
             raise ValueError(f'PGSN term {type(t)} does not normalizes a Python value')

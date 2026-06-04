@@ -1,22 +1,4 @@
-<grammar  xmlns="http://relaxng.org/ns/structure/1.0">
-
-
-  <define name="gsn_header">
-    <interleave>
-      <optional>
-        <element name="description"><ref name="val_pat"/></element>
-      </optional>
-      <zeroOrMore>
-        <element name="context"><ref name="val_pat"/></element>
-      </zeroOrMore>
-      <zeroOrMore>
-        <element name="assumption">
-          <ref name="val_pat"/>
-        </element>
-     </zeroOrMore>
-    </interleave>
-  </define>
-
+<grammar xmlns="http://relaxng.org/ns/structure/1.0">
 
   <define name="list_pat">
     <zeroOrMore>
@@ -24,161 +6,307 @@
     </zeroOrMore>
   </define>
 
+  <!-- body of a dl: dt/dd pairs -->
+  <define name="dl_body">
+    <zeroOrMore>
+      <element name="dt">
+        <choice>
+          <attribute name="key"/>
+          <ref name="val_pat"/>
+        </choice>
+      </element>
+      <element name="dd">
+        <ref name="val_pat"/>
+      </element>
+    </zeroOrMore>
+  </define>
 
   <define name="data_type_pat">
     <choice>
-      <element name="ul">
-        <ref name="list_pat"/>
-      </element>
-      <element name="ol">
-        <ref name="list_pat"/>
-      </element>
-      <element name="dl">
-        <zeroOrMore>
-          <element name="dt">
-            <choice>
-              <attribute name="name"/>
-              <text/>
-            </choice>
-          </element>
-          <element name="dd">
-            <ref name="val_pat"/>
-          </element>
-        </zeroOrMore>
-      </element>
+      <element name="ul"><ref name="list_pat"/></element>
+      <element name="ol"><ref name="list_pat"/></element>
+      <element name="dl"><ref name="dl_body"/></element>
     </choice>
   </define>
 
-
-  <define name="build_in_func">
+  <define name="gsn_header">
     <choice>
-      <element name="map"><empty/></element>  
-      <element name="field">
-        <attribute name="name"/>
-      </element>
-    </choice>
-  </define>
-
-
-  <define name="object_pat">
-    <attribute name="class"/>
-    <zeroOrMore>
-      <element name="attribute">
-        <attribute name="name">
-        </attribute>
-        <optional>
-          <ref name="val_pat"/>
-        </optional>
-    </element>  
-    </zeroOrMore>
-  </define>
-
-
-  <define name="base_val_pat">
-    <choice>
+      <element name="description"><ref name="val_pat"/></element>
       <text/>
-      <element name="object"><ref name="object_pat"/></element>
-      <element name="var">
-        <attribute name="name"/>
-        <optional><attribute name="instance"/></optional>
-      </element>
-      <element name="arg">
-        <attribute name="name"/>
-        <ref name="val_pat"/>
-      </element>
-      <element name="fun">
-        <ref name="defun_pat"/>
-      </element>
-      <element name="div">
-        <ref name="defs_pat"/>
-        <ref name="val_pat"/>
-      </element>
-      <ref name="build_in_func"/>
-      <ref name="data_type_pat"/>
-      <element name="Goal">
-        <ref name="gsn_header"/>
-        <ref name="val_pat"/>
-      </element>
-      <element name="Strategy">
-        <ref name="gsn_header"/>
-        <oneOrMore>
-          <element name="goal">
-            <ref name="val_pat"/>
-          </element>
-        </oneOrMore>
-      </element>
-      <element name="Evidence">
-        <element name="description">
-          <ref name="val_pat"/>
-        </element>
-      </element>
     </choice>
-  </define>
-
-
-  <define name="val_pat">
-    <optional>
-      <attribute name="instance"/>
-    </optional>
-    <choice>
-      <attribute name="var"/>
-      <oneOrMore>
-        <ref name="base_val_pat"/>
-      </oneOrMore>  
-    </choice>
-  </define>
-  
-  <define name="class_pat">
-    <attribute name="name"></attribute>
-    <optional>
-      <attribute name="inherit"></attribute>
-    </optional>
-    <zeroOrMore>
-      <element name="attribute">
-        <attribute name="name"/>
-        <optional>
-          <ref name="val_pat"/>
-        </optional>
-      </element>  
-    </zeroOrMore>
-  </define>
-
-
-  <define name="defun_pat">
-    <zeroOrMore>
-      <element name="arg">
-        <attribute name="name"/>
-      </element>
-    </zeroOrMore>
-    <ref name="val_pat"/>
-  </define>
-
-
-  <define name="defs_pat">
     <zeroOrMore>
       <choice>
-        <element name="def">
-          <attribute name="name"/>
-          <ref name="val_pat"/>
+        <element name="Context">
+          <choice>
+            <element name="description"><ref name="val_pat"/></element>
+            <ref name="val_pat"/>
+          </choice>
         </element>
-        <element name="defun">
-          <attribute name="name"/>
-          <ref name="defun_pat"/>
+        <element name="Assumption">
+          <choice>
+            <element name="description"><ref name="val_pat"/></element>
+            <ref name="val_pat"/>
+          </choice>
         </element>
-        <element name="class">
-          <ref name="class_pat"/>
-        </element>      
       </choice>
     </zeroOrMore>
   </define>
 
+  <!-- body of a Goal -->
+  <define name="goal_body">
+    <ref name="gsn_header"/>
+    <choice>
+      <ref name="str_pat"/>
+      <ref name="ev_pat"/>
+      <oneOrMore><ref name="goal_pat"/></oneOrMore>
+      <element name="supportedBy"><ref name="val_pat"/></element>
+      <element name="undeveloped"><empty/></element>
+    </choice>
+  </define>
 
-  <start>
-    <element name="PGSN">
-      <ref name="defs_pat"/>
+  <define name="goal_pat">
+    <element name="Goal"><ref name="goal_body"/></element>
+  </define>
+
+  <!-- body of a Strategy -->
+  <define name="str_body">
+    <ref name="gsn_header"/>
+    <choice>
+      <oneOrMore><ref name="goal_pat"/></oneOrMore>
+      <element name="subGoals"><ref name="val_pat"/></element>
+    </choice>
+  </define>
+
+  <define name="str_pat">
+    <element name="Strategy"><ref name="str_body"/></element>
+  </define>
+
+  <!-- body of an Evidence -->
+  <define name="ev_body">
+    <ref name="gsn_header"/>
+  </define>
+
+  <define name="ev_pat">
+    <element name="Evidence"><ref name="ev_body"/></element>
+  </define>
+
+  <define name="GSNNode">
+    <choice>
+      <ref name="goal_pat"/>
+      <ref name="str_pat"/>
+      <ref name="ev_pat"/>
+    </choice>
+  </define>
+
+  <define name="param_pat">
+    <element name="param">
+      <attribute name="name"/>
+      <!-- positional="true" marks a positional parameter (keyword otherwise) -->
+      <optional><attribute name="positional"><value>true</value></attribute></optional>
+      <optional><attribute name="instanceOf"/></optional>
+      <optional><ref name="val_pat"/></optional>
+    </element>
+  </define>
+
+  <define name="defun_pat">
+    <zeroOrMore><ref name="param_pat"/></zeroOrMore>
+    <ref name="base_val_pat"/>
+  </define>
+
+  <!-- call: positional args (no name) precede keyword args (named) -->
+  <define name="call_pat">
+    <ref name="val_pat"/>
+    <zeroOrMore>
+      <element name="arg"><ref name="val_pat"/></element>
+    </zeroOrMore>
+    <zeroOrMore>
+      <element name="arg">
+        <attribute name="name"/>
+        <ref name="val_pat"/>
+      </element>
+    </zeroOrMore>
+  </define>
+
+  <!-- body of a class -->
+  <define name="class_body">
+    <optional>
+      <element name="inherit"><ref name="val_pat"/></element>
+    </optional>
+    <zeroOrMore>
+      <element name="attribute">
+        <attribute name="name"/>
+        <optional><ref name="val_pat"/></optional>
+      </element>
+    </zeroOrMore>
+    <zeroOrMore>
+      <element name="method">
+        <attribute name="name"/>
+        <ref name="defun_pat"/>
+      </element>
+    </zeroOrMore>
+  </define>
+
+  <define name="class_pat">
+    <element name="class"><ref name="class_body"/></element>
+  </define>
+
+  <!-- body of an object -->
+  <define name="object_body">
+    <element name="instanceOf"><ref name="val_pat"/></element>
+    <zeroOrMore>
+      <element name="attribute">
+        <attribute name="name"/>
+        <optional><ref name="val_pat"/></optional>
+      </element>
+    </zeroOrMore>
+  </define>
+
+  <define name="object_pat">
+    <element name="object"><ref name="object_body"/></element>
+  </define>
+
+  <define name="apply_pat">
+    <element name="apply"><ref name="call_pat"/></element>
+  </define>
+
+  <define name="send_pat">
+    <element name="send">
+      <attribute name="name"/>
+      <ref name="call_pat"/>
+    </element>
+  </define>
+
+  <define name="get_pat">
+    <element name="get">
+      <attribute name="name"/>
       <ref name="val_pat"/>
     </element>
+  </define>
+
+  <define name="template_pat">
+    <element name="template"><ref name="defun_pat"/></element>
+  </define>
+
+  <define name="var_pat">
+    <element name="var">
+      <optional><attribute name="instanceOf"/></optional>
+      <attribute name="name"/>
+    </element>
+  </define>
+
+  <!-- body of a div -->
+  <define name="div_body">
+    <zeroOrMore><ref name="def_pat"/></zeroOrMore>
+    <ref name="base_val_pat"/>
+  </define>
+
+  <define name="expression_pat">
+    <choice>
+      <text/>
+      <ref name="class_pat"/>
+      <ref name="object_pat"/>
+      <ref name="apply_pat"/>
+      <ref name="template_pat"/>
+      <ref name="get_pat"/>
+      <ref name="send_pat"/>
+      <element name="div"><ref name="div_body"/></element>
+      <ref name="data_type_pat"/>
+      <ref name="GSNNode"/>
+    </choice>
+  </define>
+
+  <define name="base_val_pat">
+    <choice>
+      <ref name="var_pat"/>
+      <ref name="expression_pat"/>
+    </choice>
+  </define>
+
+  <define name="val_pat">
+    <choice>
+      <attribute name="var"/>
+      <ref name="base_val_pat"/>
+    </choice>
+  </define>
+
+  <!-- def: either a plain value (desugared / full form), or the `as` sugar.
+       Invariant: <def as="T">C</def> is valid iff <def><T>C</T></def> is valid.
+       Tags needing their own required attribute (var/get/send) are therefore
+       not expressible via `as`, since their desugared form would be invalid. -->
+  <define name="def_pat">
+    <element name="def">
+      <attribute name="name"/>
+      <optional><attribute name="instanceOf"/></optional>
+      <choice>
+        <ref name="val_pat"/>
+        <group><attribute name="as"><value>Goal</value></attribute><ref name="goal_body"/></group>
+        <group><attribute name="as"><value>Strategy</value></attribute><ref name="str_body"/></group>
+        <group><attribute name="as"><value>Evidence</value></attribute><ref name="ev_body"/></group>
+        <group><attribute name="as"><value>class</value></attribute><ref name="class_body"/></group>
+        <group><attribute name="as"><value>object</value></attribute><ref name="object_body"/></group>
+        <group><attribute name="as"><value>template</value></attribute><ref name="defun_pat"/></group>
+        <group><attribute name="as"><value>div</value></attribute><ref name="div_body"/></group>
+        <group><attribute name="as"><value>apply</value></attribute><ref name="call_pat"/></group>
+        <group><attribute name="as"><value>ul</value></attribute><ref name="list_pat"/></group>
+        <group><attribute name="as"><value>ol</value></attribute><ref name="list_pat"/></group>
+        <group><attribute name="as"><value>dl</value></attribute><ref name="dl_body"/></group>
+      </choice>
+    </element>
+  </define>
+
+  <define name="import_pat">
+    <element name="from">
+      <attribute name="file"/>
+      <choice>
+        <group>
+          <attribute name="import"/>
+          <optional><attribute name="as"/></optional>
+        </group>
+        <oneOrMore>
+          <element name="import">
+            <attribute name="name"/>
+            <optional><attribute name="as"/></optional>
+          </element>
+        </oneOrMore>
+      </choice>
+      <zeroOrMore>
+        <element name="arg">
+          <attribute name="name"/>
+          <ref name="val_pat"/>
+        </element>
+      </zeroOrMore>
+    </element>
+  </define>
+
+  <start>
+    <choice>
+      <ref name="pgsn_pat"/>
+      <ref name="pgsn_module_pat"/>
+    </choice>
   </start>
 
+  <define name="pgsn_pat">
+    <element name="PGSN">
+      <zeroOrMore>
+        <choice>
+          <ref name="import_pat"/>
+          <ref name="def_pat"/>
+        </choice>
+      </zeroOrMore>
+      <ref name="val_pat"/>
+    </element>
+  </define>
+
+  <define name="pgsn_module_pat">
+    <element name="PGSNModule">
+      <zeroOrMore><ref name="param_pat"/></zeroOrMore>
+      <zeroOrMore>
+        <choice>
+          <ref name="import_pat"/>
+          <ref name="def_pat"/>
+        </choice>
+      </zeroOrMore>
+    </element>
+  </define>
 
 </grammar>
