@@ -10,7 +10,7 @@ from pathlib import Path
 
 from pgsn.dsl import (
     variable, string, list_term, record, empty_record, let,
-    lambda_abs, lambda_abs_vars, lambda_abs_keywords,
+    lambda_abs, lambda_abs_keywords,
     fix, map_term, fold, concat, cons, head, tail, index,
     true, false, if_then_else, guard,
     equal, plus, minus, times, div, mod,
@@ -18,13 +18,13 @@ from pgsn.dsl import (
     base_class, undefined, empty,
     boolean_and, boolean_or, boolean_not,
     has_label, list_labels, add_attribute, remove_attribute, overwrite_record,
-    format_string,
+    format_string, lambda_abs_vars
 )
 from pgsn.gsn import (
     goal, strategy, evidence, context, assumption,
     goal_class, strategy_class, evidence_class,
     context_class, assumption_class, gsn_class,
-    undeveloped, immediate, evidence_as_goal,
+    undeveloped, immediate,
 )
 import pgsn.pgsn_term as _term
 
@@ -102,7 +102,6 @@ _BUILTINS: dict[str, _term.Term] = {
     "goal": goal, "strategy": strategy, "evidence": evidence,
     "context": context, "assumption": assumption,
     "immediate": immediate, "undeveloped": undeveloped,
-    "evidence_as_goal": evidence_as_goal,
     "gsn_class": gsn_class, "goal_class": goal_class,
     "strategy_class": strategy_class, "evidence_class": evidence_class,
     "context_class": context_class, "assumption_class": assumption_class,
@@ -121,14 +120,21 @@ def _text_fields(s: str) -> list[str]:
 def _text_to_term(s: str) -> _term.Term:
     """
     Turn user text into a Term. If it contains {name} fields, build a
-    format_string application binding each field to the variable of that name;
-    otherwise a plain String. Escaping follows Python's str.format ({{ -> {).
+    format_string application binding each field to the variable of that name.
+    If it contains {{ }} escapes but no fields, still run format_string so
+    the escapes are resolved ({{ -> {, }} -> }).
+    Plain text with no braces at all becomes a String directly.
+    Escaping follows Python's str.format ({{ -> {).
     """
     fields = _text_fields(s)
-    if not fields:
-        return string(s)
-    args = record({name: variable(name) for name in fields})
-    return format_string(string(s))(args)
+    if fields:
+        args = record({name: variable(name) for name in fields})
+        return format_string(string(s))(args)
+    if "{{" in s or "}}" in s:
+        # No variable fields but escape sequences present — run format_string
+        # with an empty record so {{ }} are resolved to literal braces.
+        return format_string(string(s))(empty_record)
+    return string(s)
 
 
 def _resolve(name: str, instance_of: str | None = None) -> _term.Term:
@@ -356,63 +362,86 @@ def _e_var(elem: ET.Element, _bd: Path, _v: frozenset) -> _term.Term:
 
 def _e_template(elem: ET.Element, base_dir: Path | None,
                 visiting: frozenset[Path]) -> _term.Term:
-    # Partition <param> declarations into positional and keyword groups.
-    # A param marked positional="true" is positional; otherwise it is a
-    # keyword param. Following Python's convention, positional params must
-    # precede all keyword params. Positional params may not carry a default
-    # value: a curried positional argument cannot signal its own omission,
-    # so defaults are a keyword-only feature.
-    positional: list[str] = []
-    keyword: list[tuple[str, ET.Element]] = []
-    seen_keyword = False
-    for c in elem:
-        if c.tag != "param":
-            continue
-        name = c.get("name")
-        if name is None:
-            raise PGSNError("<param> requires a name attribute")
-        if c.get("positional") == "true":
-            if seen_keyword:
-                raise PGSNError("positional <param> must precede keyword <param>")
-            has_default = bool([gc for gc in c if gc.tag != "param"]) or \
-                bool(c.text and c.text.strip())
-            if has_default:
-                raise PGSNError("positional <param> may not have a default value")
-            positional.append(name)
-        else:
-            seen_keyword = True
-            keyword.append((name, c))
-
+    params = [(c.get("name"), c) for c in elem if c.tag == "param"]
     body_elems = [c for c in elem if c.tag != "param"]
-    if body_elems:
-        body = _expr(body_elems[0], base_dir, visiting)
+
+    # Split body into leading defs and the final value expression,
+    # mirroring the structure of <div> and <PGSN>.
+    if body_elems and body_elems[-1].tag != "def":
+        final_elem = body_elems[-1]
+        leading = body_elems[:-1]
     elif elem.text and elem.text.strip():
-        body = _text_to_term(elem.text.strip())
+        final_elem = None
+        leading = []
     else:
         raise PGSNError("<template> has no body")
 
-    # Inner layer: keyword params received as a single trailing Record,
-    # matching Term.__call__ which passes keyword args as one Record.
-    if keyword:
-        defaults_dict: dict = {}
-        for name, pelem in keyword:
-            pchildren = [gc for gc in pelem if gc.tag != "param"]
-            if pchildren:
-                defaults_dict[name] = _expr(pchildren[0], base_dir, visiting)
-            elif pelem.text and pelem.text.strip():
-                defaults_dict[name] = _text_to_term(pelem.text.strip())
-        body = lambda_abs_keywords(
-            {name: variable(name) for name, _ in keyword},
+    # Validate: everything before the final value must be a <def>
+    for c in leading:
+        if c.tag != "def":
+            raise PGSNError(
+                f"<{c.tag}> must come after all <def>s in <template>")
+
+    if final_elem is not None:
+        final = _expr(final_elem, base_dir, visiting)
+    else:
+        final = _text_to_term(elem.text.strip())
+
+    bindings = _bindings(leading, base_dir, visiting)
+    body = _thread_lets(bindings, final)
+
+    if not params:
+        return body
+
+    # Separate positional params (positional="true") from keyword params.
+    # Positional must all come before keyword params (Python convention).
+    positional_params = []
+    keyword_params = []
+    seen_keyword = False
+    for name, pelem in params:
+        is_pos = pelem.get("positional", "false").lower() == "true"
+        if is_pos:
+            if seen_keyword:
+                raise PGSNError(
+                    f"Positional param '{name}' must come before keyword params")
+            # Positional params must not carry a default value
+            pchildren = [c for c in pelem if c.tag != "param"]
+            if pchildren or (pelem.text and pelem.text.strip()):
+                raise PGSNError(
+                    f"Positional param '{name}' must not have a default value")
+            positional_params.append(name)
+        else:
+            seen_keyword = True
+            keyword_params.append((name, pelem))
+
+    # Build default values dict for keyword params
+    defaults_dict = {}
+    for name, pelem in keyword_params:
+        pchildren = [c for c in pelem if c.tag != "param"]
+        if pchildren:
+            defaults_dict[name] = _expr(pchildren[0], base_dir, visiting)
+        elif pelem.text and pelem.text.strip():
+            defaults_dict[name] = _text_to_term(pelem.text.strip())
+
+    # Build the term: keyword layer first (innermost), then positional layer
+    # wrapping it. This matches Term.__call__ which strips positional args
+    # before passing the keyword Record.
+    if keyword_params:
+        t = lambda_abs_keywords(
+            {name: variable(name) for name in [n for n, _ in keyword_params]},
             body,
             record(defaults_dict) if defaults_dict else empty_record,
         )
+    else:
+        t = body
 
-    # Outer layer: positional params stripped first via plain currying,
-    # matching Term.__call__ which applies positional args as `f a b ...`.
-    if positional:
-        body = lambda_abs_vars(tuple(variable(n) for n in positional), body)
+    if positional_params:
+        t = lambda_abs_vars(
+            tuple(variable(name) for name in positional_params),
+            t,
+        )
 
-    return body
+    return t
 
 
 def _e_apply(elem: ET.Element, base_dir: Path | None,

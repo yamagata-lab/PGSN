@@ -7,18 +7,33 @@ GSN nodes (Goal, Strategy, Evidence) are treated as first-class values and can b
 
 ## Document Structure
 
-The root element of a PGSN document is `<PGSN>`, structured as follows:
+PGSN has two root elements: `<PGSN>` for standalone documents and `<PGSNModule>` for reusable modules.
+
+### `<PGSN>` — standalone document
+
+Produces a single value. Does **not** accept `<param>`.
 
 ```xml
 <PGSN>
-    <param name="p"/>          <!-- parameters (zero or more) -->
     <from file="..."/>         <!-- imports (zero or more) -->
     <def name="x">...</def>    <!-- definitions (zero or more) -->
     ...                        <!-- value (exactly one) -->
 </PGSN>
 ```
 
-`import` and `def` elements may be freely interleaved.
+### `<PGSNModule>` — reusable module
+
+Accepts parameters from the caller. `<param>` must appear first.
+
+```xml
+<PGSNModule>
+    <param name="p"/>          <!-- parameters (zero or more, must come first) -->
+    <from file="..."/>         <!-- imports (zero or more) -->
+    <def name="x">...</def>    <!-- definitions (zero or more) -->
+</PGSNModule>
+```
+
+`import` and `def` elements may be freely interleaved within both forms.
 
 ---
 
@@ -43,8 +58,8 @@ This is expanded by a preprocessor before evaluation.
 
 ## Parameters (param)
 
-`param` declares variables that this PGSN module receives from the outside.
-Parameters must appear at the top of the module.
+`param` declares variables that a `<PGSNModule>` receives from the caller.
+Parameters are only valid inside `<PGSNModule>` and must appear before any `<from>` or `<def>` elements.
 
 ```xml
 <param name="A1" instanceOf="Assumption"/>
@@ -133,6 +148,16 @@ Use `div` to scope definitions locally.
     <def name="y">expr2</def>
     expr   <!-- the value of the div -->
 </div>
+```
+
+Local `def` elements can also appear directly inside a `<template>` body, before the final value expression. This avoids the need for a wrapping `<div>`.
+
+```xml
+<template>
+    <param name="x"/>
+    <def name="doubled"><apply><var name="plus"/><arg var="x"/><arg var="x"/></apply></def>
+    <var name="doubled"/>   <!-- final value -->
+</template>
 ```
 
 ---
@@ -309,13 +334,30 @@ Keys can be arbitrary expressions or string literals via the `key` attribute.
 ### Format Strings in Text
 
 Wherever text is allowed, you can embed in-scope variables with the `{name}` notation.
-This is expanded by the preprocessor into a `format_string` application. To write a literal brace, escape it as `{{` `}}`.
+This is expanded by the preprocessor into a `format_string` application. To write a literal brace, escape it as `{{` or `}}`.
 
 ```xml
 <template>
     <param name="c" positional="true"/>
     <Evidence>Test result for component {c}</Evidence>
 </template>
+```
+
+### GSN Leading Text as Description
+
+For GSN header elements (`Goal`, `Strategy`, `Evidence`, `Context`, `Assumption`), leading plain text is automatically treated as the `description`. When the element also has child elements (such as a nested `<Strategy>`), the text is lifted into a `<description>` element by the preprocessor. `{name}` expansion applies here too.
+
+```xml
+<!-- these two forms are equivalent -->
+<Goal>
+    System {name} is secure
+    <undeveloped/>
+</Goal>
+
+<Goal>
+    <description>System {name} is secure</description>
+    <undeveloped/>
+</Goal>
 ```
 
 ---
@@ -474,4 +516,3 @@ A complete example combining parameters and imports.
 ```
 
 A module that receives `param` values uses `<PGSNModule>` rather than `<PGSN>` (which ends with a single value); `param` may appear only at the top of `<PGSNModule>`.
-```

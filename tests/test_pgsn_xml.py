@@ -418,6 +418,11 @@ def test_wrong_root(tmp_path):
         compile_pgsn(p)
 
 
+# ------------------------------------------------------------------ #
+# Positional template parameters
+# ------------------------------------------------------------------ #
+
+class TestPositionalParams:
     """Regression tests for positional vs keyword <template> parameters.
 
     Background
@@ -436,17 +441,14 @@ def test_wrong_root(tmp_path):
                                    the "does not normalize a Python value" error)
     """
 
-    def _to_tree(xml: str):
+    def _to_tree(self, xml: str):
         """Compile + fully_eval, then build the GSN tree. Errors propagate."""
         term = load_string(xml)
         tree = gsn_tree(term)
         tree.show()
         return tree
 
-    # --- positional application via map_term (the original crash) ---------------
-    # A pure-positional template applied element-wise by map_term. Before the fix
-    # this left an un-normalized App and crashed at the gsn_tree step.
-    def test_positional_via_map_term(capsys):
+    def test_positional_via_map_term(self, capsys):
         xml = """
         <PGSN>
             <def name="goalTemplate" as="template">
@@ -464,11 +466,9 @@ def test_wrong_root(tmp_path):
             </Goal>
         </PGSN>
         """
-        _to_tree(xml)  # must not raise
+        self._to_tree(xml)  # must not raise
 
-    # --- keyword application (must keep working) --------------------------------
-    # A pure-keyword template applied with a named <arg>.
-    def test_keyword_application(capsys):
+    def test_keyword_application(self, capsys):
         xml = """
         <PGSN>
             <def name="mk" as="template">
@@ -479,12 +479,9 @@ def test_wrong_root(tmp_path):
             <var name="g"/>
         </PGSN>
         """
-        _to_tree(xml)  # must not raise
+        self._to_tree(xml)  # must not raise
 
-    # --- mixed positional + keyword ---------------------------------------------
-    # Positional param stripped first, keyword param supplied as the trailing
-    # Record: f(pos, kw=...).
-    def test_mixed_positional_then_keyword(capsys):
+    def test_mixed_positional_then_keyword(self, capsys):
         xml = """
         <PGSN>
             <def name="mk" as="template">
@@ -496,10 +493,9 @@ def test_wrong_root(tmp_path):
             <var name="g"/>
         </PGSN>
         """
-        _to_tree(xml)  # must not raise
+        self._to_tree(xml)  # must not raise
 
-    # --- error: keyword param declared before a positional param ----------------
-    def test_keyword_before_positional_rejected():
+    def test_keyword_before_positional_rejected(self):
         xml = """
         <PGSN>
             <def name="mk" as="template">
@@ -513,8 +509,7 @@ def test_wrong_root(tmp_path):
         with pytest.raises(PGSNError):
             load_string(xml)
 
-    # --- error: positional param carrying a default value -----------------------
-    def test_positional_with_default_rejected():
+    def test_positional_with_default_rejected(self):
         xml = """
         <PGSN>
             <def name="mk" as="template">
@@ -528,3 +523,270 @@ def test_wrong_root(tmp_path):
             load_string(xml)
 
 
+# ------------------------------------------------------------------ #
+# template with inner defs (no wrapping div needed)
+# ------------------------------------------------------------------ #
+
+def test_template_inner_defs(tmp_path):
+    # <template> body can contain <def>s before the final value,
+    # equivalent to wrapping them in a <div>.
+    result = run("""
+    <PGSN>
+        <def name="f">
+            <template>
+                <param name="x"/>
+                <def name="a"><var name="x"/></def>
+                <def name="b"><var name="a"/></def>
+                <var name="b"/>
+            </template>
+        </def>
+        <apply><var name="f"/><arg name="x">hello</arg></apply>
+    </PGSN>""", tmp_path)
+    assert result == "hello"
+
+
+def test_template_inner_defs_gsn(tmp_path):
+    # Inner defs in a template that builds a GSN node.
+    result = run("""
+    <PGSN>
+        <def name="makeGoal">
+            <template>
+                <param name="desc"/>
+                <def name="ev"><Evidence><description var="desc"/></Evidence></def>
+                <Goal>
+                    <description var="desc"/>
+                    <supportedBy var="ev"/>
+                </Goal>
+            </template>
+        </def>
+        <apply><var name="makeGoal"/><arg name="desc">system is safe</arg></apply>
+    </PGSN>""", tmp_path)
+    assert gsn_type(result) == "Goal"
+    assert result["description"] == "system is safe"
+    assert gsn_type(result["support"]) == "Evidence"
+
+
+def test_template_inner_defs_equiv_div(tmp_path):
+    # template with inner defs must produce the same result as wrapping in div.
+    with_defs = run("""
+    <PGSN>
+        <def name="f">
+            <template>
+                <param name="x"/>
+                <def name="y"><var name="x"/></def>
+                <var name="y"/>
+            </template>
+        </def>
+        <apply><var name="f"/><arg name="x">ok</arg></apply>
+    </PGSN>""", tmp_path)
+
+    with_div = run("""
+    <PGSN>
+        <def name="f">
+            <template>
+                <param name="x"/>
+                <div>
+                    <def name="y"><var name="x"/></def>
+                    <var name="y"/>
+                </div>
+            </template>
+        </def>
+        <apply><var name="f"/><arg name="x">ok</arg></apply>
+    </PGSN>""", tmp_path)
+
+    assert with_defs == with_div
+
+
+def test_template_inner_non_def_before_value_error(tmp_path):
+    # A non-def element before the final value is an error.
+    p = tmp_path / "bad.pgsn"
+    p.write_text("""
+    <PGSN>
+        <def name="f">
+            <template>
+                <param name="x"/>
+                <var name="x"/>
+                <def name="y">oops</def>
+                <var name="y"/>
+            </template>
+        </def>
+        <apply><var name="f"/><arg name="x">v</arg></apply>
+    </PGSN>""")
+    with pytest.raises(PGSNError):
+        compile_pgsn(p)
+
+
+# ------------------------------------------------------------------ #
+# GSN text lift: leading text -> <description>
+# ------------------------------------------------------------------ #
+
+def test_gsn_text_lift_goal(tmp_path):
+    # Leading text in a Goal with sibling children is lifted to <description>.
+    result = run("""
+    <PGSN>
+        <Goal>
+            system is secure
+            <Evidence>static analysis passed</Evidence>
+        </Goal>
+    </PGSN>""", tmp_path)
+    assert gsn_type(result) == "Goal"
+    assert result["description"] == "system is secure"
+
+
+def test_gsn_text_lift_strategy(tmp_path):
+    result = run("""
+    <PGSN>
+        <Goal>
+            top goal
+            <Strategy>
+                argument by decomposition
+                <Goal>
+                    sub goal
+                    <undeveloped/>
+                </Goal>
+            </Strategy>
+        </Goal>
+    </PGSN>""", tmp_path)
+    assert result["description"] == "top goal"
+    assert result["support"]["description"] == "argument by decomposition"
+
+
+# ------------------------------------------------------------------ #
+# {var} inline text expansion
+# ------------------------------------------------------------------ #
+
+def test_text_expansion_in_description(tmp_path):
+    result = run("""
+    <PGSN>
+        <def name="f">
+            <template>
+                <param name="name"/>
+                <Goal>
+                    System {name} is secure
+                    <undeveloped/>
+                </Goal>
+            </template>
+        </def>
+        <apply><var name="f"/><arg name="name">Alpha</arg></apply>
+    </PGSN>""", tmp_path)
+    assert result["description"] == "System Alpha is secure"
+
+
+def test_text_expansion_in_evidence(tmp_path):
+    result = run("""
+    <PGSN>
+        <def name="f">
+            <template>
+                <param name="c"/>
+                <Evidence>Test doc for {c}</Evidence>
+            </template>
+        </def>
+        <apply><var name="f"/><arg name="c">C1</arg></apply>
+    </PGSN>""", tmp_path)
+    assert gsn_type(result) == "Evidence"
+    assert result["description"] == "Test doc for C1"
+
+
+def test_text_expansion_multiple_fields(tmp_path):
+    result = run("""
+    <PGSN>
+        <def name="f">
+            <template>
+                <param name="a"/>
+                <param name="b"/>
+                <Evidence>{a} and {b}</Evidence>
+            </template>
+        </def>
+        <apply>
+            <var name="f"/>
+            <arg name="a">foo</arg>
+            <arg name="b">bar</arg>
+        </apply>
+    </PGSN>""", tmp_path)
+    assert result["description"] == "foo and bar"
+
+
+def test_text_expansion_escaped_braces(tmp_path):
+    # {{ and }} are Python str.format escapes for literal braces.
+    result = run("""
+    <PGSN>
+        <Evidence>{{not a var}}</Evidence>
+    </PGSN>""", tmp_path)
+    assert result["description"] == "{not a var}"
+
+
+def test_text_no_expansion_without_braces(tmp_path):
+    # Plain text without {} must pass through unchanged.
+    result = run("""
+    <PGSN>
+        <Evidence>plain text no braces</Evidence>
+    </PGSN>""", tmp_path)
+    assert result["description"] == "plain text no braces"
+
+
+# ------------------------------------------------------------------ #
+# var attribute shorthand
+# ------------------------------------------------------------------ #
+
+def test_var_attribute_on_arg(tmp_path):
+    result = run("""
+    <PGSN>
+        <def name="x">hello</def>
+        <def name="f">
+            <template>
+                <param name="v"/>
+                <var name="v"/>
+            </template>
+        </def>
+        <apply>
+            <var name="f"/>
+            <arg name="v" var="x"/>
+        </apply>
+    </PGSN>""", tmp_path)
+    assert result == "hello"
+
+
+def test_var_attribute_on_supportedBy(tmp_path):
+    result = run("""
+    <PGSN>
+        <def name="ev"><Evidence>audit passed</Evidence></def>
+        <Goal>
+            logged
+            <supportedBy var="ev"/>
+        </Goal>
+    </PGSN>""", tmp_path)
+    assert gsn_type(result) == "Goal"
+    assert gsn_type(result["support"]) == "Evidence"
+
+
+def test_var_attribute_on_subGoals(tmp_path):
+    result = run("""
+    <PGSN>
+        <def name="goals">
+            <ul>
+                <li><Goal>G1<undeveloped/></Goal></li>
+                <li><Goal>G2<undeveloped/></Goal></li>
+            </ul>
+        </def>
+        <Goal>
+            top
+            <Strategy>
+                by decomposition
+                <subGoals var="goals"/>
+            </Strategy>
+        </Goal>
+    </PGSN>""", tmp_path)
+    assert gsn_type(result) == "Goal"
+    assert gsn_type(result["support"]) == "Strategy"
+
+
+def test_var_attribute_with_children_error(tmp_path):
+    # var attribute + child elements is an error.
+    p = tmp_path / "bad.pgsn"
+    p.write_text("""
+    <PGSN>
+        <def name="x">hello</def>
+        <arg var="x"><string>extra</string></arg>
+    </PGSN>""")
+    with pytest.raises(PGSNError):
+        compile_pgsn(p)

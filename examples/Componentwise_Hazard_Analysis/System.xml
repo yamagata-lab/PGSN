@@ -3,6 +3,7 @@
   <def name="hazards" as="ol">
     <li>H1</li>
     <li>H2</li>
+    <li>H3</li>
 <!--    <li>H3</li>-->
   </def>
 
