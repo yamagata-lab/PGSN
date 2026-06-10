@@ -1,13 +1,17 @@
 <PGSN>
     <def name="goalTemplate" as="template">
         <param name="desc" positional="true"/>
-        <Goal><description var="desc"/><Evidence><description var="desc"/></Evidence></Goal>
+        <Goal>{desc}<Evidence>{desc}</Evidence></Goal>
     </def>
 
     <def name="goals" as="apply">
         <var name="map_term"/>
         <arg var="goalTemplate"/>
-        <arg><ol><li>Firewall enabled</li><li>Encrypted communication</li><li>Access control active</li></ol></arg>
+        <arg><ol>
+            <li>Firewall enabled</li>
+            <li>Encrypted communication</li>
+            <li>Access control active</li>
+        </ol></arg>
     </def>
 
     <Goal>

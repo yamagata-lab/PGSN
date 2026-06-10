@@ -20,18 +20,16 @@
 
   <def name="makeComponentGoal" as="template">
     <param name="c" positional="true"/>
-    <div>
-      <def name="cName"><apply><var name="c"/><arg>name</arg></apply></def>
-      <Goal>
-        <description>{cName} is safe</description>
-        <Strategy>
-          Argument over each hazard
-          <subGoals>
-            <apply><var name="map_term"/><arg var="c"/><arg var="hazards"/></apply>
-          </subGoals>
-        </Strategy>
-      </Goal>
-    </div>
+    <def name="cName"><apply><var name="c"/><arg>name</arg></apply></def>
+    <Goal>
+      <description>{cName} is safe</description>
+      <Strategy>
+        Argument over each hazard
+        <subGoals>
+          <apply><var name="map_term"/><arg var="c"/><arg var="hazards"/></apply>
+        </subGoals>
+      </Strategy>
+    </Goal>
   </def>
 
   <Goal>
