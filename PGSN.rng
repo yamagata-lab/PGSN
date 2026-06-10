@@ -115,13 +115,21 @@
   <define name="param_pat">
     <element name="param">
       <attribute name="name"/>
-        <optional>
-          <attribute name="instanceOf"/>
-        </optional>
-        <optional>
-          <ref name="val_pat"/>
-        </optional>
-      </element>
+      <optional>
+        <attribute name="instanceOf"/>
+      </optional>
+      <optional>
+        <attribute name="positional">
+          <choice>
+            <value>true</value>
+            <value>false</value>
+          </choice>
+        </attribute>
+      </optional>
+      <optional>
+        <ref name="val_pat"/>
+      </optional>
+    </element>
   </define>
 
 
@@ -140,8 +148,15 @@
     <ref name="val_pat"/>
     <zeroOrMore>
       <element name="arg">
-        <attribute name="name"/>
-        <ref name="val_pat"/>
+        <optional>
+          <attribute name="name"/>
+        </optional>
+        <optional>
+          <attribute name="var"/>
+        </optional>
+        <optional>
+          <ref name="val_pat"/>
+        </optional>
       </element>
     </zeroOrMore>
   </define>
@@ -304,8 +319,15 @@
     </choice>
     <zeroOrMore>
       <element name="arg">
-        <attribute name="name"/>
-        <ref name="val_pat"/>
+        <optional>
+          <attribute name="name"/>
+        </optional>
+        <optional>
+          <attribute name="var"/>
+        </optional>
+        <optional>
+          <ref name="val_pat"/>
+        </optional>
       </element>
     </zeroOrMore>
   </element>
