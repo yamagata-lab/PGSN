@@ -230,8 +230,18 @@
 
 <define name="get_pat">
   <element name="get">
-    <attribute name="name"/>
-    <ref name="val_pat"/>
+    <!-- label="x" is the user-facing form; preprocessor rewrites it to name="x" -->
+    <choice>
+      <attribute name="label"/>
+      <attribute name="name"/>
+    </choice>
+    <!-- of="obj" is shorthand: inserts <var name="obj"/> as the receiver -->
+    <optional>
+      <attribute name="of"/>
+    </optional>
+    <optional>
+      <ref name="val_pat"/>
+    </optional>
   </element>
 </define>
 
