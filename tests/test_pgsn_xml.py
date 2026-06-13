@@ -203,11 +203,11 @@ def test_class_object_get(tmp_path):
         </def>
         <def name="obj">
             <object>
-                <instanceOf><var name="MyClass"/></instanceOf>
+                <instanceOf var="MyClass"/>
                 <attribute name="label">test_label</attribute>
             </object>
         </def>
-        <get name="label"><var name="obj"/></get>
+        <get label="label" of="obj"/>
     </PGSN>""", tmp_path)
     assert result == "test_label"
 
@@ -228,12 +228,12 @@ def test_class_inheritance(tmp_path):
         </def>
         <def name="obj">
             <object>
-                <instanceOf><var name="Child"/></instanceOf>
+                <instanceOf var="Child"/>
                 <attribute name="x">px</attribute>
                 <attribute name="y">py</attribute>
             </object>
         </def>
-        <get name="y"><var name="obj"/></get>
+        <get label="y" of="obj"/>
     </PGSN>""", tmp_path)
     assert result == "py"
 
@@ -871,17 +871,16 @@ def test_apply_template_builtin(tmp_path):
 
 def test_send_method_to(tmp_path):
     # <send method="m" to="obj"> shorthand: method call on a variable receiver.
-    # The method returns the value of the "greeting" attribute via self.
     result = run("""
     <PGSN>
         <def name="Greeter" as="class">
             <attribute name="greeting"/>
             <method name="greet">
-                <get name="greeting"><var name="self"/></get>
+                <get label="greeting" of="self"/>
             </method>
         </def>
         <def name="g" as="object">
-            <instanceOf>Greeter</instanceOf>
+            <instanceOf var="Greeter"/>
             <attribute name="greeting">hello</attribute>
         </def>
         <send method="greet" to="g"/>
@@ -896,11 +895,11 @@ def test_send_method_without_to(tmp_path):
         <def name="Greeter" as="class">
             <attribute name="greeting"/>
             <method name="greet">
-                <get name="greeting"><var name="self"/></get>
+                <get label="greeting" of="self"/>
             </method>
         </def>
         <def name="g" as="object">
-            <instanceOf>Greeter</instanceOf>
+            <instanceOf var="Greeter"/>
             <attribute name="greeting">hello</attribute>
         </def>
         <send method="greet">
@@ -918,11 +917,11 @@ def test_send_method_to_equiv_without_to(tmp_path):
         <def name="Wrapper" as="class">
             <attribute name="val"/>
             <method name="unwrap">
-                <get name="val"><var name="self"/></get>
+                <get label="val" of="self"/>
             </method>
         </def>
         <def name="w" as="object">
-            <instanceOf>Wrapper</instanceOf>
+            <instanceOf var="Wrapper"/>
             <attribute name="val">abc</attribute>
         </def>
         {send_form}
