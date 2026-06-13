@@ -10,7 +10,7 @@ from pathlib import Path
 
 from pgsn.dsl import (
     variable, string, list_term, record, empty_record, let,
-    lambda_abs, lambda_abs_keywords,
+    lambda_abs, lambda_abs_keywords, lambda_abs_vars,
     fix, map_term, fold, concat, cons, head, tail, index,
     true, false, if_then_else, guard,
     equal, plus, minus, times, div, mod,
@@ -18,7 +18,7 @@ from pgsn.dsl import (
     base_class, undefined, empty,
     boolean_and, boolean_or, boolean_not,
     has_label, list_labels, add_attribute, remove_attribute, overwrite_record,
-    format_string, lambda_abs_vars
+    format_string,
 )
 from pgsn.gsn import (
     goal, strategy, evidence, context, assumption,
@@ -38,9 +38,13 @@ class PGSNError(Exception):
 #
 # Expands shorthands in place on the ElementTree, before compilation,
 # so the compiler proper never sees them:
-#   1. def-as:        <def as="T">..</def>  ->  <def><T>..</T></def>
-#   2. var-attribute: <tag var="x"/>        ->  <tag><var name="x"/></tag>
-#   3. GSN text:      <Goal>txt<Strategy/>  ->  <Goal><description>txt</description><Strategy/>
+#   1. def-as:          <def as="T">..</def>       ->  <def><T>..</T></def>
+#   2. var-attribute:   <tag var="x"/>             ->  <tag><var name="x"/></tag>
+#   3. GSN text:        <Goal>txt<Strategy/>        ->  <Goal><description>txt</description><Strategy/>
+#   4. apply template:  <apply template="f">...</apply>
+#                                                  ->  <apply><var name="f"/>...</apply>
+#   5. send method/to:  <send method="m" to="obj"> ->  <send name="m"><var name="obj"/>...
+#                       (method= is the only user-facing form; name= is internal)
 # ------------------------------------------------------------------ #
 
 _GSN_HEADER_TAGS = {"Goal", "Strategy", "Evidence", "Context", "Assumption"}
@@ -60,7 +64,25 @@ def _preprocess(elem: ET.Element) -> None:
             wrapper.append(child)
         elem.append(wrapper)
 
+    # apply template="f": insert <var name="f"/> as the first child
+    if elem.tag == "apply" and "template" in elem.attrib:
+        name = elem.attrib.pop("template")
+        var_elem = ET.Element("var")
+        var_elem.set("name", name)
+        elem.insert(0, var_elem)
+
+    # send method="m" to="obj": rename method->name, insert <var name="obj"/> first
+    if elem.tag == "send" and "method" in elem.attrib:
+        method = elem.attrib.pop("method")
+        elem.set("name", method)
+        if "to" in elem.attrib:
+            receiver = elem.attrib.pop("to")
+            var_elem = ET.Element("var")
+            var_elem.set("name", receiver)
+            elem.insert(0, var_elem)
+
     # var-attribute: <tag var="x"/> -> <tag><var name="x"/></tag>
+    # (skip apply and send which handle var-like attrs above)
     if "var" in elem.attrib:
         if len(elem) > 0:
             raise PGSNError(

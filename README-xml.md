@@ -250,6 +250,21 @@ Applies a template to arguments.
 </apply>
 ```
 
+When the function is a named variable, the `template` attribute provides a shorthand that avoids the inner `<var>` element:
+
+```xml
+<!-- shorthand -->
+<apply template="funcname">
+    <arg>expr1</arg>
+</apply>
+
+<!-- equivalent full form -->
+<apply>
+    <var name="funcname"/>
+    <arg>expr1</arg>
+</apply>
+```
+
 ---
 
 ## Classes and Objects
@@ -294,7 +309,16 @@ Applies a template to arguments.
 ### Method Invocation (send)
 
 ```xml
-<send name="methodName">
+<send method="methodName" to="receiverVar">
+    <arg name="arg1">expr1</arg>
+</send>
+```
+
+The `method` attribute names the method; `to` is a shorthand for a variable receiver.
+When the receiver is a complex expression rather than a plain variable, omit `to` and write the receiver as the first child element:
+
+```xml
+<send method="methodName">
     receiver_expr
     <arg name="arg1">expr1</arg>
 </send>

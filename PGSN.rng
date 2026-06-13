@@ -207,6 +207,10 @@
 
   <define name="apply_pat">
     <element name="apply">
+      <!-- template="f" is shorthand: inserts <var name="f"/> as the function -->
+      <optional>
+        <attribute name="template"/>
+      </optional>
       <ref name="call_pat"/>
     </element>
   </define>
@@ -214,7 +218,11 @@
 
 <define name="send_pat">
   <element name="send">
-    <attribute name="name"/>
+    <attribute name="method"/>
+    <!-- to="obj" is shorthand: inserts <var name="obj"/> as the receiver -->
+    <optional>
+      <attribute name="to"/>
+    </optional>
     <ref name="call_pat"/>
   </element>
 </define>

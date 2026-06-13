@@ -790,3 +790,150 @@ def test_var_attribute_with_children_error(tmp_path):
     </PGSN>""")
     with pytest.raises(PGSNError):
         compile_pgsn(p)
+
+
+# ------------------------------------------------------------------ #
+# apply template= shorthand
+# ------------------------------------------------------------------ #
+
+def test_apply_template_attribute(tmp_path):
+    # <apply template="f"> is shorthand for <apply><var name="f"/>...</apply>
+    result = run("""
+    <PGSN>
+        <def name="greet">
+            <template>
+                <param name="name"/>
+                <var name="name"/>
+            </template>
+        </def>
+        <apply template="greet">
+            <arg name="name">world</arg>
+        </apply>
+    </PGSN>""", tmp_path)
+    assert result == "world"
+
+
+def test_apply_template_positional(tmp_path):
+    # template= with positional argument
+    result = run("""
+    <PGSN>
+        <def name="wrap" as="template">
+            <param name="x" positional="true"/>
+            <Evidence>{x}</Evidence>
+        </def>
+        <apply template="wrap">
+            <arg>component A</arg>
+        </apply>
+    </PGSN>""", tmp_path)
+    assert gsn_type(result) == "Evidence"
+    assert result["description"] == "component A"
+
+
+def test_apply_template_equiv_var(tmp_path):
+    # apply template= must produce the same result as explicit <var>
+    with_attr = run("""
+    <PGSN>
+        <def name="f" as="template">
+            <param name="x"/>
+            <var name="x"/>
+        </def>
+        <apply template="f"><arg name="x">ok</arg></apply>
+    </PGSN>""", tmp_path)
+
+    with_var = run("""
+    <PGSN>
+        <def name="f" as="template">
+            <param name="x"/>
+            <var name="x"/>
+        </def>
+        <apply><var name="f"/><arg name="x">ok</arg></apply>
+    </PGSN>""", tmp_path)
+
+    assert with_attr == with_var
+
+
+def test_apply_template_builtin(tmp_path):
+    # template= also works with builtin names
+    result = run("""
+    <PGSN>
+        <apply template="if_then_else">
+            <arg var="true"/>
+            <arg>yes</arg>
+            <arg>no</arg>
+        </apply>
+    </PGSN>""", tmp_path)
+    assert result == "yes"
+
+
+# ------------------------------------------------------------------ #
+# send method= / to= shorthand
+# ------------------------------------------------------------------ #
+
+def test_send_method_to(tmp_path):
+    # <send method="m" to="obj"> shorthand: method call on a variable receiver.
+    # The method returns the value of the "greeting" attribute via self.
+    result = run("""
+    <PGSN>
+        <def name="Greeter" as="class">
+            <attribute name="greeting"/>
+            <method name="greet">
+                <get name="greeting"><var name="self"/></get>
+            </method>
+        </def>
+        <def name="g" as="object">
+            <instanceOf>Greeter</instanceOf>
+            <attribute name="greeting">hello</attribute>
+        </def>
+        <send method="greet" to="g"/>
+    </PGSN>""", tmp_path)
+    assert result == "hello"
+
+
+def test_send_method_without_to(tmp_path):
+    # send method= without to= uses the first child element as receiver.
+    result = run("""
+    <PGSN>
+        <def name="Greeter" as="class">
+            <attribute name="greeting"/>
+            <method name="greet">
+                <get name="greeting"><var name="self"/></get>
+            </method>
+        </def>
+        <def name="g" as="object">
+            <instanceOf>Greeter</instanceOf>
+            <attribute name="greeting">hello</attribute>
+        </def>
+        <send method="greet">
+            <var name="g"/>
+        </send>
+    </PGSN>""", tmp_path)
+    assert result == "hello"
+
+
+def test_send_method_to_equiv_without_to(tmp_path):
+    # send method= to= must produce the same result as method= with explicit
+    # child var element as receiver (the two ways of specifying the receiver).
+    xml_base = """
+    <PGSN>
+        <def name="Wrapper" as="class">
+            <attribute name="val"/>
+            <method name="unwrap">
+                <get name="val"><var name="self"/></get>
+            </method>
+        </def>
+        <def name="w" as="object">
+            <instanceOf>Wrapper</instanceOf>
+            <attribute name="val">abc</attribute>
+        </def>
+        {send_form}
+    </PGSN>"""
+
+    with_to = run(
+        xml_base.format(send_form='<send method="unwrap" to="w"/>'),
+        tmp_path)
+
+    without_to = run(
+        xml_base.format(send_form='<send method="unwrap"><var name="w"/></send>'),
+        tmp_path)
+
+    assert with_to == without_to
