@@ -39,7 +39,27 @@ Accepts parameters from the caller. `<param>` must appear first.
 
 ## Values
 
-A value in PGSN is any expression or variable reference.
+In PGSN, **everything is a value**. Every element that accepts content expects an **expression** — something that evaluates to a value. There are no special "name slots" or "class name strings" built into the language.
+
+> **Key principle: bare text becomes a String literal.**
+> When you write text directly inside an element, it is parsed as a `String` value.
+> `<inherit>Goal</inherit>` does not refer to the Goal class — it produces the
+> string `"Goal"`, which is not a class. To refer to a variable, use `<var>` or
+> the `var=` shorthand attribute.
+
+```xml
+<!-- WRONG: text content becomes the string "Goal", not the class itself -->
+<inherit>Goal</inherit>
+
+<!-- CORRECT: var= is shorthand for a variable reference -->
+<inherit var="Goal"/>
+
+<!-- CORRECT: full form -->
+<inherit><var name="Goal"/></inherit>
+
+<!-- CORRECT: any expression that evaluates to a class works -->
+<inherit><apply template="makeBaseClass"><arg>...</arg></apply></inherit>
+```
 
 ### Shorthand for Variable References
 
@@ -62,6 +82,7 @@ This is expanded by a preprocessor before evaluation.
 Parameters are only valid inside `<PGSNModule>` and must appear before any `<from>` or `<def>` elements.
 
 ```xml
+<!-- Assumption is a built-in alias for assumption_class -->
 <param name="A1" instanceOf="Assumption"/>
 
 <!-- with a default value -->
@@ -112,7 +133,7 @@ Brings names from external PGSN files into scope. For security reasons, only rel
 ### `as` Attribute (Shorthand)
 
 The `as` attribute on `def` lets you omit the wrapping element type (tag name).
-This is also expanded by the preprocessor.
+This is also expanded by the preprocessor before compilation.
 
 ```xml
 <!-- full form -->
@@ -122,20 +143,48 @@ This is also expanded by the preprocessor.
 <def name="myGoal" as="Goal">...</def>
 ```
 
-`as` accepts only **built-in tag names** (`Goal`, `Strategy`, `Evidence`, `template`, `class`, `object`, `div`, `apply`, `ul`, `ol`, `dl`).
-User-defined class names (e.g. `GoalWithURL`) cannot be used with `as`
-(see "Extending GSN via Classes" below).
+`<def name="x" as="T">C</def>` is purely syntactic: the preprocessor rewrites it to `<def name="x"><T>C</T></def>` before compilation. Any tag name that is valid in that position can be used — including user-defined class instantiation tags like `object`. The only restriction is that tags requiring a mandatory attribute of their own (such as `var`, `get`, and `send`, which require `name=`) cannot be used, because the desugared form would be missing that attribute.
 
-> **Design invariant**
-> `<def name="x" as="T">C</def>` is valid if and only if its desugared form `<def name="x"><T>C</T></def>` is valid.
-> Consequently, tags whose element carries a required attribute (`name`) — namely `var`, `get`, and `send` — cannot be used with `as`, because the desugared `<send>C</send>` would be missing its required attribute.
+### Local Definitions
+
+Use `<def>` elements inside a `<div>` to scope definitions locally.
+
+```xml
+<div>
+    <def name="x">expr1</def>
+    <def name="y">expr2</def>
+    expr   <!-- the value of the div -->
+</div>
+```
+
+`<def>` elements can also appear directly inside a `<template>` body, before the final value expression. This avoids the need for a wrapping `<div>`.
+
+```xml
+<template>
+    <param name="x"/>
+    <def name="doubled"><apply><var name="plus"/><arg var="x"/><arg var="x"/></apply></def>
+    <var name="doubled"/>   <!-- final value -->
+</template>
+```
 
 ### `instanceOf` Attribute
 
-Used to explicitly declare the type of the defined value.
+Adds a runtime type check: the value must be an instance of the specified class.
+The attribute value is a **variable name** that refers to a class expression.
+For complex class expressions (e.g. a computed class), use the `<instanceOf>` child element form instead.
+
+> **PGSN has no class names.** Classes are ordinary values bound to variables.
+> `instanceOf="x"` means "the variable `x`", not a string literal class name.
 
 ```xml
-<def name="x" instanceOf="MyClass">...</def>
+<!-- myClass must be a variable bound to a class definition -->
+<def name="x" instanceOf="myClass">...</def>
+
+<!-- same for var references -->
+<var name="x" instanceOf="myClass"/>
+
+<!-- for complex class expressions, use the child element form -->
+<instanceOf><apply template="computeClass"><arg>...</arg></apply></instanceOf>
 ```
 
 ### Local Definitions (div)
@@ -148,16 +197,6 @@ Use `div` to scope definitions locally.
     <def name="y">expr2</def>
     expr   <!-- the value of the div -->
 </div>
-```
-
-Local `def` elements can also appear directly inside a `<template>` body, before the final value expression. This avoids the need for a wrapping `<div>`.
-
-```xml
-<template>
-    <param name="x"/>
-    <def name="doubled"><apply><var name="plus"/><arg var="x"/><arg var="x"/></apply></def>
-    <var name="doubled"/>   <!-- final value -->
-</template>
 ```
 
 ---
@@ -184,7 +223,9 @@ The following names are predefined; reference them with `<var name="..."/>` and 
 - Strings: `format_string`
 - Classes / objects: `define_class`, `instantiate`, `is_instance`, `is_subclass`, `base_class`
 - Misc: `fix`, `undefined`
-- GSN: `goal`, `strategy`, `evidence`, `context`, `assumption`, `undeveloped`, `immediate`, `evidence_as_goal`, and the classes (`goal_class`, etc.)
+- GSN constructors: `goal`, `strategy`, `evidence`, `context`, `assumption`, `undeveloped`, `immediate`, `evidence_as_goal`
+- GSN classes (long form): `goal_class`, `strategy_class`, `evidence_class`, `context_class`, `assumption_class`, `gsn_class`, `support_class`, `undeveloped_class`
+- GSN classes (short aliases): `Goal`, `Strategy`, `Evidence`, `Context`, `Assumption`, `GSN`, `Support`
 
 Example (mapping a template over a list):
 
@@ -273,37 +314,53 @@ When the function is a named variable, the `template` attribute provides a short
 
 ```xml
 <class>
-    <inherit>ParentClass</inherit>    <!-- inheritance (optional) -->
+    <!-- inherit accepts any expression that evaluates to a class.
+         var= is the common shorthand for a variable reference. -->
+    <inherit var="ParentClass"/>          <!-- inheritance (optional) -->
     <attribute name="attr1">default_value</attribute>
-    <attribute name="attr2"/>         <!-- no default value -->
+    <attribute name="attr2"/>             <!-- no default value -->
     <method name="m">
+        <!-- 'self' refers to the receiver object and is always available in
+             the method body without being declared as a param. -->
         <param name="p1">default</param>
         <param name="p2"/>
-        body_expr
+        body_expr   <!-- may use <var name="self"/> to access the receiver -->
     </method>
 </class>
 ```
+
+> **Note: PGSN has no class names.**
+> Classes are ordinary values; there is no registry of named classes.
+> `<inherit>`, `<instanceOf>`, and the `instanceOf` attribute all accept
+> **expressions that evaluate to a class**, not string literals.
+> Writing `<inherit>SomeClass</inherit>` is a text node and becomes
+> `"SomeClass"` as a string value, which is not a class — use `<inherit var="someClass"/>`
+> (or any other expression) instead.
 
 ### Object Instantiation (object)
 
 ```xml
 <object>
-    <instanceOf>MyClass</instanceOf>
+    <instanceOf var="MyClass"/>
     <attribute name="attr1">value</attribute>
 </object>
 ```
 
 ### Key Access (get)
 
-`get` works on both `Record` and `PGSNObject`. Internally it applies `expr` to the string key `name` as a positional argument, so it is completely equivalent to an `apply` with a plain-text `arg`.
+`get` works on both `Record` and `PGSNObject`. The `label` attribute names the key; `of` is a shorthand for a variable receiver. Internally it applies the receiver to the string key as a positional argument, so it is completely equivalent to an `apply` with a plain-text `arg`.
 
 ```xml
-<!-- PGSNObject attribute access -->
-<get name="description"><var name="myGoal"/></get>
+<!-- shorthand: label= names the key, of= names the receiver variable -->
+<get label="description" of="my_goal"/>
 
-<!-- Record key access (the two forms below are equivalent) -->
-<get name="x"><var name="myRecord"/></get>
-<apply><var name="myRecord"/><arg>x</arg></apply>
+<!-- when the receiver is a complex expression, use a child element -->
+<get label="description"><apply template="getGoal"/></get>
+
+<!-- Record key access — all three forms are equivalent -->
+<get label="x" of="my_record"/>
+<get label="x"><var name="my_record"/></get>
+<apply><var name="my_record"/><arg>x</arg></apply>
 ```
 
 ### Method Invocation (send)
@@ -402,7 +459,7 @@ Goal, Strategy, and Evidence all share the same header structure.
      Accepts any expression as a value. -->
 <Context>textual description</Context>
 <Context var="someObject"/>                            <!-- variable reference -->
-<Context><get name="version">expr</get></Context>      <!-- expression -->
+<Context><get label="version">expr</get></Context>      <!-- expression -->
 
 <!-- Assumption: an assumption the argument relies on.
      Like Context, accepts any expression as a value. -->
@@ -492,21 +549,19 @@ Instantiate the extended class with `<object>` (listing its attributes explicitl
 ```xml
 <!-- a class inheriting Goal, adding a URL attribute -->
 <def name="GoalWithURL" as="class">
-    <inherit>Goal</inherit>
+    <inherit var="Goal"/>
     <attribute name="URL"/>
 </def>
 
 <!-- instantiation (object form) -->
 <object>
-    <instanceOf>GoalWithURL</instanceOf>
+    <instanceOf var="GoalWithURL"/>
     <attribute name="description">System X is secure</attribute>
     <attribute name="URL">https://example.com/evidence</attribute>
     <attribute name="support" var="undeveloped"/>
 </object>
 ```
 
-> The shorthand of writing a user-defined class name in the `as` attribute (e.g. `<def name="myGoal" as="GoalWithURL">...`) is not supported.
-> Since `as` is limited to built-in tag names, use the `<object>` form above to instantiate an extended class.
 
 ---
 

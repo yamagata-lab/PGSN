@@ -19,14 +19,15 @@ from pgsn.dsl import (
     boolean_and, boolean_or, boolean_not,
     has_label, list_labels, add_attribute, remove_attribute, overwrite_record,
     format_string,
+    Term,
 )
 from pgsn.gsn import (
     goal, strategy, evidence, context, assumption,
     goal_class, strategy_class, evidence_class,
     context_class, assumption_class, gsn_class,
-    undeveloped, immediate,
+    support_class, undeveloped_class,
+    undeveloped, immediate, evidence_as_goal,
 )
-import pgsn.pgsn_term as _term
 
 
 class PGSNError(Exception):
@@ -38,13 +39,14 @@ class PGSNError(Exception):
 #
 # Expands shorthands in place on the ElementTree, before compilation,
 # so the compiler proper never sees them:
-#   1. def-as:          <def as="T">..</def>       ->  <def><T>..</T></def>
-#   2. var-attribute:   <tag var="x"/>             ->  <tag><var name="x"/></tag>
-#   3. GSN text:        <Goal>txt<Strategy/>        ->  <Goal><description>txt</description><Strategy/>
+#   1. def-as:          <def as="T">..</def>         ->  <def><T>..</T></def>
+#   2. var-attribute:   <tag var="x"/>               ->  <tag><var name="x"/></tag>
+#   3. GSN text:        <Goal>txt<Strategy/>          ->  <Goal><description>txt</description><Strategy/>
 #   4. apply template:  <apply template="f">...</apply>
-#                                                  ->  <apply><var name="f"/>...</apply>
-#   5. send method/to:  <send method="m" to="obj"> ->  <send name="m"><var name="obj"/>...
-#                       (method= is the only user-facing form; name= is internal)
+#                                                    ->  <apply><var name="f"/>...</apply>
+#   5. get label/of:    <get label="x" of="obj"/>    ->  <get name="x"><var name="obj"/></get>
+#   6. send method/to:  <send method="m" to="obj">   ->  <send name="m"><var name="obj"/>...
+#                       (label/method are user-facing; name= is internal)
 # ------------------------------------------------------------------ #
 
 _GSN_HEADER_TAGS = {"Goal", "Strategy", "Evidence", "Context", "Assumption"}
@@ -70,6 +72,16 @@ def _preprocess(elem: ET.Element) -> None:
         var_elem = ET.Element("var")
         var_elem.set("name", name)
         elem.insert(0, var_elem)
+
+    # get label="x" of="obj": rename label->name, insert <var name="obj"/> as child
+    if elem.tag == "get" and "label" in elem.attrib:
+        label = elem.attrib.pop("label")
+        elem.set("name", label)
+        if "of" in elem.attrib:
+            receiver = elem.attrib.pop("of")
+            var_elem = ET.Element("var")
+            var_elem.set("name", receiver)
+            elem.insert(0, var_elem)
 
     # send method="m" to="obj": rename method->name, insert <var name="obj"/> first
     if elem.tag == "send" and "method" in elem.attrib:
@@ -107,7 +119,7 @@ def _preprocess(elem: ET.Element) -> None:
 
 
 # Builtins substituted inline during compilation (not at evaluation time)
-_BUILTINS: dict[str, _term.Term] = {
+_BUILTINS: dict[str, Term] = {
     "fix": fix, "map_term": map_term, "fold": fold, "concat": concat,
     "cons": cons, "head": head, "tail": tail, "index": index,
     "equal": equal, "guard": guard, "if_then_else": if_then_else,
@@ -124,9 +136,15 @@ _BUILTINS: dict[str, _term.Term] = {
     "goal": goal, "strategy": strategy, "evidence": evidence,
     "context": context, "assumption": assumption,
     "immediate": immediate, "undeveloped": undeveloped,
+    "evidence_as_goal": evidence_as_goal,
     "gsn_class": gsn_class, "goal_class": goal_class,
     "strategy_class": strategy_class, "evidence_class": evidence_class,
     "context_class": context_class, "assumption_class": assumption_class,
+    "support_class": support_class, "undeveloped_class": undeveloped_class,
+    # Intuitive aliases for GSN class values
+    "Goal": goal_class, "Strategy": strategy_class, "Evidence": evidence_class,
+    "Context": context_class, "Assumption": assumption_class,
+    "GSN": gsn_class, "Support": support_class,
 }
 
 _SUPPORT_TAGS = {"Strategy", "Evidence", "Goal", "supportedBy", "undeveloped"}
@@ -139,7 +157,7 @@ def _text_fields(s: str) -> list[str]:
             if fname is not None and fname != ""]
 
 
-def _text_to_term(s: str) -> _term.Term:
+def _text_to_term(s: str) -> Term:
     """
     Turn user text into a Term. If it contains {name} fields, build a
     format_string application binding each field to the variable of that name.
@@ -159,7 +177,7 @@ def _text_to_term(s: str) -> _term.Term:
     return string(s)
 
 
-def _resolve(name: str, instance_of: str | None = None) -> _term.Term:
+def _resolve(name: str, instance_of: str | None = None) -> Term:
     """Builtins are substituted inline; other names become free variables."""
     term = _BUILTINS.get(name, variable(name))
     if instance_of:
@@ -168,8 +186,8 @@ def _resolve(name: str, instance_of: str | None = None) -> _term.Term:
     return term
 
 
-def _thread_lets(bindings: list[tuple[str, _term.Term]],
-                 body: _term.Term) -> _term.Term:
+def _thread_lets(bindings: list[tuple[str, Term]],
+                 body: Term) -> Term:
     """Fold a binding list into nested let expressions around body."""
     for name, term in reversed(bindings):
         body = let(variable(name), term, body)
@@ -201,13 +219,13 @@ def _split_args(arg_elems: list[ET.Element], base_dir: Path | None,
 # Document compilers
 # ------------------------------------------------------------------ #
 
-def compile_pgsn(path: str | Path) -> _term.Term:
+def compile_pgsn(path: str | Path) -> Term:
     """Compile a <PGSN> document file into a single Term (no evaluation)."""
     p = Path(path).resolve()
     return _compile_root(ET.parse(p).getroot(), p.parent, entry=p)
 
 
-def compile_pgsn_string(xml: str, base_dir: str | Path | None = None) -> _term.Term:
+def compile_pgsn_string(xml: str, base_dir: str | Path | None = None) -> Term:
     """
     Compile a <PGSN> document from a string.
     Imports are disallowed unless base_dir is given to resolve relative paths.
@@ -217,7 +235,7 @@ def compile_pgsn_string(xml: str, base_dir: str | Path | None = None) -> _term.T
 
 
 def _compile_root(root: ET.Element, base_dir: Path | None,
-                  entry: Path | None = None) -> _term.Term:
+                  entry: Path | None = None) -> Term:
     """Compile a parsed <PGSN> root element against a base directory.
 
     The entry file path (when known) seeds the visiting set so that an
@@ -240,7 +258,7 @@ def _compile_root(root: ET.Element, base_dir: Path | None,
 
 
 def _compile_module(root: ET.Element, base_dir: Path | None,
-                    visiting: frozenset[Path]) -> _term.Term:
+                    visiting: frozenset[Path]) -> Term:
     """
     Compile <PGSNModule> to a keyword-lambda Term.
     When applied to a Record of args, yields a Record of exported names.
@@ -273,7 +291,7 @@ def _compile_module(root: ET.Element, base_dir: Path | None,
 # ------------------------------------------------------------------ #
 
 def _bindings(elems: list[ET.Element], base_dir: Path | None,
-              visiting: frozenset[Path]) -> list[tuple[str, _term.Term]]:
+              visiting: frozenset[Path]) -> list[tuple[str, Term]]:
     result = []
     for elem in elems:
         if elem.tag == "def":
@@ -286,7 +304,7 @@ def _bindings(elems: list[ET.Element], base_dir: Path | None,
 
 
 def _compile_def(elem: ET.Element, base_dir: Path | None,
-                 visiting: frozenset[Path]) -> tuple[str, _term.Term]:
+                 visiting: frozenset[Path]) -> tuple[str, Term]:
     name = elem.get("name")
     term = _content(elem, base_dir, visiting)
 
@@ -302,7 +320,7 @@ def _compile_def(elem: ET.Element, base_dir: Path | None,
 
 
 def _compile_from(elem: ET.Element, base_dir: Path | None,
-                  visiting: frozenset[Path]) -> list[tuple[str, _term.Term]]:
+                  visiting: frozenset[Path]) -> list[tuple[str, Term]]:
     """
     File I/O at compile time (path is a static literal).
     Module application and field access are lazy Terms.
@@ -341,7 +359,7 @@ def _compile_from(elem: ET.Element, base_dir: Path | None,
 # ------------------------------------------------------------------ #
 
 def _content(parent: ET.Element, base_dir: Path | None,
-             visiting: frozenset[Path]) -> _term.Term:
+             visiting: frozenset[Path]) -> Term:
     """Single value from element content: one child expression or bare text."""
     val_children = [c for c in parent if c.tag != "param"]
     if len(val_children) == 1:
@@ -355,7 +373,7 @@ def _content(parent: ET.Element, base_dir: Path | None,
 
 
 def _expr(elem: ET.Element, base_dir: Path | None,
-          visiting: frozenset[Path]) -> _term.Term:
+          visiting: frozenset[Path]) -> Term:
     dispatch = {
         "var":      _e_var,
         "template": _e_template,
@@ -378,12 +396,12 @@ def _expr(elem: ET.Element, base_dir: Path | None,
     return fn(elem, base_dir, visiting)
 
 
-def _e_var(elem: ET.Element, _bd: Path, _v: frozenset) -> _term.Term:
+def _e_var(elem: ET.Element, _bd: Path, _v: frozenset) -> Term:
     return _resolve(elem.get("name"), elem.get("instanceOf"))
 
 
 def _e_template(elem: ET.Element, base_dir: Path | None,
-                visiting: frozenset[Path]) -> _term.Term:
+                visiting: frozenset[Path]) -> Term:
     params = [(c.get("name"), c) for c in elem if c.tag == "param"]
     body_elems = [c for c in elem if c.tag != "param"]
 
@@ -467,7 +485,7 @@ def _e_template(elem: ET.Element, base_dir: Path | None,
 
 
 def _e_apply(elem: ET.Element, base_dir: Path | None,
-             visiting: frozenset[Path]) -> _term.Term:
+             visiting: frozenset[Path]) -> Term:
     children = list(elem)
     if not children:
         raise PGSNError("<apply> needs a function")
@@ -480,7 +498,7 @@ def _e_apply(elem: ET.Element, base_dir: Path | None,
 
 
 def _e_class(elem: ET.Element, base_dir: Path | None,
-             visiting: frozenset[Path]) -> _term.Term:
+             visiting: frozenset[Path]) -> Term:
     inh = elem.find("inherit")
     kwargs: dict = {
         "inherit": _content(inh, base_dir, visiting) if inh is not None else base_class
@@ -489,7 +507,11 @@ def _e_class(elem: ET.Element, base_dir: Path | None,
     defs = {c.get("name"): _content(c, base_dir, visiting)
             for c in elem if c.tag == "attribute"
             and (list(c) or (c.text and c.text.strip()))}
-    methods = {c.get("name"): _e_template(c, base_dir, visiting)
+    # Methods must be stored as λself.body so that PGSNObject._apply_arg can
+    # call (method)(self) to bind the receiver. This mirrors the DSL pattern:
+    #   define_class(methods={'m': lambda_abs(self_var, body)})
+    _self_var = variable("self")
+    methods = {c.get("name"): lambda_abs(_self_var, _e_template(c, base_dir, visiting))
                for c in elem if c.tag == "method"}
     if attrs:
         kwargs["attributes"] = list_term(tuple(string(a) for a in attrs))
@@ -501,7 +523,7 @@ def _e_class(elem: ET.Element, base_dir: Path | None,
 
 
 def _e_object(elem: ET.Element, base_dir: Path | None,
-              visiting: frozenset[Path]) -> _term.Term:
+              visiting: frozenset[Path]) -> Term:
     inst = elem.find("instanceOf")
     if inst is None:
         raise PGSNError("<object> requires <instanceOf>")
@@ -513,15 +535,17 @@ def _e_object(elem: ET.Element, base_dir: Path | None,
 
 
 def _e_get(elem: ET.Element, base_dir: Path | None,
-           visiting: frozenset[Path]) -> _term.Term:
+           visiting: frozenset[Path]) -> Term:
     return _content(elem, base_dir, visiting)(string(elem.get("name")))
 
 
 def _e_send(elem: ET.Element, base_dir: Path | None,
-            visiting: frozenset[Path]) -> _term.Term:
+            visiting: frozenset[Path]) -> Term:
     children = list(elem)
     if not children:
         raise PGSNError("<send> needs a receiver")
+    # receiver("methodName") triggers PGSNObject._apply_arg which automatically
+    # applies self (the receiver) to the method value before returning it.
     method = _expr(children[0], base_dir, visiting)(string(elem.get("name")))
     positional, keyword = _split_args(children[1:], base_dir, visiting)
     if not positional and not keyword:
@@ -530,7 +554,7 @@ def _e_send(elem: ET.Element, base_dir: Path | None,
 
 
 def _e_div(elem: ET.Element, base_dir: Path | None,
-           visiting: frozenset[Path]) -> _term.Term:
+           visiting: frozenset[Path]) -> Term:
     children = list(elem)
     if not children:
         raise PGSNError("<div> has no value")
@@ -541,14 +565,14 @@ def _e_div(elem: ET.Element, base_dir: Path | None,
 
 
 def _e_list(elem: ET.Element, base_dir: Path | None,
-            visiting: frozenset[Path]) -> _term.Term:
+            visiting: frozenset[Path]) -> Term:
     return list_term(tuple(
         _content(li, base_dir, visiting) for li in elem.findall("li")
     ))
 
 
 def _e_dict(elem: ET.Element, base_dir: Path | None,
-            visiting: frozenset[Path]) -> _term.Term:
+            visiting: frozenset[Path]) -> Term:
     children = list(elem)
     attrs = {}
     for i in range(0, len(children) - 1, 2):
@@ -565,7 +589,7 @@ def _e_dict(elem: ET.Element, base_dir: Path | None,
 # ------------------------------------------------------------------ #
 
 def _gsn_header(elem: ET.Element, base_dir: Path | None,
-                visiting: frozenset[Path]) -> tuple[_term.Term, list, list]:
+                visiting: frozenset[Path]) -> tuple[Term, list, list]:
     desc_elem = elem.find("description")
     desc = (_content(desc_elem, base_dir, visiting) if desc_elem is not None
             else _text_to_term((elem.text or "").strip()))
@@ -577,7 +601,7 @@ def _gsn_header(elem: ET.Element, base_dir: Path | None,
 
 
 def _e_annotation(elem: ET.Element, base_dir: Path | None, visiting: frozenset[Path],
-                  ctor: _term.Term) -> _term.Term:
+                  ctor: Term) -> Term:
     """
     Context and Assumption share the same structure (documentation +
     optional payload). ctor is the constructor (context or assumption).
@@ -597,7 +621,7 @@ def _e_annotation(elem: ET.Element, base_dir: Path | None, visiting: frozenset[P
 
 
 def _e_goal(elem: ET.Element, base_dir: Path | None,
-            visiting: frozenset[Path]) -> _term.Term:
+            visiting: frozenset[Path]) -> Term:
     desc, contexts, assumptions = _gsn_header(elem, base_dir, visiting)
     body = [c for c in elem if c.tag in _SUPPORT_TAGS]
     support = undeveloped
@@ -622,7 +646,7 @@ def _e_goal(elem: ET.Element, base_dir: Path | None,
 
 
 def _e_strategy(elem: ET.Element, base_dir: Path | None,
-                visiting: frozenset[Path]) -> _term.Term:
+                visiting: frozenset[Path]) -> Term:
     desc, _, _ = _gsn_header(elem, base_dir, visiting)
     sub_goal_elems = [c for c in elem if c.tag == "Goal"]
     sub_goals_elem = elem.find("subGoals")
@@ -638,7 +662,7 @@ def _e_strategy(elem: ET.Element, base_dir: Path | None,
 
 
 def _e_evidence(elem: ET.Element, base_dir: Path | None,
-                visiting: frozenset[Path]) -> _term.Term:
+                visiting: frozenset[Path]) -> Term:
     desc, _, _ = _gsn_header(elem, base_dir, visiting)
     return evidence(description=desc)
 
@@ -647,12 +671,12 @@ def _e_evidence(elem: ET.Element, base_dir: Path | None,
 # Public API
 # ------------------------------------------------------------------ #
 
-def load(path: str | Path) -> _term.Term:
+def load(path: str | Path) -> Term:
     """Compile and fully evaluate a PGSN XML document file."""
     return compile_pgsn(path).fully_eval()
 
 
-def load_string(xml: str, base_dir: str | Path | None = None) -> _term.Term:
+def load_string(xml: str, base_dir: str | Path | None = None) -> Term:
     """Compile and fully evaluate a PGSN XML document from a string.
 
     Imports are disallowed unless base_dir is provided.
