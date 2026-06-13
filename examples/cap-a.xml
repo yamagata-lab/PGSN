@@ -2,29 +2,40 @@
     <!-- per-component evidence-goal builders; {c} is filled from the param -->
     <def name="mkTestDoc" as="template">
         <param name="c" positional="true"/>
-        <apply><var name="evidence_as_goal"/><arg><Evidence>Test doc for {c}</Evidence></arg></apply>
+        <apply template="evidence_as_goal">
+            <arg><Evidence>Test doc for {c}</Evidence></arg>
+        </apply>
     </def>
 
     <def name="mkTestResource" as="template">
         <param name="c" positional="true"/>
-        <apply><var name="evidence_as_goal"/><arg><Evidence>Test resources for {c}</Evidence></arg></apply>
+        <apply template="evidence_as_goal">
+            <arg><Evidence>Test resources for {c}</Evidence></arg>
+        </apply>
     </def>
 
     <def name="gd3" as="template">
         <param name="xs" positional="true"/>
-        <def name="testDocs" as="apply"><var name="map_term"/><arg var="mkTestDoc"/><arg var="xs"/></def>
-        <def name="testResources" as="apply"><var name="map_term"/><arg var="mkTestResource"/><arg var="xs"/></def>
-        <def name="evidences" as="apply">
-            <var name="cons"/>
-            <arg><apply><var name="evidence_as_goal"/><arg><Evidence>E3.1...</Evidence></arg></apply></arg>
-            <arg><apply><var name="concat"/><arg var="testDocs"/><arg var="testResources"/></apply></arg>
+        <def name="testDocs">
+            <apply template="map_term"><arg var="mkTestDoc"/><arg var="xs"/></apply>
+        </def>
+        <def name="testResources">
+            <apply template="map_term"><arg var="mkTestResource"/><arg var="xs"/></apply>
+        </def>
+        <def name="evidences">
+            <apply template="cons">
+                <arg><apply template="evidence_as_goal"><arg><Evidence>E3.1...</Evidence></arg></apply></arg>
+                <arg><apply template="concat"><arg var="testDocs"/><arg var="testResources"/></apply></arg>
+            </apply>
         </def>
         <Goal>
             <description>GD3: Security test is ...</description>
             <Context>N.D. devel. info. ...</Context>
-            <supportedBy><apply><var name="immediate"/><arg var="evidences"/></apply></supportedBy>
+            <supportedBy><apply template="immediate"><arg var="evidences"/></apply></supportedBy>
         </Goal>
     </def>
 
-    <apply><var name="gd3"/><arg><ol><li>C1</li><li>C2</li><li>C3</li></ol></arg></apply>
+    <apply template="gd3">
+        <arg><ol><li>C1</li><li>C2</li><li>C3</li></ol></arg>
+    </apply>
 </PGSN>
