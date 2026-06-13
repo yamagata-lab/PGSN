@@ -213,7 +213,6 @@ def python_value(obs: Term, with_inherit_chain=False):
 
 
 def json_dumps(t: Term, **kwargs) -> str:
-
     d = json_term_converter.unstructure(t, unstructure_as=Term)
     return json.dumps(d, **kwargs)
 
