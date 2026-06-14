@@ -936,3 +936,653 @@ def test_send_method_to_equiv_without_to(tmp_path):
         tmp_path)
 
     assert with_to == without_to
+
+
+# ------------------------------------------------------------------ #
+# Integer literals
+# ------------------------------------------------------------------ #
+
+def test_integer_literal_in_arg(tmp_path):
+    # Plain numeric text is parsed as Integer, not String
+    result = run("""
+    <PGSN>
+        <apply template="plus">
+            <arg>3</arg>
+            <arg>5</arg>
+        </apply>
+    </PGSN>""", tmp_path)
+    assert result == 8
+
+
+def test_integer_literal_in_def(tmp_path):
+    result = run("""
+    <PGSN>
+        <def name="n">42</def>
+        <var name="n"/>
+    </PGSN>""", tmp_path)
+    assert result == 42
+
+
+def test_string_not_confused_with_integer(tmp_path):
+    # Text that isn't purely numeric stays a String
+    result = run("""
+    <PGSN>
+        <def name="s">hello</def>
+        <var name="s"/>
+    </PGSN>""", tmp_path)
+    assert result == "hello"
+
+
+def test_integer_arithmetic(tmp_path):
+    result = run("""
+    <PGSN>
+        <def name="x">3</def>
+        <def name="y">4</def>
+        <apply template="plus"><arg var="x"/><arg var="y"/></apply>
+    </PGSN>""", tmp_path)
+    assert result == 7
+
+
+# ------------------------------------------------------------------ #
+# {expr} inline expression expansion
+# ------------------------------------------------------------------ #
+
+def test_text_expr_simple_var(tmp_path):
+    # {name} still works as before
+    result = run("""
+    <PGSN>
+        <def name="f" as="template">
+            <param name="name" positional="true"/>
+            <Evidence>Hello {name}</Evidence>
+        </def>
+        <apply template="f"><arg>world</arg></apply>
+    </PGSN>""", tmp_path)
+    assert result["description"] == "Hello world"
+
+
+def test_text_expr_arithmetic(tmp_path):
+    # {x + 1} expands to plus(var(x), integer(1))
+    result = run("""
+    <PGSN>
+        <def name="f" as="template">
+            <param name="n" positional="true"/>
+            <Evidence>Count: {n + 1}</Evidence>
+        </def>
+        <apply template="f"><arg>4</arg></apply>
+    </PGSN>""", tmp_path)
+    assert result["description"] == "Count: 5"
+
+
+def test_text_expr_multiply(tmp_path):
+    result = run("""
+    <PGSN>
+        <def name="f" as="template">
+            <param name="n" positional="true"/>
+            <Evidence>{n * 2} items</Evidence>
+        </def>
+        <apply template="f"><arg>3</arg></apply>
+    </PGSN>""", tmp_path)
+    assert result["description"] == "6 items"
+
+
+def test_text_expr_two_vars(tmp_path):
+    result = run("""
+    <PGSN>
+        <def name="f" as="template">
+            <param name="a" positional="true"/>
+            <param name="b" positional="true"/>
+            <Evidence>{a + b} total</Evidence>
+        </def>
+        <apply template="f"><arg>10</arg><arg>5</arg></apply>
+    </PGSN>""", tmp_path)
+    assert result["description"] == "15 total"
+
+
+def test_text_expr_equality_stringifies(tmp_path):
+    # {x == y} is interpolated as a STRING (format_string semantics), not a
+    # raw Boolean. To get a raw Boolean for use as a condition, use <expr>
+    # instead of {...} — see test_expr_element_equality.
+    result = run("""
+    <PGSN>
+        <def name="x">1</def>
+        <Evidence>Result: {x == 1}</Evidence>
+    </PGSN>""", tmp_path)
+    assert result["description"] == "Result: True"
+
+
+# ------------------------------------------------------------------ #
+# <expr> element
+# ------------------------------------------------------------------ #
+
+def test_expr_element_arithmetic(tmp_path):
+    result = run("""
+    <PGSN>
+        <def name="x">10</def>
+        <def name="y">3</def>
+        <expr>x + y</expr>
+    </PGSN>""", tmp_path)
+    assert result == 13
+
+
+def test_expr_element_equality(tmp_path):
+    result = run("""
+    <PGSN>
+        <def name="n">5</def>
+        <apply template="if_then_else">
+            <arg><expr>n == 5</expr></arg>
+            <arg>match</arg>
+            <arg>no match</arg>
+        </apply>
+    </PGSN>""", tmp_path)
+    assert result == "match"
+
+
+def test_expr_element_complex(tmp_path):
+    result = run("""
+    <PGSN>
+        <def name="a">3</def>
+        <def name="b">4</def>
+        <expr>a * a + b * b</expr>
+    </PGSN>""", tmp_path)
+    assert result == 25
+
+
+def test_expr_element_unary_minus(tmp_path):
+    result = run("""
+    <PGSN>
+        <def name="x">5</def>
+        <expr>x + -3</expr>
+    </PGSN>""", tmp_path)
+    assert result == 2
+
+
+# ------------------------------------------------------------------ #
+# New builtins: repeat, fold, list_all, integer_sum
+# ------------------------------------------------------------------ #
+
+def test_builtin_repeat(tmp_path):
+    # repeat(f, acc, n) applies f to acc n times
+    result = run("""
+    <PGSN>
+        <def name="addOne" as="template">
+            <param name="x" positional="true"/>
+            <expr>x + 1</expr>
+        </def>
+        <apply template="repeat">
+            <arg var="addOne"/>
+            <arg>0</arg>
+            <arg>5</arg>
+        </apply>
+    </PGSN>""", tmp_path)
+    assert result == 5
+
+
+def test_builtin_fold(tmp_path):
+    result = run("""
+    <PGSN>
+        <apply template="fold">
+            <arg var="plus"/>
+            <arg>0</arg>
+            <arg><ol><li>1</li><li>2</li><li>3</li></ol></arg>
+        </apply>
+    </PGSN>""", tmp_path)
+    assert result == 6
+
+
+def test_builtin_integer_sum(tmp_path):
+    result = run("""
+    <PGSN>
+        <apply template="integer_sum">
+            <arg><ol><li>10</li><li>20</li><li>12</li></ol></arg>
+        </apply>
+    </PGSN>""", tmp_path)
+    assert result == 42
+
+
+def test_builtin_list_all(tmp_path):
+    result = run("""
+    <PGSN>
+        <def name="isPos" as="template">
+            <param name="x" positional="true"/>
+            <apply template="equal"><arg><expr>x == x</expr></arg><arg var="true"/></apply>
+        </def>
+        <apply template="list_all">
+            <arg var="isPos"/>
+            <arg><ol><li>1</li><li>2</li><li>3</li></ol></arg>
+        </apply>
+    </PGSN>""", tmp_path)
+    assert result is True
+
+
+# ------------------------------------------------------------------ #
+# Comparison operators
+# ------------------------------------------------------------------ #
+
+def test_less_than(tmp_path):
+    result = run("""
+    <PGSN>
+        <apply template="if_then_else">
+            <arg><expr>3 &lt; 5</expr></arg>
+            <arg>yes</arg>
+            <arg>no</arg>
+        </apply>
+    </PGSN>""", tmp_path)
+    assert result == "yes"
+
+
+def test_greater_than(tmp_path):
+    result = run("""
+    <PGSN>
+        <apply template="if_then_else">
+            <arg><expr>10 > 5</expr></arg>
+            <arg>yes</arg>
+            <arg>no</arg>
+        </apply>
+    </PGSN>""", tmp_path)
+    assert result == "yes"
+
+
+def test_less_eq(tmp_path):
+    result = run("""
+    <PGSN>
+        <apply template="if_then_else">
+            <arg><expr>5 &lt;= 5</expr></arg>
+            <arg>yes</arg>
+            <arg>no</arg>
+        </apply>
+    </PGSN>""", tmp_path)
+    assert result == "yes"
+
+
+def test_greater_eq(tmp_path):
+    result = run("""
+    <PGSN>
+        <apply template="if_then_else">
+            <arg><expr>6 >= 5</expr></arg>
+            <arg>yes</arg>
+            <arg>no</arg>
+        </apply>
+    </PGSN>""", tmp_path)
+    assert result == "yes"
+
+
+def test_comparison_with_var(tmp_path):
+    result = run("""
+    <PGSN>
+        <def name="n">3</def>
+        <apply template="if_then_else">
+            <arg><expr>n &lt; 5</expr></arg>
+            <arg>small</arg>
+            <arg>large</arg>
+        </apply>
+    </PGSN>""", tmp_path)
+    assert result == "small"
+
+
+def test_comparison_builtin_direct(tmp_path):
+    # less_than as a direct builtin call
+    result = run("""
+    <PGSN>
+        <apply template="less_than">
+            <arg>3</arg>
+            <arg>5</arg>
+        </apply>
+    </PGSN>""", tmp_path)
+    assert result is True
+
+
+# ------------------------------------------------------------------ #
+# Boolean operators: xor, implies, and/or/not in <expr>
+# ------------------------------------------------------------------ #
+
+def test_boolean_xor_builtin(tmp_path):
+    result = run("""
+    <PGSN>
+        <apply template="boolean_xor">
+            <arg var="true"/>
+            <arg var="false"/>
+        </apply>
+    </PGSN>""", tmp_path)
+    assert result is True
+
+
+def test_boolean_xor_both_true(tmp_path):
+    result = run("""
+    <PGSN>
+        <apply template="boolean_xor">
+            <arg var="true"/>
+            <arg var="true"/>
+        </apply>
+    </PGSN>""", tmp_path)
+    assert result is False
+
+
+def test_implies_builtin(tmp_path):
+    # false implies anything -> true
+    result = run("""
+    <PGSN>
+        <apply template="implies">
+            <arg var="false"/>
+            <arg var="false"/>
+        </apply>
+    </PGSN>""", tmp_path)
+    assert result is True
+
+
+def test_implies_true_false(tmp_path):
+    # true implies false -> false
+    result = run("""
+    <PGSN>
+        <apply template="implies">
+            <arg var="true"/>
+            <arg var="false"/>
+        </apply>
+    </PGSN>""", tmp_path)
+    assert result is False
+
+
+def test_expr_and(tmp_path):
+    result = run("""
+    <PGSN>
+        <def name="n">3</def>
+        <apply template="if_then_else">
+            <arg><expr>n > 0 and n &lt; 10</expr></arg>
+            <arg>in range</arg>
+            <arg>out of range</arg>
+        </apply>
+    </PGSN>""", tmp_path)
+    assert result == "in range"
+
+
+def test_expr_or(tmp_path):
+    result = run("""
+    <PGSN>
+        <def name="n">0</def>
+        <apply template="if_then_else">
+            <arg><expr>n &lt; 0 or n == 0</expr></arg>
+            <arg>non-positive</arg>
+            <arg>positive</arg>
+        </apply>
+    </PGSN>""", tmp_path)
+    assert result == "non-positive"
+
+
+def test_expr_not(tmp_path):
+    result = run("""
+    <PGSN>
+        <def name="n">5</def>
+        <apply template="if_then_else">
+            <arg><expr>not (n == 0)</expr></arg>
+            <arg>nonzero</arg>
+            <arg>zero</arg>
+        </apply>
+    </PGSN>""", tmp_path)
+    assert result == "nonzero"
+
+
+# ------------------------------------------------------------------ #
+# <if cond="..."> shorthand for if_then_else
+# ------------------------------------------------------------------ #
+
+def test_if_cond_with_else(tmp_path):
+    result = run("""
+    <PGSN>
+        <def name="n">0</def>
+        <if cond="n == 0">
+            <then>base case</then>
+            <else>recursive case</else>
+        </if>
+    </PGSN>""", tmp_path)
+    assert result == "base case"
+
+
+def test_if_cond_else_branch(tmp_path):
+    result = run("""
+    <PGSN>
+        <def name="n">5</def>
+        <if cond="n == 0">
+            <then>base case</then>
+            <else>recursive case</else>
+        </if>
+    </PGSN>""", tmp_path)
+    assert result == "recursive case"
+
+
+def test_if_cond_without_else(tmp_path):
+    # missing <else> uses undefined; the then-branch is taken when cond holds
+    result = run("""
+    <PGSN>
+        <def name="ready" var="true"/>
+        <if cond="ready">
+            <then>done</then>
+        </if>
+    </PGSN>""", tmp_path)
+    assert result == "done"
+
+
+def test_if_cond_with_arithmetic(tmp_path):
+    result = run("""
+    <PGSN>
+        <def name="x">3</def>
+        <if cond="x &gt; 0 and x &lt; 10">
+            <then>in range</then>
+            <else>out of range</else>
+        </if>
+    </PGSN>""", tmp_path)
+    assert result == "in range"
+
+
+def test_if_cond_with_gsn_branches(tmp_path):
+    # A general expression (here: if_then_else) used as a Goal's support
+    # must be wrapped in <supportedBy>, per PGSN.rng's goal_pat: a bare
+    # <if> is not a direct alternative of <Goal>'s choice. Likewise,
+    # <undeveloped/> on its own is only valid as a direct child of <Goal>
+    # (not inside val_pat/expression_pat), so use <var name="undeveloped"/>
+    # to reference the same builtin value as a general expression.
+    result = run("""
+    <PGSN>
+        <def name="hasEvidence">1</def>
+        <Goal>
+            System is secure
+            <supportedBy>
+                <if cond="hasEvidence == 1">
+                    <then><Evidence>Audit passed</Evidence></then>
+                    <else><var name="undeveloped"/></else>
+                </if>
+            </supportedBy>
+        </Goal>
+    </PGSN>""", tmp_path)
+    assert gsn_type(result) == "Goal"
+    assert gsn_type(result["support"]) == "Evidence"
+
+
+def test_if_cond_simple_var(tmp_path):
+    # cond can be a plain variable name, not just an expression
+    result = run("""
+    <PGSN>
+        <def name="flag" var="false"/>
+        <if cond="flag">
+            <then>yes</then>
+            <else>no</else>
+        </if>
+    </PGSN>""", tmp_path)
+    assert result == "no"
+
+
+# ------------------------------------------------------------------ #
+# <if><cond>...</cond>...</if> child-element form
+# ------------------------------------------------------------------ #
+
+def test_if_cond_child_element_var_shorthand(tmp_path):
+    # <cond var="x"/> as an alternative to cond="x"
+    result = run("""
+    <PGSN>
+        <def name="flag" var="true"/>
+        <if>
+            <cond var="flag"/>
+            <then>yes</then>
+            <else>no</else>
+        </if>
+    </PGSN>""", tmp_path)
+    assert result == "yes"
+
+
+def test_if_cond_child_element_complex_expr(tmp_path):
+    # <cond> can hold any expression, e.g. an <apply>
+    result = run("""
+    <PGSN>
+        <def name="x">5</def>
+        <if>
+            <cond><apply template="greater_than"><arg var="x"/><arg>3</arg></apply></cond>
+            <then>big</then>
+            <else>small</else>
+        </if>
+    </PGSN>""", tmp_path)
+    assert result == "big"
+
+
+def test_if_missing_cond_error(tmp_path):
+    # <if> without cond= and without <cond> child is an error
+    p = tmp_path / "bad.pgsn"
+    p.write_text("""
+    <PGSN>
+        <if><then>a</then><else>b</else></if>
+    </PGSN>""")
+    with pytest.raises(PGSNError):
+        compile_pgsn(p)
+
+
+# ------------------------------------------------------------------ #
+# <cases>/<case>/<else>: a flat cascade of conditions
+# ------------------------------------------------------------------ #
+
+def test_cases_first_branch(tmp_path):
+    result = run("""
+    <PGSN>
+        <def name="n">0</def>
+        <cases>
+            <case cond="n == 0">zero</case>
+            <case cond="n == 1">one</case>
+            <case cond="n == 2">two</case>
+            <else>many</else>
+        </cases>
+    </PGSN>""", tmp_path)
+    assert result == "zero"
+
+
+def test_cases_middle_branch(tmp_path):
+    result = run("""
+    <PGSN>
+        <def name="n">1</def>
+        <cases>
+            <case cond="n == 0">zero</case>
+            <case cond="n == 1">one</case>
+            <case cond="n == 2">two</case>
+            <else>many</else>
+        </cases>
+    </PGSN>""", tmp_path)
+    assert result == "one"
+
+
+def test_cases_last_case_branch(tmp_path):
+    result = run("""
+    <PGSN>
+        <def name="n">2</def>
+        <cases>
+            <case cond="n == 0">zero</case>
+            <case cond="n == 1">one</case>
+            <case cond="n == 2">two</case>
+            <else>many</else>
+        </cases>
+    </PGSN>""", tmp_path)
+    assert result == "two"
+
+
+def test_cases_falls_through_to_else(tmp_path):
+    result = run("""
+    <PGSN>
+        <def name="n">99</def>
+        <cases>
+            <case cond="n == 0">zero</case>
+            <case cond="n == 1">one</case>
+            <case cond="n == 2">two</case>
+            <else>many</else>
+        </cases>
+    </PGSN>""", tmp_path)
+    assert result == "many"
+
+
+def test_cases_without_final_else(tmp_path):
+    # no <else>: falls through to undefined if nothing matches.
+    # Here the second case matches, so undefined is never evaluated.
+    result = run("""
+    <PGSN>
+        <def name="n">1</def>
+        <cases>
+            <case cond="n == 0">zero</case>
+            <case cond="n == 1">one</case>
+        </cases>
+    </PGSN>""", tmp_path)
+    assert result == "one"
+
+
+def test_cases_cond_child_element(tmp_path):
+    # <case> with a <cond> child element (var= shorthand), body is the
+    # case's remaining content directly — no <then> wrapper.
+    result = run("""
+    <PGSN>
+        <def name="flag" var="true"/>
+        <cases>
+            <case cond="false">first</case>
+            <case><cond var="flag"/>second</case>
+            <else>third</else>
+        </cases>
+    </PGSN>""", tmp_path)
+    assert result == "second"
+
+
+def test_cases_cond_child_complex_expr(tmp_path):
+    # <cond> child can hold an arbitrary expression, e.g. <apply>
+    result = run("""
+    <PGSN>
+        <def name="x">5</def>
+        <cases>
+            <case><cond><apply template="greater_than"><arg var="x"/><arg>10</arg></apply></cond>big</case>
+            <case><cond><apply template="greater_than"><arg var="x"/><arg>0</arg></apply></cond>positive</case>
+            <else>non-positive</else>
+        </cases>
+    </PGSN>""", tmp_path)
+    assert result == "positive"
+
+
+def test_cases_with_gsn_branches(tmp_path):
+    # Same reasoning as test_if_cond_with_gsn_branches: a <cases> expression
+    # used as support must be wrapped in <supportedBy>, and the fallback
+    # uses <var name="undeveloped"/> instead of a bare <undeveloped/>.
+    result = run("""
+    <PGSN>
+        <def name="level">2</def>
+        <Goal>
+            System is secure
+            <supportedBy>
+                <cases>
+                    <case cond="level == 1"><Evidence>Level 1 audit</Evidence></case>
+                    <case cond="level == 2"><Evidence>Level 2 audit</Evidence></case>
+                    <else><var name="undeveloped"/></else>
+                </cases>
+            </supportedBy>
+        </Goal>
+    </PGSN>""", tmp_path)
+    assert gsn_type(result) == "Goal"
+    assert gsn_type(result["support"]) == "Evidence"
+    assert result["support"]["description"] == "Level 2 audit"
+
+
+def test_cases_requires_at_least_one_case(tmp_path):
+    p = tmp_path / "bad.pgsn"
+    p.write_text("""
+    <PGSN>
+        <cases><else>fallback</else></cases>
+    </PGSN>""")
+    with pytest.raises(PGSNError):
+        compile_pgsn(p)

@@ -215,8 +215,8 @@ PGSN では**すべてが値**です。コンテンツを受け取る要素は�
 以下の名前はあらかじめ定義済みで、`<var name="..."/>` で参照し `apply` に適用できます。
 
 - リスト操作: `cons`・`head`・`tail`・`index`・`concat`・`map_term`・`fold`
-- 真偽値: `true`・`false`・`if_then_else`・`boolean_and`・`boolean_or`・`boolean_not`・`equal`・`guard`
-- 整数: `plus`・`minus`・`times`・`div`・`mod`
+- 真偽値: `true`・`false`・`if_then_else`・`boolean_and`・`boolean_or`・`boolean_not`・`boolean_xor`・`implies`・`equal`・`guard`
+- 整数: `plus`・`minus`・`times`・`div`・`mod`・`less_than`・`less_eq`・`greater_than`・`greater_eq`
 - レコード: `has_label`・`list_labels`・`add_attribute`・`remove_attribute`・`overwrite_record`
 - 文字列: `format_string`
 - クラス／オブジェクト: `define_class`・`instantiate`・`is_instance`・`is_subclass`・`base_class`
@@ -420,6 +420,79 @@ PGSN では**すべてが値**です。コンテンツを受け取る要素は�
     <Evidence>Component {c} のテスト結果</Evidence>
 </template>
 ```
+
+`{...}` には単純な変数名だけでなく、小さな式言語を書けます。算術演算（`+`・`-`・`*`・`/`・`%`）、比較演算（`==`・`!=`・`<`・`<=`・`>`・`>=`）、論理演算（`and`・`or`・`not`）、整数リテラルが使えます。式は評価され、結果は**必ず文字列に変換されて**テキストに埋め込まれます——`{x == 1}` はテキスト `"True"` や `"False"` になり、Boolean 値そのものにはなりません。
+
+```xml
+<Evidence>Component {c}: {count + 1} / {total}</Evidence>
+<Goal>{n} は範囲内: {n >= 0 and n < 100}</Goal>
+```
+
+式の**生の値**（文字列化されていない値）が必要な場合——例えば `if_then_else` の条件として Boolean を使いたい場合——は `{...}` ではなく下記の `<expr>` 要素を使ってください。
+
+### `<expr>` 要素
+
+同じ式言語を単独の要素として使えます。`{...}` と異なり、式の値をそのまま（Boolean・Integer など）返すので、テキストの中だけでなく値が期待される任意の場所で使えます。
+
+```xml
+<expr>x + y * 2</expr>
+<expr>n == 0</expr>
+<expr>a >= 0 and a < 100</expr>
+```
+
+### 条件分岐（if）
+
+`<if cond="...">` は `if_then_else` の略記です。`cond` 属性は `<expr>` と同じ式言語でパースされるので、単純な変数名でも算術・比較・論理式でも書けます。`<then>` は必須、`<else>` は省略可能（省略時は `undefined` が使われます）。
+
+```xml
+<if cond="n == 0">
+    <then><Evidence>基本ケースを検証済み</Evidence></then>
+    <else><undeveloped/></else>
+</if>
+```
+
+#### `<cond>` 子要素
+
+条件が属性文字列にうまく収まらない場合——例えば `var=` 略記や `<apply>` のような任意の式を使いたい場合——`cond` 属性の代わりに `<cond>` を子要素として書けます。`<cond>` は任意の式（`val_pat`）を受け取り、`var=` 略記も使えます。
+
+```xml
+<if>
+    <cond var="flag"/>
+    <then>yes</then>
+    <else>no</else>
+</if>
+
+<if>
+    <cond><apply template="greater_than"><arg var="x"/><arg>3</arg></apply></cond>
+    <then>big</then>
+    <else>small</else>
+</if>
+```
+
+### 多方向の条件分岐（cases）
+
+条件のカスケード——PythonのmatchやLispのcond、Cのswitchのようなもの——には、`<if>`を入れ子にする代わりに`<cases>`を使います。`<case>`はそれぞれ兄弟要素として並び、入れ子のツリーではなくフラットな条件のリストになります。
+
+```xml
+<cases>
+    <case cond="n == 0">zero</case>
+    <case cond="n == 1">one</case>
+    <case cond="n == 2">two</case>
+    <else>many</else>
+</cases>
+```
+
+各`<case>`は`<if>`と同じ方法で条件を持ちます——`cond`属性または`<cond>`子要素（`var=`略記や任意の式に便利）。`<if>`の`<then>`とは異なり、**`<case>`の本体はその要素自身の残りのコンテンツ**です——`<then>`によるラップは不要です。
+
+```xml
+<cases>
+    <case cond="false">first</case>
+    <case><cond var="flag"/>second</case>
+    <else>third</else>
+</cases>
+```
+
+`<case>`は順に評価され、どれにも一致しなければ`<else>`（省略時は`undefined`）が使われます。内部的には`<if>`/`<else>`を入れ子にした場合と同じネストした`if_then_else`チェーンに展開されますが、XML上の見た目はフラットな兄弟要素のリストになります。
 
 ### GSN の地テキストとして description を記述する
 

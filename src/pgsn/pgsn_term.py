@@ -1078,6 +1078,62 @@ class Mod(ConstMixin, Builtin):
         return Integer.nameless(value=i1 % i2)
 
 
+@frozen
+class LessThan(ConstMixin, Builtin):
+
+    @classmethod
+    def build(cls, is_named: bool, **kwarg) -> Term:
+        return super().build(arity=2, is_named=is_named, **kwarg)
+
+    def _applicable_args(self, args: tuple[Term, ...]):
+        return len(args) >= 2 and isinstance(args[0], Integer) and isinstance(args[1], Integer)
+
+    def _apply_args(self, args: tuple[Term, ...]):
+        return Boolean.nameless(value=args[0].value < args[1].value)
+
+
+@frozen
+class LessEq(ConstMixin, Builtin):
+
+    @classmethod
+    def build(cls, is_named: bool, **kwarg) -> Term:
+        return super().build(arity=2, is_named=is_named, **kwarg)
+
+    def _applicable_args(self, args: tuple[Term, ...]):
+        return len(args) >= 2 and isinstance(args[0], Integer) and isinstance(args[1], Integer)
+
+    def _apply_args(self, args: tuple[Term, ...]):
+        return Boolean.nameless(value=args[0].value <= args[1].value)
+
+
+@frozen
+class GreaterThan(ConstMixin, Builtin):
+
+    @classmethod
+    def build(cls, is_named: bool, **kwarg) -> Term:
+        return super().build(arity=2, is_named=is_named, **kwarg)
+
+    def _applicable_args(self, args: tuple[Term, ...]):
+        return len(args) >= 2 and isinstance(args[0], Integer) and isinstance(args[1], Integer)
+
+    def _apply_args(self, args: tuple[Term, ...]):
+        return Boolean.nameless(value=args[0].value > args[1].value)
+
+
+@frozen
+class GreaterEq(ConstMixin, Builtin):
+
+    @classmethod
+    def build(cls, is_named: bool, **kwarg) -> Term:
+        return super().build(arity=2, is_named=is_named, **kwarg)
+
+    def _applicable_args(self, args: tuple[Term, ...]):
+        return len(args) >= 2 and isinstance(args[0], Integer) and isinstance(args[1], Integer)
+
+    def _apply_args(self, args: tuple[Term, ...]):
+        return Boolean.nameless(value=args[0].value >= args[1].value)
+
+
 # Control flow
 @frozen
 class IfThenElse(ConstMixin, Builtin):
@@ -1232,66 +1288,12 @@ class Formatter(ConstMixin, Builtin):
 
 
 
-def _find_open_variables(t: Term) -> list[int]:
-    """Return de Bruijn indices of free (unbound) Variables remaining in a nameless term.
-
-    A nameless Variable with num >= 0 that survived full_eval is an open term —
-    it was never substituted, which means some lambda abstraction is still unapplied.
-    """
-    match t:
-        case Variable():
-            return [t.num]
-        case App():
-            return _find_open_variables(t.t1) + _find_open_variables(t.t2)
-        case Abs():
-            # Variables with num == 0 are bound by this Abs; shift index for callers.
-            return [i - 1 for i in _find_open_variables(t.t) if i > 0]
-        case List():
-            result = []
-            for item in t.terms:
-                result.extend(_find_open_variables(item))
-            return result
-        case Record():
-            result = []
-            for _, v in t.attributes().items():
-                result.extend(_find_open_variables(v))
-            return result
-        case PGSNObject():
-            result = []
-            for _, v in t.attributes().items():
-                result.extend(_find_open_variables(v))
-            return result
-        case _:
-            return []
-
-
 def value_of(term: Term, steps=1000, with_inherit_chain=False) -> Any:
     t = term.fully_eval(steps)
-
-    # Detect open terms (unapplied lambdas / unsubstituted variables) before
-    # attempting conversion, so we can emit a meaningful diagnostic instead of
-    # a cryptic "does not normalizes" error later.
-    open_indices = _find_open_variables(t)
-    if open_indices:
-        raise ValueError(
-            f"PGSN term did not fully evaluate: open (unbound) de Bruijn "
-            f"indices {sorted(set(open_indices))} remain in the normalised term. "
-            f"This usually means a lambda is still waiting for an argument. "
-            f"Partial term (first 300 chars): {repr(t)[:300]}"
-        )
-
     return to_python(t, with_inherit_chain=with_inherit_chain)
 
 
-def to_python(t: Term, with_inherit_chain=False, _path: str = "<root>") -> Any:
-    """Convert a fully-evaluated PGSN term to a plain Python value.
-
-    Args:
-        t: The term to convert.  Must be in normal form (no App nodes).
-        with_inherit_chain: When True, PGSNObject dicts include __parent_classes__.
-        _path: Internal breadcrumb string that tracks the nested key/index path
-               so that error messages can pinpoint exactly where conversion failed.
-    """
+def to_python(t: Term, with_inherit_chain=False) -> Any:
     match t:
         case String():
             return t.value
@@ -1301,44 +1303,24 @@ def to_python(t: Term, with_inherit_chain=False, _path: str = "<root>") -> Any:
             return t.value
         case List():
             terms = t.terms
-            result = []
-            for i, t1 in enumerate(terms):
-                child_path = f"{_path}[{i}]"
-                # propagate both flags through list elements
-                result.append(to_python(t1,
-                                        with_inherit_chain=with_inherit_chain,
-                                        _path=child_path))
-            return result
+            # Propagate with_inherit_chain so nested GSN objects keep their
+            # __parent_classes__ marker too, not just the top-level term.
+            return [value_of(t1, with_inherit_chain=with_inherit_chain) for t1 in terms]
         case Record():
             attr = t.attributes()
-            out = {}
-            for k, t1 in attr.items():
-                child_path = f"{_path}.{k}"
-                out[k] = to_python(t1,
-                                   with_inherit_chain=with_inherit_chain,
-                                   _path=child_path)
-            return out
+            # Same propagation as above for record-valued attributes.
+            return {k: value_of(t1, with_inherit_chain=with_inherit_chain) for k, t1 in attr.items()}
         case PGSNObject():
             attr = t.attributes()
             cls_name = t.instance.name
-            attrs = {}
-            for k, t1 in attr.items():
-                child_path = f"{_path}.{k}"
-                attrs[k] = to_python(t1,
-                                     with_inherit_chain=with_inherit_chain,
-                                     _path=child_path)
+            # Same propagation as above for object attributes (e.g. support, sub_goals).
+            attrs =  {k: value_of(t1, with_inherit_chain=with_inherit_chain) for k, t1 in attr.items()}
             attrs["__" + cls_name + "__"] = True
             if with_inherit_chain:
                 attrs["__parent_classes__"] = [cls.name for cls in _inherit_chain(t.instance)]
             return attrs
         case _:
-            # Include the path breadcrumb and a repr snippet to help locate the
-            # stuck node without having to inspect the entire term tree manually.
-            raise ValueError(
-                f"PGSN term cannot be converted to a Python value at path '{_path}': "
-                f"unexpected term type {type(t).__name__}. "
-                f"Term (first 200 chars): {repr(t)[:200]}"
-            )
+            raise ValueError(f'PGSN term {type(t)} does not normalizes a Python value')
 
 
 # Evaluation Context

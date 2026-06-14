@@ -11,14 +11,15 @@ from pathlib import Path
 from pgsn.dsl import (
     variable, string, list_term, record, empty_record, let,
     lambda_abs, lambda_abs_keywords, lambda_abs_vars,
-    fix, map_term, fold, concat, cons, head, tail, index,
+    fix, repeat, map_term, fold, foldr, concat, cons, head, tail, index,
     true, false, if_then_else, guard,
     equal, plus, minus, times, div, mod,
+    less_than, less_eq, greater_than, greater_eq,
     define_class, instantiate, is_instance, is_subclass,
     base_class, undefined, empty,
-    boolean_and, boolean_or, boolean_not,
+    boolean_and, boolean_or, boolean_not, boolean_xor, implies,
     has_label, list_labels, add_attribute, remove_attribute, overwrite_record,
-    format_string,
+    format_string, integer, list_all, integer_sum, instance,
     Term,
 )
 from pgsn.gsn import (
@@ -47,9 +48,92 @@ class PGSNError(Exception):
 #   5. get label/of:    <get label="x" of="obj"/>    ->  <get name="x"><var name="obj"/></get>
 #   6. send method/to:  <send method="m" to="obj">   ->  <send name="m"><var name="obj"/>...
 #                       (label/method are user-facing; name= is internal)
+#   7. if/cond/else:    <if cond="...">...</if>      ->  if_then_else application
+#                       (see _take_cond_arg below)
+#   8. cases/case/else: <cases><case cond="...">..   ->  nested if_then_else chain
+#                       (see _build_cases_chain below)
 # ------------------------------------------------------------------ #
 
 _GSN_HEADER_TAGS = {"Goal", "Strategy", "Evidence", "Context", "Assumption"}
+
+
+def _take_cond_arg(elem: ET.Element) -> ET.Element:
+    """Extract the condition of an <if> or <case> element as an <arg>.
+
+    The condition is either:
+      - a `cond` attribute, parsed by the mini-expression language (same as
+        <expr>), or
+      - a <cond> child element holding any expression (val_pat) — useful
+        for var= shorthand or expressions too complex for an attribute.
+
+    The source attribute/element is consumed (removed) from `elem`. If a
+    <cond> child is removed, its `.tail` text (text following </cond> in
+    the source) is preserved by merging it into `elem`'s remaining content
+    — this matters for <case>, where that text is part of the case's body.
+    """
+    if "cond" in elem.attrib:
+        cond_text = elem.attrib.pop("cond")
+        expr_elem = ET.Element("expr")
+        expr_elem.text = cond_text
+        arg = ET.Element("arg")
+        arg.append(expr_elem)
+        return arg
+    cond_elem = elem.find("cond")
+    if cond_elem is None:
+        raise PGSNError(
+            f"<{elem.tag}> requires a 'cond' attribute or <cond> child element")
+    siblings = list(elem)
+    idx = siblings.index(cond_elem)
+    elem.remove(cond_elem)
+    if cond_elem.tail:
+        if idx == 0:
+            elem.text = (elem.text or "") + cond_elem.tail
+        else:
+            prev = siblings[idx - 1]
+            prev.tail = (prev.tail or "") + cond_elem.tail
+        cond_elem.tail = None
+    cond_elem.tag = "arg"
+    return cond_elem
+
+
+def _build_cases_chain(case_elems: list[ET.Element],
+                       base_else_arg: ET.Element) -> ET.Element:
+    """Build the nested if_then_else chain for a <cases> element's <case>s.
+
+    Each <case> supplies its condition (cond= attribute or <cond> child) and
+    its body is the *remaining content* of the <case> element itself — there
+    is no <then> wrapper, unlike <if>.
+
+    Returns an <arg> element holding the else-branch content for the level
+    above: either `base_else_arg` itself (if no <case>s remain) or an
+    <apply> wrapping the first <case> with the rest of the chain as its
+    else-branch.
+    """
+    if not case_elems:
+        return base_else_arg
+
+    first, *rest = case_elems
+    cond_arg = _take_cond_arg(first)
+
+    # The remaining content of <case> (after removing <cond> if present) is
+    # the case's value — rename <case> -> <arg> directly, no <then> wrapper.
+    first.tag = "arg"
+    then_arg = first
+
+    inner_else_arg = _build_cases_chain(rest, base_else_arg)
+
+    func_var = ET.Element("var")
+    func_var.set("name", "if_then_else")
+
+    apply_elem = ET.Element("apply")
+    apply_elem.append(func_var)
+    apply_elem.append(cond_arg)
+    apply_elem.append(then_arg)
+    apply_elem.append(inner_else_arg)
+
+    result_arg = ET.Element("arg")
+    result_arg.append(apply_elem)
+    return result_arg
 
 
 def _preprocess(elem: ET.Element) -> None:
@@ -65,6 +149,99 @@ def _preprocess(elem: ET.Element) -> None:
             elem.remove(child)
             wrapper.append(child)
         elem.append(wrapper)
+
+    # if/cond/else: <if cond="...">...</if> expands to if_then_else.
+    #
+    #   <if cond="n == 0">              <if><cond var="x"/>
+    #       <then>a</then>                  <then>a</then>
+    #       <else>b</else>                  <else>b</else>
+    #   </if>                            </if>
+    #
+    # The condition is either a `cond` attribute (parsed by the same
+    # mini-expression language as <expr>) or a <cond> child element holding
+    # any expression (val_pat) — useful when var= shorthand or a complex
+    # expression doesn't fit in an attribute string.
+    #
+    # <then> is required; <else> may be omitted (defaults to
+    # <var name="undefined"/>). For a cascade of conditions, use <cases>
+    # instead (below).
+    if elem.tag == "if":
+        then_elem = elem.find("then")
+        if then_elem is None:
+            raise PGSNError("<if> requires a <then> element")
+
+        cond_arg = _take_cond_arg(elem)
+
+        elem.remove(then_elem)
+        then_elem.tag = "arg"
+
+        else_elem = elem.find("else")
+        if else_elem is not None:
+            elem.remove(else_elem)
+            else_elem.tag = "arg"
+            else_arg = else_elem
+        else:
+            else_arg = ET.Element("arg")
+            undef_var = ET.Element("var")
+            undef_var.set("name", "undefined")
+            else_arg.append(undef_var)
+
+        func_var = ET.Element("var")
+        func_var.set("name", "if_then_else")
+
+        # Rebuild <if> as <apply>
+        elem.tag = "apply"
+        elem.text = None
+        for c in list(elem):
+            elem.remove(c)
+        elem.append(func_var)
+        elem.append(cond_arg)
+        elem.append(then_elem)
+        elem.append(else_arg)
+
+    # cases: a flat cascade of conditions, like Python's match / Lisp's cond.
+    #
+    #   <cases>
+    #       <case cond="n == 0">zero</case>
+    #       <case><cond var="flag"/>complex condition case</case>
+    #       <else>many</else>
+    #   </cases>
+    #
+    # Each <case> supplies its condition (cond= attribute or <cond> child,
+    # same as <if>) and its body is the case element's own remaining
+    # content — there is no <then> wrapper. <case>s are checked in order;
+    # <else> (or <var name="undefined"/> if omitted) is used if none match.
+    # Internally this expands to the same nested if_then_else chain as a
+    # cascade of <if>/<else><if>, but the XML surface is a flat list of
+    # siblings.
+    if elem.tag == "cases":
+        case_elems = elem.findall("case")
+        if not case_elems:
+            raise PGSNError("<cases> requires at least one <case> element")
+        for c in case_elems:
+            elem.remove(c)
+
+        else_elem = elem.find("else")
+        if else_elem is not None:
+            elem.remove(else_elem)
+            else_elem.tag = "arg"
+            base_else_arg = else_elem
+        else:
+            base_else_arg = ET.Element("arg")
+            undef_var = ET.Element("var")
+            undef_var.set("name", "undefined")
+            base_else_arg.append(undef_var)
+
+        result_arg = _build_cases_chain(case_elems, base_else_arg)
+        apply_elem = result_arg.find("apply")
+
+        # Rebuild <cases> as <apply>
+        elem.tag = "apply"
+        elem.text = None
+        for c in list(elem):
+            elem.remove(c)
+        for c in list(apply_elem):
+            elem.append(c)
 
     # apply template="f": insert <var name="f"/> as the first child
     if elem.tag == "apply" and "template" in elem.attrib:
@@ -120,12 +297,17 @@ def _preprocess(elem: ET.Element) -> None:
 
 # Builtins substituted inline during compilation (not at evaluation time)
 _BUILTINS: dict[str, Term] = {
-    "fix": fix, "map_term": map_term, "fold": fold, "concat": concat,
+    "fix": fix, "repeat": repeat,
+    "map_term": map_term, "fold": fold, "foldr": foldr, "concat": concat,
     "cons": cons, "head": head, "tail": tail, "index": index,
+    "list_all": list_all, "integer_sum": integer_sum, "instance": instance,
     "equal": equal, "guard": guard, "if_then_else": if_then_else,
     "plus": plus, "minus": minus, "times": times, "div": div, "mod": mod,
+    "less_than": less_than, "less_eq": less_eq,
+    "greater_than": greater_than, "greater_eq": greater_eq,
     "boolean_and": boolean_and, "boolean_or": boolean_or,
-    "boolean_not": boolean_not, "true": true, "false": false,
+    "boolean_not": boolean_not, "boolean_xor": boolean_xor,
+    "implies": implies, "true": true, "false": false,
     "has_label": has_label, "list_labels": list_labels,
     "add_attribute": add_attribute, "remove_attribute": remove_attribute,
     "overwrite_record": overwrite_record, "format_string": format_string,
@@ -150,30 +332,141 @@ _BUILTINS: dict[str, Term] = {
 _SUPPORT_TAGS = {"Strategy", "Evidence", "Goal", "supportedBy", "undeveloped"}
 
 
+import ast as _ast
+import string as _stringmod
+
+
+def _ast_to_term(node: _ast.expr) -> Term:
+    """Convert a Python AST expression node to a PGSN Term.
+
+    Supports: variable names, integer/string literals, arithmetic (+,-,*,/,%),
+    equality (==, !=), and parenthesised sub-expressions.
+    Raises PGSNError for unsupported constructs.
+    """
+    match node:
+        case _ast.Name(id=name):
+            return _resolve(name)
+        case _ast.Constant(value=v) if isinstance(v, int):
+            return integer(v)
+        case _ast.Constant(value=v) if isinstance(v, str):
+            return string(v)
+        case _ast.BinOp(left=l, op=_ast.Add(), right=r):
+            return plus(_ast_to_term(l), _ast_to_term(r))
+        case _ast.BinOp(left=l, op=_ast.Sub(), right=r):
+            return minus(_ast_to_term(l), _ast_to_term(r))
+        case _ast.BinOp(left=l, op=_ast.Mult(), right=r):
+            return times(_ast_to_term(l), _ast_to_term(r))
+        case _ast.BinOp(left=l, op=_ast.Div(), right=r):
+            return div(_ast_to_term(l), _ast_to_term(r))
+        case _ast.BinOp(left=l, op=_ast.Mod(), right=r):
+            return mod(_ast_to_term(l), _ast_to_term(r))
+        case _ast.Compare(left=l, ops=[_ast.Eq()], comparators=[r]):
+            return equal(_ast_to_term(l), _ast_to_term(r))
+        case _ast.Compare(left=l, ops=[_ast.NotEq()], comparators=[r]):
+            return boolean_not(equal(_ast_to_term(l), _ast_to_term(r)))
+        case _ast.Compare(left=l, ops=[_ast.Lt()], comparators=[r]):
+            return less_than(_ast_to_term(l), _ast_to_term(r))
+        case _ast.Compare(left=l, ops=[_ast.LtE()], comparators=[r]):
+            return less_eq(_ast_to_term(l), _ast_to_term(r))
+        case _ast.Compare(left=l, ops=[_ast.Gt()], comparators=[r]):
+            return greater_than(_ast_to_term(l), _ast_to_term(r))
+        case _ast.Compare(left=l, ops=[_ast.GtE()], comparators=[r]):
+            return greater_eq(_ast_to_term(l), _ast_to_term(r))
+        case _ast.UnaryOp(op=_ast.USub(), operand=o):
+            return minus(integer(0), _ast_to_term(o))
+        case _ast.UnaryOp(op=_ast.Not(), operand=o):
+            return boolean_not(_ast_to_term(o))
+        case _ast.BoolOp(op=_ast.And(), values=values):
+            terms = [_ast_to_term(v) for v in values]
+            result = terms[0]
+            for t in terms[1:]:
+                result = boolean_and(result, t)
+            return result
+        case _ast.BoolOp(op=_ast.Or(), values=values):
+            terms = [_ast_to_term(v) for v in values]
+            result = terms[0]
+            for t in terms[1:]:
+                result = boolean_or(result, t)
+            return result
+        case _:
+            raise PGSNError(
+                f"Unsupported expression in {{...}}: {_ast.unparse(node)!r}")
+
+
+def _parse_expr(s: str) -> Term:
+    """Parse a mini-expression string into a PGSN Term."""
+    try:
+        tree = _ast.parse(s.strip(), mode='eval')
+        return _ast_to_term(tree.body)
+    except SyntaxError as e:
+        raise PGSNError(f"Syntax error in expression {s!r}: {e}")
+
+
 def _text_fields(s: str) -> list[str]:
-    """Return the {name} field names in s, honouring Python's {{ }} escaping."""
-    import string as _stringmod
+    """Return the raw {field} strings from s, honouring {{ }} escaping.
+
+    Each field may be a plain name or a mini-expression like 'x + 1'.
+    """
     return [fname for _, fname, _, _ in _stringmod.Formatter().parse(s)
             if fname is not None and fname != ""]
 
 
+def _field_to_term(field: str) -> tuple[str, Term]:
+    """Convert one {field} string to (placeholder_name, Term).
+
+    Simple identifiers become variable references; anything containing an
+    operator is parsed as a mini-expression and bound to an auto-generated
+    placeholder name so format_string can interpolate it.
+    """
+    field = field.strip()
+    # Simple identifier — keep as-is for format_string placeholder
+    if field.isidentifier():
+        return field, _resolve(field)
+    # Expression — parse and bind to a synthetic placeholder
+    placeholder = f"_e{abs(hash(field)) % 100000}"
+    return placeholder, _parse_expr(field)
+
+
 def _text_to_term(s: str) -> Term:
     """
-    Turn user text into a Term. If it contains {name} fields, build a
-    format_string application binding each field to the variable of that name.
-    If it contains {{ }} escapes but no fields, still run format_string so
-    the escapes are resolved ({{ -> {, }} -> }).
-    Plain text with no braces at all becomes a String directly.
-    Escaping follows Python's str.format ({{ -> {).
+    Turn user text into a PGSN Term.
+
+    Rules applied in order:
+    1. Plain integer text (e.g. "42") → Integer(42).
+    2. {name} or {expr} fields → format_string application.
+       Each field may be a plain variable name or a mini-expression
+       (arithmetic / equality) parsed by _ast_to_term. The result is always
+       stringified and interpolated into the text (Jinja-style). If you need
+       the raw, non-string value of an expression (e.g. a Boolean condition),
+       use a standalone <expr>...</expr> element instead of {...}.
+    3. {{ }} escape sequences with no fields → format_string with empty record.
+    4. Plain text → String.
     """
-    fields = _text_fields(s)
-    if fields:
-        args = record({name: variable(name) for name in fields})
-        return format_string(string(s))(args)
+    # Integer literal
+    try:
+        return integer(int(s.strip()))
+    except ValueError:
+        pass
+
+    raw_fields = _text_fields(s)
+    if raw_fields:
+        # Map each raw field to (placeholder, term), rewriting the template
+        # string when a field is a complex expression.
+        bindings: dict[str, Term] = {}
+        fmt = s
+        for raw in raw_fields:
+            placeholder, term = _field_to_term(raw)
+            bindings[placeholder] = term
+            if raw != placeholder:
+                # Replace the expression with the synthetic placeholder name
+                fmt = fmt.replace("{" + raw + "}", "{" + placeholder + "}")
+        args = record(bindings)
+        return format_string(string(fmt))(args)
+
     if "{{" in s or "}}" in s:
-        # No variable fields but escape sequences present — run format_string
-        # with an empty record so {{ }} are resolved to literal braces.
+        # Escape sequences only — resolve {{ -> { etc.
         return format_string(string(s))(empty_record)
+
     return string(s)
 
 
@@ -376,6 +669,7 @@ def _expr(elem: ET.Element, base_dir: Path | None,
           visiting: frozenset[Path]) -> Term:
     dispatch = {
         "var":      _e_var,
+        "expr":     _e_expr,
         "template": _e_template,
         "apply":    _e_apply,
         "class":    _e_class,
@@ -394,6 +688,14 @@ def _expr(elem: ET.Element, base_dir: Path | None,
     if fn is None:
         raise PGSNError(f"Unknown expression: <{elem.tag}>")
     return fn(elem, base_dir, visiting)
+
+
+def _e_expr(elem: ET.Element, _bd: Path, _v: frozenset) -> Term:
+    """<expr>x + y * 2</expr> — compile a mini-expression to a Term."""
+    text = (elem.text or "").strip()
+    if not text:
+        raise PGSNError("<expr> is empty")
+    return _parse_expr(text)
 
 
 def _e_var(elem: ET.Element, _bd: Path, _v: frozenset) -> Term:

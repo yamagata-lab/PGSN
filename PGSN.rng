@@ -263,9 +263,59 @@
 </define>
 
 
+<define name="cond_pat">
+  <choice>
+    <attribute name="cond"/>
+    <element name="cond">
+      <ref name="val_pat"/>
+    </element>
+  </choice>
+</define>
+
+
+<define name="if_pat">
+  <element name="if">
+    <ref name="cond_pat"/>
+    <element name="then">
+      <ref name="val_pat"/>
+    </element>
+    <optional>
+      <element name="else">
+        <ref name="val_pat"/>
+      </element>
+    </optional>
+  </element>
+</define>
+
+
+<define name="case_pat">
+  <element name="case">
+    <ref name="cond_pat"/>
+    <ref name="val_pat"/>
+  </element>
+</define>
+
+
+<define name="cases_pat">
+  <element name="cases">
+    <oneOrMore>
+      <ref name="case_pat"/>
+    </oneOrMore>
+    <optional>
+      <element name="else">
+        <ref name="val_pat"/>
+      </element>
+    </optional>
+  </element>
+</define>
+
+
 <define name="expression_pat">
   <choice>
     <text/>
+    <element name="expr"><text/></element>
+    <ref name="if_pat"/>
+    <ref name="cases_pat"/>
     <ref name="class_pat"/>
     <ref name="object_pat"/>
     <ref name="apply_pat"/>

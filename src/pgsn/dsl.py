@@ -84,6 +84,18 @@ boolean_or = lambda_abs_vars(
 )
 boolean_not = lambda_abs(_x, if_then_else(_x)(false)(true))
 
+# x xor y: true when exactly one of x, y is true
+boolean_xor = lambda_abs_vars(
+    (_x, _y),
+    if_then_else(_x)(boolean_not(_y))(_y)
+)
+
+# x implies y: false only when x is true and y is false
+implies = lambda_abs_vars(
+    (_x, _y),
+    if_then_else(_x)(_y)(true)
+)
+
 equal = Equal.named()
 
 
@@ -93,6 +105,12 @@ minus = Minus.named()
 times = Times.named()
 div = Div.named()
 mod = Mod.named()
+
+# Comparison operators (Integer, Integer) -> Boolean
+less_than = LessThan.named()
+less_eq = LessEq.named()
+greater_than = GreaterThan.named()
+greater_eq = GreaterEq.named()
 
 _repeat = variable("repeat")
 _num = variable("num")
@@ -137,7 +155,9 @@ list_all = lambda_abs_vars(
     let(
         _f,
         lambda_abs_vars((_z, _w), boolean_and(_x(_z))(_w)),
-        fold(_f)(_y)(true)
+        # fold signature is fold(f)(acc)(list); acc starts at `true`
+        # (vacuously all-true) and `_y` is the list being checked.
+        fold(_f)(true)(_y)
     )
 )
 

@@ -217,8 +217,8 @@ References a previously defined name.
 The following names are predefined; reference them with `<var name="..."/>` and apply them via `apply`.
 
 - List operations: `cons`, `head`, `tail`, `index`, `concat`, `map_term`, `fold`
-- Booleans: `true`, `false`, `if_then_else`, `boolean_and`, `boolean_or`, `boolean_not`, `equal`, `guard`
-- Integers: `plus`, `minus`, `times`, `div`, `mod`
+- Booleans: `true`, `false`, `if_then_else`, `boolean_and`, `boolean_or`, `boolean_not`, `boolean_xor`, `implies`, `equal`, `guard`
+- Integers: `plus`, `minus`, `times`, `div`, `mod`, `less_than`, `less_eq`, `greater_than`, `greater_eq`
 - Records: `has_label`, `list_labels`, `add_attribute`, `remove_attribute`, `overwrite_record`
 - Strings: `format_string`
 - Classes / objects: `define_class`, `instantiate`, `is_instance`, `is_subclass`, `base_class`
@@ -423,6 +423,79 @@ This is expanded by the preprocessor into a `format_string` application. To writ
     <Evidence>Test result for component {c}</Evidence>
 </template>
 ```
+
+`{...}` is not limited to a bare variable name — it accepts a small expression language: arithmetic (`+`, `-`, `*`, `/`, `%`), comparisons (`==`, `!=`, `<`, `<=`, `>`, `>=`), boolean operators (`and`, `or`, `not`), and integer literals. The expression is evaluated and the result is **always converted to a string** and interpolated into the text — `{x == 1}` becomes the text `"True"` or `"False"`, not a Boolean value.
+
+```xml
+<Evidence>Component {c}: {count + 1} of {total}</Evidence>
+<Goal>{n} is within range: {n >= 0 and n < 100}</Goal>
+```
+
+If you need the **raw, non-string value** of an expression — for example, a Boolean to use as a condition in `if_then_else` — use a standalone `<expr>` element (below) instead of `{...}`.
+
+### `<expr>` Element
+
+The same mini-expression language is available as a standalone element. Unlike `{...}`, it returns the expression's value as-is (Boolean, Integer, etc.), making it usable anywhere a value is expected, not just inside text:
+
+```xml
+<expr>x + y * 2</expr>
+<expr>n == 0</expr>
+<expr>a >= 0 and a < 100</expr>
+```
+
+### Conditionals (if)
+
+`<if cond="...">` is shorthand for `if_then_else`. The `cond` attribute is parsed by the same mini-expression language as `<expr>`, so it can be a plain variable name or an arithmetic/comparison/boolean expression. `<then>` is required; `<else>` may be omitted (in which case `undefined` is used for the else-branch).
+
+```xml
+<if cond="n == 0">
+    <then><Evidence>Base case verified</Evidence></then>
+    <else><undeveloped/></else>
+</if>
+```
+
+#### `<cond>` child element
+
+When the condition doesn't fit comfortably in an attribute string — for example, to use `var=` shorthand or an arbitrary expression such as `<apply>` — write `<cond>` as a child element instead of the `cond` attribute. It accepts any expression (`val_pat`), including the `var=` shorthand:
+
+```xml
+<if>
+    <cond var="flag"/>
+    <then>yes</then>
+    <else>no</else>
+</if>
+
+<if>
+    <cond><apply template="greater_than"><arg var="x"/><arg>3</arg></apply></cond>
+    <then>big</then>
+    <else>small</else>
+</if>
+```
+
+### Multi-way Conditionals (cases)
+
+For a cascade of conditions — like Python's `match`, Lisp's `cond`, or a C `switch` — use `<cases>` instead of nesting `<if>`s. Each `<case>` is a sibling, giving a flat list of conditions rather than a nested tree:
+
+```xml
+<cases>
+    <case cond="n == 0">zero</case>
+    <case cond="n == 1">one</case>
+    <case cond="n == 2">two</case>
+    <else>many</else>
+</cases>
+```
+
+Each `<case>` supplies its condition the same way as `<if>` — either a `cond` attribute or a `<cond>` child element (useful for `var=` shorthand or an arbitrary expression). Unlike `<if>`'s `<then>`, **a `<case>`'s body is its own remaining content** — there is no `<then>` wrapper:
+
+```xml
+<cases>
+    <case cond="false">first</case>
+    <case><cond var="flag"/>second</case>
+    <else>third</else>
+</cases>
+```
+
+`<case>`s are checked in order; `<else>` (or `undefined` if omitted) is used if none match. Internally this expands to the same nested `if_then_else` chain as nested `<if>`/`<else>`, but the XML surface is a flat list of siblings.
 
 ### GSN Leading Text as Description
 
