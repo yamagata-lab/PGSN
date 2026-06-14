@@ -683,6 +683,7 @@ def _expr(elem: ET.Element, base_dir: Path | None,
         "Goal":     _e_goal,
         "Strategy": _e_strategy,
         "Evidence": _e_evidence,
+        "undeveloped": _e_undeveloped,
     }
     fn = dispatch.get(elem.tag)
     if fn is None:
@@ -967,6 +968,15 @@ def _e_evidence(elem: ET.Element, base_dir: Path | None,
                 visiting: frozenset[Path]) -> Term:
     desc, _, _ = _gsn_header(elem, base_dir, visiting)
     return evidence(description=desc)
+
+
+def _e_undeveloped(elem: ET.Element, _bd: Path | None,
+                   _v: frozenset[Path]) -> Term:
+    """<undeveloped/> as a general expression — the same `undeveloped`
+    builtin used as <Goal>'s direct-support shorthand, but usable anywhere
+    an expression is expected (e.g. <if>/<cases> branches inside
+    <supportedBy>)."""
+    return undeveloped
 
 
 # ------------------------------------------------------------------ #

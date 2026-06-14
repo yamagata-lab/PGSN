@@ -1375,10 +1375,9 @@ def test_if_cond_with_arithmetic(tmp_path):
 def test_if_cond_with_gsn_branches(tmp_path):
     # A general expression (here: if_then_else) used as a Goal's support
     # must be wrapped in <supportedBy>, per PGSN.rng's goal_pat: a bare
-    # <if> is not a direct alternative of <Goal>'s choice. Likewise,
-    # <undeveloped/> on its own is only valid as a direct child of <Goal>
-    # (not inside val_pat/expression_pat), so use <var name="undeveloped"/>
-    # to reference the same builtin value as a general expression.
+    # <if> is not a direct alternative of <Goal>'s choice. <undeveloped/>
+    # is part of GSNNode, so it can be used as a general expression too
+    # (e.g. as an <if>/<else> branch), not just as <Goal>'s direct child.
     result = run("""
     <PGSN>
         <def name="hasEvidence">1</def>
@@ -1387,7 +1386,7 @@ def test_if_cond_with_gsn_branches(tmp_path):
             <supportedBy>
                 <if cond="hasEvidence == 1">
                     <then><Evidence>Audit passed</Evidence></then>
-                    <else><var name="undeveloped"/></else>
+                    <else><undeveloped/></else>
                 </if>
             </supportedBy>
         </Goal>
@@ -1557,8 +1556,8 @@ def test_cases_cond_child_complex_expr(tmp_path):
 
 def test_cases_with_gsn_branches(tmp_path):
     # Same reasoning as test_if_cond_with_gsn_branches: a <cases> expression
-    # used as support must be wrapped in <supportedBy>, and the fallback
-    # uses <var name="undeveloped"/> instead of a bare <undeveloped/>.
+    # used as support must be wrapped in <supportedBy>. <undeveloped/> is
+    # part of GSNNode, so the fallback can use it directly as a branch value.
     result = run("""
     <PGSN>
         <def name="level">2</def>
@@ -1568,7 +1567,7 @@ def test_cases_with_gsn_branches(tmp_path):
                 <cases>
                     <case cond="level == 1"><Evidence>Level 1 audit</Evidence></case>
                     <case cond="level == 2"><Evidence>Level 2 audit</Evidence></case>
-                    <else><var name="undeveloped"/></else>
+                    <else><undeveloped/></else>
                 </cases>
             </supportedBy>
         </Goal>
