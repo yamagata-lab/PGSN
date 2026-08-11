@@ -45,13 +45,16 @@ class PGSNError(Exception):
 #   3. GSN text:        <Goal>txt<Strategy/>          ->  <Goal><description>txt</description><Strategy/>
 #   4. apply template:  <apply template="f">...</apply>
 #                                                    ->  <apply><var name="f"/>...</apply>
-#   5. get label/of:    <get label="x" of="obj"/>    ->  <get name="x"><var name="obj"/></get>
-#   6. send method/to:  <send method="m" to="obj">   ->  <send name="m"><var name="obj"/>...
-#                       (label/method are user-facing; name= is internal)
 #   7. if/cond/else:    <if cond="...">...</if>      ->  if_then_else application
 #                       (see _take_cond_arg below)
 #   8. cases/case/else: <cases><case cond="...">..   ->  nested if_then_else chain
 #                       (see _build_cases_chain below)
+#
+# <get> and <send> are not shorthand-expanded here: 'label'/'method' (with
+# 'name' as an internal-style alias) are read directly by _e_get/_e_send,
+# and the receiver is simply the element's content -- written as a child
+# expression, or as var="obj" via shorthand #2 above (e.g.
+# <get label="x" var="obj"/> or <get label="x"><apply>...</apply></get>).
 # ------------------------------------------------------------------ #
 
 _GSN_HEADER_TAGS = {"Goal", "Strategy", "Evidence", "Context", "Assumption"}
@@ -250,28 +253,11 @@ def _preprocess(elem: ET.Element) -> None:
         var_elem.set("name", name)
         elem.insert(0, var_elem)
 
-    # get label="x" of="obj": rename label->name, insert <var name="obj"/> as child
-    if elem.tag == "get" and "label" in elem.attrib:
-        label = elem.attrib.pop("label")
-        elem.set("name", label)
-        if "of" in elem.attrib:
-            receiver = elem.attrib.pop("of")
-            var_elem = ET.Element("var")
-            var_elem.set("name", receiver)
-            elem.insert(0, var_elem)
-
-    # send method="m" to="obj": rename method->name, insert <var name="obj"/> first
-    if elem.tag == "send" and "method" in elem.attrib:
-        method = elem.attrib.pop("method")
-        elem.set("name", method)
-        if "to" in elem.attrib:
-            receiver = elem.attrib.pop("to")
-            var_elem = ET.Element("var")
-            var_elem.set("name", receiver)
-            elem.insert(0, var_elem)
-
     # var-attribute: <tag var="x"/> -> <tag><var name="x"/></tag>
-    # (skip apply and send which handle var-like attrs above)
+    # This also covers <get label="x" var="obj"/> and <send method="m" var="obj"/>:
+    # the receiver becomes a <var name="obj"/> child, just like any other
+    # var= shorthand. _e_get/_e_send read 'label'/'method' directly and treat
+    # this child as the receiver expression.
     if "var" in elem.attrib:
         if len(elem) > 0:
             raise PGSNError(
@@ -488,7 +474,7 @@ def _thread_lets(bindings: list[tuple[str, Term]],
 
 
 def _split_args(arg_elems: list[ET.Element], base_dir: Path | None,
-                visiting: frozenset[Path]) -> tuple[list, dict]:
+                visiting: frozenset[Path], jails: dict[str, Path]) -> tuple[list, dict]:
     """
     Collect <arg> children into positional and keyword groups.
     Positional args (no name) must precede keyword args, as in Python.
@@ -502,9 +488,9 @@ def _split_args(arg_elems: list[ET.Element], base_dir: Path | None,
         if name is None:
             if keyword:
                 raise PGSNError("positional arg after keyword arg")
-            positional.append(_content(a, base_dir, visiting))
+            positional.append(_content(a, base_dir, visiting, jails))
         else:
-            keyword[name] = _content(a, base_dir, visiting)
+            keyword[name] = _content(a, base_dir, visiting, jails)
     return positional, keyword
 
 
@@ -512,28 +498,51 @@ def _split_args(arg_elems: list[ET.Element], base_dir: Path | None,
 # Document compilers
 # ------------------------------------------------------------------ #
 
-def compile_pgsn(path: str | Path) -> Term:
-    """Compile a <PGSN> document file into a single Term (no evaluation)."""
+def _resolve_jails(jails: dict[str, str | Path] | None) -> dict[str, Path]:
+    """Normalize a caller-supplied jail table to resolved, absolute Paths.
+
+    A jail is a (name -> trusted directory) entry supplied by whoever invokes
+    the compiler -- never by the PGSN document itself. See _compile_from for
+    how <from file="/jailname/rest..."/> resolves against this table.
+    """
+    if not jails:
+        return {}
+    return {name: Path(p).resolve() for name, p in jails.items()}
+
+
+def compile_pgsn(path: str | Path,
+                 jails: dict[str, str | Path] | None = None) -> Term:
+    """Compile a <PGSN> document file into a single Term (no evaluation).
+
+    jails: optional {name: directory} table. A <from file="/name/rest"/>
+    resolves "rest" under that directory instead of relative to the
+    importing file -- see _compile_from.
+    """
     p = Path(path).resolve()
-    return _compile_root(ET.parse(p).getroot(), p.parent, entry=p)
+    return _compile_root(ET.parse(p).getroot(), p.parent, entry=p,
+                         jails=_resolve_jails(jails))
 
 
-def compile_pgsn_string(xml: str, base_dir: str | Path | None = None) -> Term:
+def compile_pgsn_string(xml: str, base_dir: str | Path | None = None,
+                        jails: dict[str, str | Path] | None = None) -> Term:
     """
     Compile a <PGSN> document from a string.
     Imports are disallowed unless base_dir is given to resolve relative paths.
     """
     bd = Path(base_dir).resolve() if base_dir is not None else None
-    return _compile_root(ET.fromstring(xml), bd, entry=None)
+    return _compile_root(ET.fromstring(xml), bd, entry=None,
+                         jails=_resolve_jails(jails))
 
 
 def _compile_root(root: ET.Element, base_dir: Path | None,
-                  entry: Path | None = None) -> Term:
+                  entry: Path | None = None,
+                  jails: dict[str, Path] | None = None) -> Term:
     """Compile a parsed <PGSN> root element against a base directory.
 
     The entry file path (when known) seeds the visiting set so that an
     import cycle returning to the entry document is detected as such.
     """
+    jails = jails or {}
     if root.tag != "PGSN":
         raise PGSNError(f"Expected <PGSN>, got <{root.tag}>")
     _preprocess(root)
@@ -545,13 +554,13 @@ def _compile_root(root: ET.Element, base_dir: Path | None,
             return _text_to_term(text)
         raise PGSNError("<PGSN> has no value")
     visiting = frozenset({entry}) if entry is not None else frozenset()
-    final = _expr(children[-1], base_dir, visiting)
-    bindings = _bindings(children[:-1], base_dir, visiting)
+    final = _expr(children[-1], base_dir, visiting, jails)
+    bindings = _bindings(children[:-1], base_dir, visiting, jails)
     return _thread_lets(bindings, final)
 
 
 def _compile_module(root: ET.Element, base_dir: Path | None,
-                    visiting: frozenset[Path]) -> Term:
+                    visiting: frozenset[Path], jails: dict[str, Path]) -> Term:
     """
     Compile <PGSNModule> to a keyword-lambda Term.
     When applied to a Record of args, yields a Record of exported names.
@@ -564,7 +573,7 @@ def _compile_module(root: ET.Element, base_dir: Path | None,
         name = p.get("name")
         params.append(name)
         if list(p) or (p.text and p.text.strip()):
-            defaults_dict[name] = _content(p, base_dir, visiting)
+            defaults_dict[name] = _content(p, base_dir, visiting, jails)
         idx += 1
 
     body_children = children[idx:]
@@ -572,7 +581,7 @@ def _compile_module(root: ET.Element, base_dir: Path | None,
 
     # Module body: let-chain ending in a record of all exported names
     exports = record({n: variable(n) for n in export_names})
-    body = _thread_lets(_bindings(body_children, base_dir, visiting), exports)
+    body = _thread_lets(_bindings(body_children, base_dir, visiting, jails), exports)
 
     arguments = {p: variable(p) for p in params}
     defaults_rec = record(defaults_dict) if defaults_dict else empty_record
@@ -584,22 +593,22 @@ def _compile_module(root: ET.Element, base_dir: Path | None,
 # ------------------------------------------------------------------ #
 
 def _bindings(elems: list[ET.Element], base_dir: Path | None,
-              visiting: frozenset[Path]) -> list[tuple[str, Term]]:
+              visiting: frozenset[Path], jails: dict[str, Path]) -> list[tuple[str, Term]]:
     result = []
     for elem in elems:
         if elem.tag == "def":
-            result.append(_compile_def(elem, base_dir, visiting))
+            result.append(_compile_def(elem, base_dir, visiting, jails))
         elif elem.tag == "from":
-            result.extend(_compile_from(elem, base_dir, visiting))
+            result.extend(_compile_from(elem, base_dir, visiting, jails))
         else:
             raise PGSNError(f"Unexpected element: <{elem.tag}>")
     return result
 
 
 def _compile_def(elem: ET.Element, base_dir: Path | None,
-                 visiting: frozenset[Path]) -> tuple[str, Term]:
+                 visiting: frozenset[Path], jails: dict[str, Path]) -> tuple[str, Term]:
     name = elem.get("name")
-    term = _content(elem, base_dir, visiting)
+    term = _content(elem, base_dir, visiting, jails)
 
     if elem.get("recursive", "false").lower() == "true":
         term = fix(lambda_abs(variable(name), term))
@@ -612,19 +621,57 @@ def _compile_def(elem: ET.Element, base_dir: Path | None,
     return name, term
 
 
+def _resolve_from_path(file_path: str, base_dir: Path | None,
+                       jails: dict[str, Path]) -> Path:
+    """Resolve a <from file="..."/> path to a concrete, trusted file.
+
+    Two forms:
+      - Relative (no leading '/'): resolved against base_dir, the directory
+        of the file containing this <from>. '..' components are forbidden,
+        so a document can only ever reach files below its own directory.
+      - Jail-absolute (leading '/'): the first path segment names a jail --
+        one of the (name -> directory) entries the *invoker* of the
+        compiler supplied via compile_pgsn(..., jails=...), never something
+        the document itself can define. The remaining segments resolve
+        under that jail's directory, with the same '..'-forbidden rule.
+        This lets a top-level document reach files placed anywhere on disk
+        (e.g. by assured_pip, outside the document's own directory tree)
+        without ever handing it a literal, real filesystem absolute path.
+    """
+    if not file_path:
+        raise PGSNError(f"Unsafe file path: {file_path!r}")
+
+    path_obj = Path(file_path)
+    if path_obj.is_absolute():
+        if not file_path.startswith("/"):
+            # e.g. a Windows-style absolute path -- not a jail reference
+            raise PGSNError(f"Unsafe file path: {file_path!r}")
+        segments = path_obj.parts[1:]  # drop the leading '/' root marker
+        if not segments:
+            raise PGSNError(f"Unsafe file path: {file_path!r}")
+        jail_name, *rest = segments
+        if ".." in rest:
+            raise PGSNError(f"Unsafe file path: {file_path!r}")
+        if jail_name not in jails:
+            raise PGSNError(f"Unknown jail: {jail_name!r}")
+        jail_dir = jails[jail_name]
+        return jail_dir.joinpath(*rest).resolve() if rest else jail_dir
+
+    if base_dir is None:
+        raise PGSNError("imports are not allowed without a base directory")
+    if ".." in path_obj.parts:
+        raise PGSNError(f"Unsafe file path: {file_path!r}")
+    return (base_dir / file_path).resolve()
+
+
 def _compile_from(elem: ET.Element, base_dir: Path | None,
-                  visiting: frozenset[Path]) -> list[tuple[str, Term]]:
+                  visiting: frozenset[Path], jails: dict[str, Path]) -> list[tuple[str, Term]]:
     """
     File I/O at compile time (path is a static literal).
     Module application and field access are lazy Terms.
     """
     file_path = elem.get("file", "")
-    if base_dir is None:
-        raise PGSNError("imports are not allowed without a base directory")
-    if not file_path or Path(file_path).is_absolute() or ".." in Path(file_path).parts:
-        raise PGSNError(f"Unsafe file path: {file_path!r}")
-
-    full = (base_dir / file_path).resolve()
+    full = _resolve_from_path(file_path, base_dir, jails)
     if full in visiting:
         raise PGSNError(f"Circular import: {full}")
 
@@ -633,10 +680,10 @@ def _compile_from(elem: ET.Element, base_dir: Path | None,
         raise PGSNError(f"Expected <PGSNModule> in {file_path!r}")
     _preprocess(root)
 
-    module_term = _compile_module(root, full.parent, visiting | {full})
+    module_term = _compile_module(root, full.parent, visiting | {full}, jails)
 
     # Args compiled in the caller's scope — they are Terms, not values yet
-    args = {a.get("name"): _content(a, base_dir, visiting)
+    args = {a.get("name"): _content(a, base_dir, visiting, jails)
             for a in elem.findall("arg")}
     applied = module_term(record(args))
 
@@ -652,11 +699,11 @@ def _compile_from(elem: ET.Element, base_dir: Path | None,
 # ------------------------------------------------------------------ #
 
 def _content(parent: ET.Element, base_dir: Path | None,
-             visiting: frozenset[Path]) -> Term:
+             visiting: frozenset[Path], jails: dict[str, Path]) -> Term:
     """Single value from element content: one child expression or bare text."""
     val_children = [c for c in parent if c.tag != "param"]
     if len(val_children) == 1:
-        return _expr(val_children[0], base_dir, visiting)
+        return _expr(val_children[0], base_dir, visiting, jails)
     if len(val_children) > 1:
         raise PGSNError(f"Multiple value children in <{parent.tag}>")
     text = (parent.text or "").strip()
@@ -666,7 +713,7 @@ def _content(parent: ET.Element, base_dir: Path | None,
 
 
 def _expr(elem: ET.Element, base_dir: Path | None,
-          visiting: frozenset[Path]) -> Term:
+          visiting: frozenset[Path], jails: dict[str, Path]) -> Term:
     dispatch = {
         "var":      _e_var,
         "expr":     _e_expr,
@@ -688,10 +735,10 @@ def _expr(elem: ET.Element, base_dir: Path | None,
     fn = dispatch.get(elem.tag)
     if fn is None:
         raise PGSNError(f"Unknown expression: <{elem.tag}>")
-    return fn(elem, base_dir, visiting)
+    return fn(elem, base_dir, visiting, jails)
 
 
-def _e_expr(elem: ET.Element, _bd: Path, _v: frozenset) -> Term:
+def _e_expr(elem: ET.Element, _bd: Path, _v: frozenset, _j: dict) -> Term:
     """<expr>x + y * 2</expr> — compile a mini-expression to a Term."""
     text = (elem.text or "").strip()
     if not text:
@@ -699,12 +746,12 @@ def _e_expr(elem: ET.Element, _bd: Path, _v: frozenset) -> Term:
     return _parse_expr(text)
 
 
-def _e_var(elem: ET.Element, _bd: Path, _v: frozenset) -> Term:
+def _e_var(elem: ET.Element, _bd: Path, _v: frozenset, _j: dict) -> Term:
     return _resolve(elem.get("name"), elem.get("instanceOf"))
 
 
 def _e_template(elem: ET.Element, base_dir: Path | None,
-                visiting: frozenset[Path]) -> Term:
+                visiting: frozenset[Path], jails: dict[str, Path]) -> Term:
     params = [(c.get("name"), c) for c in elem if c.tag == "param"]
     body_elems = [c for c in elem if c.tag != "param"]
 
@@ -726,11 +773,11 @@ def _e_template(elem: ET.Element, base_dir: Path | None,
                 f"<{c.tag}> must come after all <def>s in <template>")
 
     if final_elem is not None:
-        final = _expr(final_elem, base_dir, visiting)
+        final = _expr(final_elem, base_dir, visiting, jails)
     else:
         final = _text_to_term(elem.text.strip())
 
-    bindings = _bindings(leading, base_dir, visiting)
+    bindings = _bindings(leading, base_dir, visiting, jails)
     body = _thread_lets(bindings, final)
 
     if not params:
@@ -762,7 +809,7 @@ def _e_template(elem: ET.Element, base_dir: Path | None,
     for name, pelem in keyword_params:
         pchildren = [c for c in pelem if c.tag != "param"]
         if pchildren:
-            defaults_dict[name] = _expr(pchildren[0], base_dir, visiting)
+            defaults_dict[name] = _expr(pchildren[0], base_dir, visiting, jails)
         elif pelem.text and pelem.text.strip():
             defaults_dict[name] = _text_to_term(pelem.text.strip())
 
@@ -788,12 +835,12 @@ def _e_template(elem: ET.Element, base_dir: Path | None,
 
 
 def _e_apply(elem: ET.Element, base_dir: Path | None,
-             visiting: frozenset[Path]) -> Term:
+             visiting: frozenset[Path], jails: dict[str, Path]) -> Term:
     children = list(elem)
     if not children:
         raise PGSNError("<apply> needs a function")
-    func = _expr(children[0], base_dir, visiting)
-    positional, keyword = _split_args(children[1:], base_dir, visiting)
+    func = _expr(children[0], base_dir, visiting, jails)
+    positional, keyword = _split_args(children[1:], base_dir, visiting, jails)
     if not positional and not keyword:
         raise PGSNError("<apply> needs at least one <arg>")
     # Delegate to Term.__call__: it casts args and builds the keyword Record
@@ -801,20 +848,20 @@ def _e_apply(elem: ET.Element, base_dir: Path | None,
 
 
 def _e_class(elem: ET.Element, base_dir: Path | None,
-             visiting: frozenset[Path]) -> Term:
+             visiting: frozenset[Path], jails: dict[str, Path]) -> Term:
     inh = elem.find("inherit")
     kwargs: dict = {
-        "inherit": _content(inh, base_dir, visiting) if inh is not None else base_class
+        "inherit": _content(inh, base_dir, visiting, jails) if inh is not None else base_class
     }
     attrs = [c.get("name") for c in elem if c.tag == "attribute"]
-    defs = {c.get("name"): _content(c, base_dir, visiting)
+    defs = {c.get("name"): _content(c, base_dir, visiting, jails)
             for c in elem if c.tag == "attribute"
             and (list(c) or (c.text and c.text.strip()))}
     # Methods must be stored as λself.body so that PGSNObject._apply_arg can
     # call (method)(self) to bind the receiver. This mirrors the DSL pattern:
     #   define_class(methods={'m': lambda_abs(self_var, body)})
     _self_var = variable("self")
-    methods = {c.get("name"): lambda_abs(_self_var, _e_template(c, base_dir, visiting))
+    methods = {c.get("name"): lambda_abs(_self_var, _e_template(c, base_dir, visiting, jails))
                for c in elem if c.tag == "method"}
     if attrs:
         kwargs["attributes"] = list_term(tuple(string(a) for a in attrs))
@@ -826,56 +873,75 @@ def _e_class(elem: ET.Element, base_dir: Path | None,
 
 
 def _e_object(elem: ET.Element, base_dir: Path | None,
-              visiting: frozenset[Path]) -> Term:
+              visiting: frozenset[Path], jails: dict[str, Path]) -> Term:
     inst = elem.find("instanceOf")
     if inst is None:
         raise PGSNError("<object> requires <instanceOf>")
     return instantiate(
-        _content(inst, base_dir, visiting),
-        record({c.get("name"): _content(c, base_dir, visiting)
+        _content(inst, base_dir, visiting, jails),
+        record({c.get("name"): _content(c, base_dir, visiting, jails)
                 for c in elem if c.tag == "attribute"})
     )
 
 
 def _e_get(elem: ET.Element, base_dir: Path | None,
-           visiting: frozenset[Path]) -> Term:
-    return _content(elem, base_dir, visiting)(string(elem.get("name")))
+           visiting: frozenset[Path], jails: dict[str, Path]) -> Term:
+    """<get label="x">...</get> — read attribute "x" off the receiver.
+
+    'label' is the user-facing attribute name; 'name' is accepted as an
+    internal-style alias. The receiver is the element's content: either a
+    child expression (val_pat) or var="obj" via the generic var= shorthand.
+    """
+    key = elem.get("label", elem.get("name"))
+    if key is None:
+        raise PGSNError("<get> requires a 'label' (or 'name') attribute")
+    return _content(elem, base_dir, visiting, jails)(string(key))
 
 
 def _e_send(elem: ET.Element, base_dir: Path | None,
-            visiting: frozenset[Path]) -> Term:
+            visiting: frozenset[Path], jails: dict[str, Path]) -> Term:
+    """<send method="m">...</send> — call method "m" on the receiver.
+
+    'method' is the user-facing attribute name; 'name' is accepted as an
+    internal-style alias. The first child is the receiver expression
+    (val_pat, or var="obj" via the generic var= shorthand); any remaining
+    children are call arguments.
+    """
+    name = elem.get("method", elem.get("name"))
+    if name is None:
+        raise PGSNError("<send> requires a 'method' (or 'name') attribute")
     children = list(elem)
     if not children:
         raise PGSNError("<send> needs a receiver")
     # receiver("methodName") triggers PGSNObject._apply_arg which automatically
     # applies self (the receiver) to the method value before returning it.
-    method = _expr(children[0], base_dir, visiting)(string(elem.get("name")))
-    positional, keyword = _split_args(children[1:], base_dir, visiting)
+    method = _expr(children[0], base_dir, visiting, jails)(string(name))
+    positional, keyword = _split_args(children[1:], base_dir, visiting, jails)
     if not positional and not keyword:
         return method
     return method(*positional, **keyword)
 
 
 def _e_div(elem: ET.Element, base_dir: Path | None,
-           visiting: frozenset[Path]) -> Term:
+           visiting: frozenset[Path], jails: dict[str, Path]) -> Term:
     children = list(elem)
     if not children:
         raise PGSNError("<div> has no value")
     # The final child is the div's value expression (use _expr, not _content)
-    final = _expr(children[-1], base_dir, visiting)
-    bs = _bindings([c for c in children[:-1] if c.tag == "def"], base_dir, visiting)
+    final = _expr(children[-1], base_dir, visiting, jails)
+    bs = _bindings([c for c in children[:-1] if c.tag == "def"], base_dir, visiting, jails)
     return _thread_lets(bs, final)
 
 
 def _e_list(elem: ET.Element, base_dir: Path | None,
-            visiting: frozenset[Path]) -> Term:
+            visiting: frozenset[Path], jails: dict[str, Path]) -> Term:
     return list_term(tuple(
-        _content(li, base_dir, visiting) for li in elem.findall("li")
+        _content(li, base_dir, visiting, jails) for li in elem.findall("li")
     ))
 
 
 def _e_dict(elem: ET.Element, base_dir: Path | None,
-            visiting: frozenset[Path]) -> Term:
+            visiting: frozenset[Path], jails: dict[str, Path]) -> Term:
     children = list(elem)
     attrs = {}
     for i in range(0, len(children) - 1, 2):
@@ -883,7 +949,7 @@ def _e_dict(elem: ET.Element, base_dir: Path | None,
         key = dt.get("key") or (dt.text or "").strip()
         if not key:
             raise PGSNError("<dt> key must be a string literal")
-        attrs[key] = _content(dd, base_dir, visiting)
+        attrs[key] = _content(dd, base_dir, visiting, jails)
     return record(attrs)
 
 
@@ -892,19 +958,19 @@ def _e_dict(elem: ET.Element, base_dir: Path | None,
 # ------------------------------------------------------------------ #
 
 def _gsn_header(elem: ET.Element, base_dir: Path | None,
-                visiting: frozenset[Path]) -> tuple[Term, list, list]:
+                visiting: frozenset[Path], jails: dict[str, Path]) -> tuple[Term, list, list]:
     desc_elem = elem.find("description")
-    desc = (_content(desc_elem, base_dir, visiting) if desc_elem is not None
+    desc = (_content(desc_elem, base_dir, visiting, jails) if desc_elem is not None
             else _text_to_term((elem.text or "").strip()))
-    contexts = [_e_annotation(c, base_dir, visiting, context)
+    contexts = [_e_annotation(c, base_dir, visiting, jails, context)
                 for c in elem if c.tag == "Context"]
-    assumptions = [_e_annotation(c, base_dir, visiting, assumption)
+    assumptions = [_e_annotation(c, base_dir, visiting, jails, assumption)
                    for c in elem if c.tag == "Assumption"]
     return desc, contexts, assumptions
 
 
 def _e_annotation(elem: ET.Element, base_dir: Path | None, visiting: frozenset[Path],
-                  ctor: Term) -> Term:
+                  jails: dict[str, Path], ctor: Term) -> Term:
     """
     Context and Assumption share the same structure (documentation +
     optional payload). ctor is the constructor (context or assumption).
@@ -912,10 +978,10 @@ def _e_annotation(elem: ET.Element, base_dir: Path | None, visiting: frozenset[P
     desc_elem = elem.find("description")
     val_children = [c for c in elem if c.tag != "description"]
     if desc_elem is not None:
-        desc = _content(desc_elem, base_dir, visiting)
-        val = _expr(val_children[0], base_dir, visiting) if val_children else string("")
+        desc = _content(desc_elem, base_dir, visiting, jails)
+        val = _expr(val_children[0], base_dir, visiting, jails) if val_children else string("")
     elif val_children:
-        val = _expr(val_children[0], base_dir, visiting)
+        val = _expr(val_children[0], base_dir, visiting, jails)
         desc = _text_to_term((elem.text or "").strip())
     else:
         desc = _text_to_term((elem.text or "").strip())
@@ -924,8 +990,8 @@ def _e_annotation(elem: ET.Element, base_dir: Path | None, visiting: frozenset[P
 
 
 def _e_goal(elem: ET.Element, base_dir: Path | None,
-            visiting: frozenset[Path]) -> Term:
-    desc, contexts, assumptions = _gsn_header(elem, base_dir, visiting)
+            visiting: frozenset[Path], jails: dict[str, Path]) -> Term:
+    desc, contexts, assumptions = _gsn_header(elem, base_dir, visiting, jails)
     body = [c for c in elem if c.tag in _SUPPORT_TAGS]
     support = undeveloped
     if body:
@@ -933,13 +999,13 @@ def _e_goal(elem: ET.Element, base_dir: Path | None,
         if first.tag == "undeveloped":
             support = undeveloped
         elif first.tag in ("Strategy", "Evidence"):
-            support = _expr(first, base_dir, visiting)
+            support = _expr(first, base_dir, visiting, jails)
         elif first.tag == "Goal":
             support = immediate(list_term(tuple(
-                _e_goal(c, base_dir, visiting) for c in body if c.tag == "Goal"
+                _e_goal(c, base_dir, visiting, jails) for c in body if c.tag == "Goal"
             )))
         elif first.tag == "supportedBy":
-            support = _content(first, base_dir, visiting)
+            support = _content(first, base_dir, visiting, jails)
     return goal(
         description=desc,
         contexts=list_term(tuple(contexts)),
@@ -949,29 +1015,29 @@ def _e_goal(elem: ET.Element, base_dir: Path | None,
 
 
 def _e_strategy(elem: ET.Element, base_dir: Path | None,
-                visiting: frozenset[Path]) -> Term:
-    desc, _, _ = _gsn_header(elem, base_dir, visiting)
+                visiting: frozenset[Path], jails: dict[str, Path]) -> Term:
+    desc, _, _ = _gsn_header(elem, base_dir, visiting, jails)
     sub_goal_elems = [c for c in elem if c.tag == "Goal"]
     sub_goals_elem = elem.find("subGoals")
     if sub_goal_elems:
         sub_goals = list_term(tuple(
-            _e_goal(c, base_dir, visiting) for c in sub_goal_elems
+            _e_goal(c, base_dir, visiting, jails) for c in sub_goal_elems
         ))
     elif sub_goals_elem is not None:
-        sub_goals = _content(sub_goals_elem, base_dir, visiting)
+        sub_goals = _content(sub_goals_elem, base_dir, visiting, jails)
     else:
         raise PGSNError("<Strategy> requires sub-goals or <subGoals>")
     return strategy(description=desc, sub_goals=sub_goals)
 
 
 def _e_evidence(elem: ET.Element, base_dir: Path | None,
-                visiting: frozenset[Path]) -> Term:
-    desc, _, _ = _gsn_header(elem, base_dir, visiting)
+                visiting: frozenset[Path], jails: dict[str, Path]) -> Term:
+    desc, _, _ = _gsn_header(elem, base_dir, visiting, jails)
     return evidence(description=desc)
 
 
 def _e_undeveloped(elem: ET.Element, _bd: Path | None,
-                   _v: frozenset[Path]) -> Term:
+                   _v: frozenset[Path], _j: dict) -> Term:
     """<undeveloped/> as a general expression — the same `undeveloped`
     builtin used as <Goal>'s direct-support shorthand, but usable anywhere
     an expression is expected (e.g. <if>/<cases> branches inside
@@ -983,14 +1049,15 @@ def _e_undeveloped(elem: ET.Element, _bd: Path | None,
 # Public API
 # ------------------------------------------------------------------ #
 
-def load(path: str | Path) -> Term:
+def load(path: str | Path, jails: dict[str, str | Path] | None = None) -> Term:
     """Compile and fully evaluate a PGSN XML document file."""
-    return compile_pgsn(path).fully_eval()
+    return compile_pgsn(path, jails=jails).fully_eval()
 
 
-def load_string(xml: str, base_dir: str | Path | None = None) -> Term:
+def load_string(xml: str, base_dir: str | Path | None = None,
+                jails: dict[str, str | Path] | None = None) -> Term:
     """Compile and fully evaluate a PGSN XML document from a string.
 
     Imports are disallowed unless base_dir is provided.
     """
-    return compile_pgsn_string(xml, base_dir).fully_eval()
+    return compile_pgsn_string(xml, base_dir, jails=jails).fully_eval()

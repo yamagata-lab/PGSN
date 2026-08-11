@@ -224,11 +224,13 @@
 
 <define name="send_pat">
   <element name="send">
-    <attribute name="method"/>
-    <!-- to="obj" is shorthand: inserts <var name="obj"/> as the receiver -->
-    <optional>
-      <attribute name="to"/>
-    </optional>
+    <!-- method="m" is the user-facing form; name="m" is an internal-style alias -->
+    <choice>
+      <attribute name="method"/>
+      <attribute name="name"/>
+    </choice>
+    <!-- receiver: var="obj" shorthand (part of val_pat below), or any
+         expression as the first content item, e.g. <apply>...</apply> -->
     <ref name="call_pat"/>
   </element>
 </define>
@@ -236,15 +238,13 @@
 
 <define name="get_pat">
   <element name="get">
-    <!-- label="x" is the user-facing form; preprocessor rewrites it to name="x" -->
+    <!-- label="x" is the user-facing form; name="x" is an internal-style alias -->
     <choice>
       <attribute name="label"/>
       <attribute name="name"/>
     </choice>
-    <!-- of="obj" is shorthand: inserts <var name="obj"/> as the receiver -->
-    <optional>
-      <attribute name="of"/>
-    </optional>
+    <!-- receiver: var="obj" shorthand, or any expression as content,
+         e.g. <get label="x"><apply>...</apply></get> -->
     <optional>
       <ref name="val_pat"/>
     </optional>

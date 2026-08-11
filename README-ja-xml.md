@@ -3,15 +3,51 @@
 PGSN は XML ベースの言語で、GSN（Goal Structuring Notation）をプログラマブルに拡張したものです。
 GSN ノード（Goal・Strategy・Evidence）を値として扱い、変数・テンプレート・クラスといったプログラミング構造と組み合わせることができます。
 
+## 目次
+
+1. [ドキュメントの構造](#1-ドキュメントの構造)
+2. [値・変数・定義](#2-値変数定義)
+   - [2.1 すべては値である](#21-すべては値である)
+   - [2.2 変数参照と `var=` 略記](#22-変数参照と-var-略記)
+   - [2.3 定義（`def`）](#23-定義def)
+   - [2.4 局所スコープ（`div`）](#24-局所スコープdiv)
+   - [2.5 実行時の型チェック（`instanceOf`）](#25-実行時の型チェックinstanceof)
+3. [データ型](#3-データ型)
+   - [3.1 整数・文字列・真偽値](#31-整数文字列真偽値)
+   - [3.2 集合・リスト（`ul`・`ol`）](#32-集合リストulol)
+   - [3.3 レコード（`dl`）](#33-レコードdl)
+4. [式と制御構造](#4-式と制御構造)
+   - [4.1 テキスト内のフォーマット文字列](#41-テキスト内のフォーマット文字列)
+   - [4.2 `<expr>` 要素](#42-expr-要素)
+   - [4.3 条件分岐（`if`）](#43-条件分岐if)
+   - [4.4 多方向の条件分岐（`cases`）](#44-多方向の条件分岐cases)
+5. [テンプレートと適用](#5-テンプレートと適用)
+   - [5.1 テンプレート定義（`template`）](#51-テンプレート定義template)
+   - [5.2 テンプレート適用（`apply`）](#52-テンプレート適用apply)
+6. [クラスとオブジェクト](#6-クラスとオブジェクト)
+   - [6.1 クラス定義（`class`）](#61-クラス定義class)
+   - [6.2 オブジェクト生成（`object`）](#62-オブジェクト生成object)
+   - [6.3 キーアクセス（`get`）](#63-キーアクセスget)
+   - [6.4 メソッド呼び出し（`send`）](#64-メソッド呼び出しsend)
+7. [GSN ノード](#7-gsn-ノード)
+   - [7.1 共通ヘッダ（`gsn_header`）](#71-共通ヘッダgsn_header)
+   - [7.2 GSNの地テキストを description として扱う](#72-gsnの地テキストを-description-として扱う)
+   - [7.3 Goal](#73-goal)
+   - [7.4 Strategy](#74-strategy)
+   - [7.5 Evidence](#75-evidence)
+8. [クラスによる GSN の拡張](#8-クラスによる-gsn-の拡張)
+9. [モジュール・パラメーター・import](#9-モジュールパラメーターimport)
+   - [9.1 `<PGSNModule>`](#91-pgsnmodule)
+   - [9.2 パラメーター（`param`）](#92-パラメーターparam)
+   - [9.3 import（`from`）](#93-importfrom)
+10. [モジュールの例](#10-モジュールの例)
+- [付録: 組み込み名一覧](#付録-組み込み名一覧)
+
 ---
 
-## ドキュメントの種類
+## 1. ドキュメントの構造
 
-PGSN には2種類のルート要素があります。
-
-### `<PGSN>` — 値を生成するドキュメント
-
-単一の値を返します。`<param>` は**使えません**。
+PGSN ドキュメントは単一の `<PGSN>` 要素で、0個以上の `<def>`（および `<from>` による import）の後に、ちょうど1つの値を表す式が続きます。これがドキュメント全体の結果になります。
 
 ```xml
 <PGSN>
@@ -21,28 +57,20 @@ PGSN には2種類のルート要素があります。
 </PGSN>
 ```
 
-### `<PGSNModule>` — 再利用可能なモジュール
+`<from>` と `<def>` は互いに自由に混在できますが、いずれも最終的な値より前に置く必要があります。
 
-呼び出し元からパラメーターを受け取ります。`<param>` は先頭にだけ書けます。
-
-```xml
-<PGSNModule>
-    <param name="p"/>          <!-- パラメーター（0個以上、先頭に書く） -->
-    <from file="..."/>         <!-- import（0個以上） -->
-    <def name="x">...</def>    <!-- 定義（0個以上） -->
-</PGSNModule>
-```
-
-`import` と `def` は両形式とも混在して書くことができます。
+> 呼び出し元からパラメーターを受け取る再利用可能なモジュールは、`<PGSN>` の代わりに `<PGSNModule>` を使います。[9. モジュール・パラメーター・import](#9-モジュールパラメーターimport) を参照してください。
 
 ---
 
-## 値（val）
+## 2. 値・変数・定義
+
+### 2.1 すべては値である
 
 PGSN では**すべてが値**です。コンテンツを受け取る要素は必ず**式**（評価されて値になるもの）を期待します。言語に「クラス名」や「特別な名前スロット」という概念はありません。
 
 > **重要な原則：ベタ書きのテキストは String リテラルになります。**
-> 要素の中にテキストを直接書くと、それは `String` 値として解釈されます。
+> 要素の中にテキストを直接書くと、それは `String` 値として解釈されます（例外として、整数として解釈できるテキストは `Integer` になります——[3.1 整数・文字列・真偽値](#31-整数文字列真偽値) を参照）。
 > `<inherit>Goal</inherit>` は Goal クラスを参照しません——文字列 `"Goal"` を生成するだけで、クラスではありません。変数を参照するには `<var>` または `var=` 属性を使います。
 
 ```xml
@@ -59,10 +87,18 @@ PGSN では**すべてが値**です。コンテンツを受け取る要素は�
 <inherit><apply template="makeBaseClass"><arg>...</arg></apply></inherit>
 ```
 
-### 変数参照の略記
+### 2.2 変数参照と `var=` 略記
 
-要素のコンテンツが変数参照のみの場合、`var` 属性で略記できます。
-これは前処理により展開されます。
+`<var>` は定義済みの名前を参照します。
+
+```xml
+<var name="x"/>
+
+<!-- 型を明示する場合 -->
+<var name="x" instanceOf="MyClass"/>
+```
+
+要素のコンテンツが変数参照のみの場合、`var` 属性で略記できます。これは前処理により展開され、式を受け取るすべての要素で同じように使えます——`<get>`/`<send>` のレシーバー、`<if>`/`<case>` の条件、`<li>`、`<Context>`/`<Assumption>`、属性のデフォルト値など。
 
 ```xml
 <!-- 完全形 -->
@@ -72,55 +108,9 @@ PGSN では**すべてが値**です。コンテンツを受け取る要素は�
 <tag var="x"/>
 ```
 
----
+> 組み込み名（算術・リスト/レコード操作・GSN コンストラクタ・クラスなど）の全リストは [付録: 組み込み名一覧](#付録-組み込み名一覧) を参照してください。`<var name="..."/>` で参照し、`apply` に適用します——[5. テンプレートと適用](#5-テンプレートと適用) を参照。
 
-## パラメーター（param）
-
-`param` は `<PGSNModule>` が外部から受け取る変数を宣言します。
-`<param>` は `<PGSNModule>` 内のみ有効で、`<from>` や `<def>` より前に書きます。
-
-```xml
-<!-- Assumption は assumption_class の組み込みエイリアス -->
-<param name="A1" instanceOf="Assumption"/>
-
-<!-- デフォルト値付き -->
-<param name="threshold">100</param>
-```
-
----
-
-## import（from）
-
-外部の PGSN ファイルから名前を持ち込みます。セキュリティ上の理由から、ファイルパスは相対パスのみ使用できます。
-
-### 単一 import
-
-```xml
-<from file="security.pgsn" import="secureGoal" as="G1"/>
-```
-
-### 複数 import
-
-```xml
-<from file="evidence.pgsn">
-    <import name="auditEvidence"/>
-    <import name="testReport" as="TR"/>
-</from>
-```
-
-### パラメーターを渡しながら import
-
-```xml
-<from file="other.pgsn">
-    <import name="someGoal" as="G2"/>
-    <arg name="A1" var="A1"/>
-    <arg name="threshold" var="threshold"/>
-</from>
-```
-
----
-
-## 定義（def）
+### 2.3 定義（`def`）
 
 `def` は名前に値を束縛します。純粋関数型なので再代入はありません。
 
@@ -128,7 +118,7 @@ PGSN では**すべてが値**です。コンテンツを受け取る要素は�
 <def name="x">expr</def>
 ```
 
-### `as` 属性（略記）
+#### `as` 属性（略記）
 
 `def` に `as` 属性を指定すると、値を包む外側のタグ名を省略できます。
 これも前処理により展開されます。
@@ -143,9 +133,9 @@ PGSN では**すべてが値**です。コンテンツを受け取る要素は�
 
 `<def name="x" as="T">C</def>` は純粋に構文上の展開です。前処理が `<def name="x"><T>C</T></def>` に書き換えてからコンパイルします。その位置で有効なタグ名であれば何でも使えます——`object` を使ったユーザー定義クラスのインスタンス化タグも含みます。唯一の制限は、`var`・`get`・`send` のように要素自身が必須属性（`name`）を持つタグで、脱糖形が必須属性を欠いて不正になるため使えません。
 
-### 局所定義
+### 2.4 局所スコープ（`div`）
 
-`<div>` の中に `<def>` を並べてスコープを限定します。
+`<div>` の中に `<def>` を並べてスコープを限定します。`<div>` の最後の子要素（`<def>` の後）がその値になります。
 
 ```xml
 <div>
@@ -165,11 +155,11 @@ PGSN では**すべてが値**です。コンテンツを受け取る要素は�
 </template>
 ```
 
-### `instanceOf` 属性
+### 2.5 実行時の型チェック（`instanceOf`）
 
-実行時に型チェックを追加します。値が指定クラスのインスタンスでなければ評価が止まります。
+`def` または `var` の `instanceOf` 属性は実行時に型チェックを追加します。値が指定クラスのインスタンスでなければ評価が止まります。
 属性値は**変数名**（クラスが束縛されている変数）を指定します。
-複雑なクラス式を使いたい場合は、`instanceOf` 要素の子要素として式を書いてください。
+複雑なクラス式を使いたい場合は、`<instanceOf>` 子要素の形式を使ってください——`<instanceOf>` が要素として使われる箇所は [6.1 クラス定義](#61-クラス定義class) と [6.2 オブジェクト生成](#62-オブジェクト生成object) を参照。
 
 > **PGSN にクラス名という概念はありません。** クラスは変数に束縛された通常の値です。
 > `instanceOf="x"` は文字列のクラス名ではなく「変数 `x`」を意味します。
@@ -185,61 +175,149 @@ PGSN では**すべてが値**です。コンテンツを受け取る要素は�
 <instanceOf><apply template="computeClass"><arg>...</arg></apply></instanceOf>
 ```
 
-### 局所定義（div）
+---
 
-スコープを限定した定義には `div` を使います。
+## 3. データ型
+
+### 3.1 整数・文字列・真偽値
+
+要素内のテキストは値になります。[2.1 すべては値である](#21-すべては値である) のルールの通り、整数として解釈できるテキストは `Integer` に、それ以外は `String` になります。
 
 ```xml
-<div>
-    <def name="x">expr1</def>
-    <def name="y">expr2</def>
-    expr   <!-- div の値 -->
-</div>
+<def name="n">42</def>        <!-- Integer 42 -->
+<def name="s">hello</def>     <!-- String "hello" -->
+```
+
+`Boolean` 値にはテキストによるリテラル表記はありません。組み込みの `true`/`false` を `<var>`・`<expr>`・`var=` 略記で参照してください（[付録: 組み込み名一覧](#付録-組み込み名一覧) を参照）。
+
+```xml
+<var name="true"/>
+<expr>true</expr>
+```
+
+### 3.2 集合・リスト（`ul`・`ol`）
+
+```xml
+<ul>
+    <li>expr1</li>
+    <li var="x"/>    <!-- 略記 -->
+</ul>
+
+<ol>
+    <li>expr1</li>
+    <li>expr2</li>
+</ol>
+```
+
+`ul` と `ol` は XML 構文上は同型ですが、順序を保ちたい場合（例: `map_term` に渡すリスト）は `ol` を使います。
+
+### 3.3 レコード（`dl`）
+
+`<dl>` は `Record`——[`get`](#63-キーアクセスget) でアクセスする名前付き値の集合——を生成します。キーには値を直接置くか、`key` 属性で文字列キーを指定します。
+
+```xml
+<dl>
+    <dt>key_expr</dt><dd>value_expr</dd>   <!-- 式をキーにする場合 -->
+    <dt key="name"/><dd>value_expr</dd>    <!-- 文字列キーの場合 -->
+</dl>
 ```
 
 ---
 
-## 変数（var）
+## 4. 式と制御構造
 
-定義済みの名前を参照します。
+### 4.1 テキスト内のフォーマット文字列
 
-```xml
-<var name="x"/>
-
-<!-- 型を明示する場合 -->
-<var name="x" instanceOf="MyClass"/>
-```
-
-### 組み込み（builtin）
-
-以下の名前はあらかじめ定義済みで、`<var name="..."/>` で参照し `apply` に適用できます。
-
-- リスト操作: `cons`・`head`・`tail`・`index`・`concat`・`map_term`・`fold`
-- 真偽値: `true`・`false`・`if_then_else`・`boolean_and`・`boolean_or`・`boolean_not`・`boolean_xor`・`implies`・`equal`・`guard`
-- 整数: `plus`・`minus`・`times`・`div`・`mod`・`less_than`・`less_eq`・`greater_than`・`greater_eq`
-- レコード: `has_label`・`list_labels`・`add_attribute`・`remove_attribute`・`overwrite_record`
-- 文字列: `format_string`
-- クラス／オブジェクト: `define_class`・`instantiate`・`is_instance`・`is_subclass`・`base_class`
-- その他: `fix`・`undefined`
-- GSN コンストラクタ: `goal`・`strategy`・`evidence`・`context`・`assumption`・`undeveloped`・`immediate`・`evidence_as_goal`
-- GSN クラス（長い名前）: `goal_class`・`strategy_class`・`evidence_class`・`context_class`・`assumption_class`・`gsn_class`・`support_class`・`undeveloped_class`
-- GSN クラス（短いエイリアス）: `Goal`・`Strategy`・`Evidence`・`Context`・`Assumption`・`GSN`・`Support`
-
-例（リストにテンプレートを写像する）:
+テキストを置ける場所では、`{name}` という記法でスコープ内の変数を埋め込めます。
+前処理により `format_string` の適用へ展開されます。波括弧自体を書きたい場合は `{{` `}}` でエスケープします。
 
 ```xml
-<apply>
-    <var name="map_term"/>
-    <arg var="someTemplate"/>     <!-- 第1引数（テンプレート） -->
-    <arg><ol><li>a</li><li>b</li></ol></arg>  <!-- 第2引数（リスト） -->
-</apply>
+<template>
+    <param name="c" positional="true"/>
+    <Evidence>Component {c} のテスト結果</Evidence>
+</template>
 ```
+
+`{...}` には単純な変数名だけでなく、小さな式言語を書けます。算術演算（`+`・`-`・`*`・`/`・`%`）、比較演算（`==`・`!=`・`<`・`<=`・`>`・`>=`）、論理演算（`and`・`or`・`not`）、整数リテラルが使えます。式は評価され、結果は**必ず文字列に変換されて**テキストに埋め込まれます——`{x == 1}` はテキスト `"True"` や `"False"` になり、Boolean 値そのものにはなりません。
+
+```xml
+<Evidence>Component {c}: {count + 1} / {total}</Evidence>
+<Goal>{n} は範囲内: {n >= 0 and n < 100}</Goal>
+```
+
+式の**生の値**（文字列化されていない値）が必要な場合——例えば `if_then_else` の条件として Boolean を使いたい場合——は `{...}` ではなく下記の `<expr>` 要素を使ってください。
+
+### 4.2 `<expr>` 要素
+
+同じ式言語を単独の要素として使えます。`{...}` と異なり、式の値をそのまま（Boolean・Integer など）返すので、テキストの中だけでなく値が期待される任意の場所で使えます。
+
+```xml
+<expr>x + y * 2</expr>
+<expr>n == 0</expr>
+<expr>a >= 0 and a < 100</expr>
+```
+
+### 4.3 条件分岐（`if`）
+
+`<if cond="...">` は `if_then_else` の略記です。`cond` 属性は `<expr>` と同じ式言語でパースされるので、単純な変数名でも算術・比較・論理式でも書けます。`<then>` は必須、`<else>` は省略可能（省略時は `undefined` が使われます）。
+
+```xml
+<if cond="n == 0">
+    <then><Evidence>基本ケースを検証済み</Evidence></then>
+    <else><undeveloped/></else>
+</if>
+```
+
+上記の `<if>` のように、一般的な式を Goal の support として使う場合は `<supportedBy>` で囲む必要があります。[7.3 Goal](#73-goal) を参照してください。
+
+#### `<cond>` 子要素
+
+条件が属性文字列にうまく収まらない場合——例えば `var=` 略記や `<apply>` のような任意の式を使いたい場合——`cond` 属性の代わりに `<cond>` を子要素として書けます。`<cond>` は任意の式（`val_pat`）を受け取り、`var=` 略記も使えます。
+
+```xml
+<if>
+    <cond var="flag"/>
+    <then>yes</then>
+    <else>no</else>
+</if>
+
+<if>
+    <cond><apply template="greater_than"><arg var="x"/><arg>3</arg></apply></cond>
+    <then>big</then>
+    <else>small</else>
+</if>
+```
+
+### 4.4 多方向の条件分岐（`cases`）
+
+条件のカスケード——PythonのmatchやLispのcond、Cのswitchのようなもの——には、`<if>`を入れ子にする代わりに`<cases>`を使います。`<case>`はそれぞれ兄弟要素として並び、入れ子のツリーではなくフラットな条件のリストになります。
+
+```xml
+<cases>
+    <case cond="n == 0">zero</case>
+    <case cond="n == 1">one</case>
+    <case cond="n == 2">two</case>
+    <else>many</else>
+</cases>
+```
+
+各`<case>`は`<if>`と同じ方法で条件を持ちます——`cond`属性または`<cond>`子要素（`var=`略記や任意の式に便利）。`<if>`の`<then>`とは異なり、**`<case>`の本体はその要素自身の残りのコンテンツ**です——`<then>`によるラップは不要です。
+
+```xml
+<cases>
+    <case cond="false">first</case>
+    <case><cond var="flag"/>second</case>
+    <else>third</else>
+</cases>
+```
+
+`<case>`は順に評価され、どれにも一致しなければ`<else>`（省略時は`undefined`）が使われます。内部的には`<if>`/`<else>`を入れ子にした場合と同じネストした`if_then_else`チェーンに展開されますが、XML上の見た目はフラットな兄弟要素のリストになります。
 
 ---
 
-## テンプレートと適用
+## 5. テンプレートと適用
 
-### テンプレート定義（template）
+### 5.1 テンプレート定義（`template`）
 
 関数を値として定義します（λ式相当）。
 引数（`param`）には**位置引数**と**キーワード引数**の2種類があります。
@@ -275,7 +353,7 @@ PGSN では**すべてが値**です。コンテンツを受け取る要素は�
 </template>
 ```
 
-### テンプレート適用（apply）
+### 5.2 テンプレート適用（`apply`）
 
 テンプレートを引数に適用します。
 `arg` には**位置引数**（`name` なし）と**キーワード引数**（`name` あり）があり、
@@ -305,11 +383,21 @@ PGSN では**すべてが値**です。コンテンツを受け取る要素は�
 </apply>
 ```
 
+例（リストにテンプレートを写像する。`map_term` などの組み込みは [付録: 組み込み名一覧](#付録-組み込み名一覧) を参照）:
+
+```xml
+<apply>
+    <var name="map_term"/>
+    <arg var="someTemplate"/>     <!-- 第1引数（テンプレート） -->
+    <arg><ol><li>a</li><li>b</li></ol></arg>  <!-- 第2引数（リスト） -->
+</apply>
+```
+
 ---
 
-## クラスとオブジェクト
+## 6. クラスとオブジェクト
 
-### クラス定義（class）
+### 6.1 クラス定義（`class`）
 
 ```xml
 <class>
@@ -333,8 +421,9 @@ PGSN では**すべてが値**です。コンテンツを受け取る要素は�
 > いずれも**クラスに評価される式**を受け取ります（文字列のクラス名ではありません）。
 > `<inherit>SomeClass</inherit>` と書くとテキストが文字列 `"SomeClass"` として扱われ、
 > クラスとして扱われません。`<inherit var="someClass"/>` のように式を使ってください。
+> 関連: [2.5 実行時の型チェック（instanceOf）](#25-実行時の型チェックinstanceof)。
 
-### オブジェクト生成（object）
+### 6.2 オブジェクト生成（`object`）
 
 ```xml
 <object>
@@ -343,33 +432,32 @@ PGSN では**すべてが値**です。コンテンツを受け取る要素は�
 </object>
 ```
 
-### キーアクセス（get）
+### 6.3 キーアクセス（`get`）
 
-`get` は `Record` と `PGSNObject` の両方に使えます。`label` 属性でキー名を指定し、`of` 属性で変数レシーバーを略記できます。内部ではレシーバーに文字列キーを位置適用するだけなので、`<apply>` に文字列 `<arg>` を渡す書き方と完全に等価です。
+`get` は `Record`（[3.3 レコード](#33-レコードdl) 参照）と `PGSNObject` の両方に使えます。`label` 属性でキー名を指定します（`name` は内部用の別名として使える）。レシーバーは要素の内容で指定し、`var="..."`（[2.2](#22-変数参照と-var-略記) と同じ var= 略記で `<var name="..."/>` に展開される）、または任意の式を子要素として書けます。内部ではレシーバーに文字列キーを位置適用するだけなので、`<apply>` に文字列 `<arg>` を渡す書き方と完全に等価です。
 
 ```xml
-<!-- 略記: label= でキー名、of= でレシーバー変数を指定 -->
-<get label="description" of="my_goal"/>
+<!-- var= 略記でレシーバー変数を指定 -->
+<get label="description" var="my_goal"/>
 
 <!-- レシーバーが複雑な式の場合は子要素に書く -->
 <get label="description"><apply template="getGoal"/></get>
 
 <!-- Record のキーアクセス（以下3つは等価） -->
-<get label="x" of="my_record"/>
+<get label="x" var="my_record"/>
 <get label="x"><var name="my_record"/></get>
 <apply><var name="my_record"/><arg>x</arg></apply>
 ```
 
-### メソッド呼び出し（send）
+### 6.4 メソッド呼び出し（`send`）
 
 ```xml
-<send method="methodName" to="receiverVar">
+<send method="methodName" var="receiverVar">
     <arg name="arg1">expr1</arg>
 </send>
 ```
 
-`method` 属性でメソッド名を指定し、`to` 属性で変数レシーバーを略記できます。
-レシーバーが変数以外の複雑な式の場合は `to` を省略し、先頭の子要素として書きます。
+`method` 属性でメソッド名を指定します（`name` は内部用の別名として使える）。レシーバーは要素の内容で指定し、`var="..."` 略記で変数を指すか、変数以外の複雑な式なら先頭の子要素として書きます。
 
 ```xml
 <send method="methodName">
@@ -380,144 +468,11 @@ PGSN では**すべてが値**です。コンテンツを受け取る要素は�
 
 ---
 
-## データ型
+## 7. GSN ノード
 
-### 集合（ul）・リスト（ol）
+GSN ノードは PGSN において通常の値と同列の第一級オブジェクトであり、クラス継承により拡張できます（[8. クラスによる GSN の拡張](#8-クラスによる-gsn-の拡張) 参照）。
 
-```xml
-<ul>
-    <li>expr1</li>
-    <li var="x"/>    <!-- 略記 -->
-</ul>
-
-<ol>
-    <li>expr1</li>
-    <li>expr2</li>
-</ol>
-```
-
-`ul` と `ol` は XML 構文上は同型ですが、順序を保ちたい場合（例: `map_term` に渡すリスト）は `ol` を使います。
-
-### 辞書（dl）
-
-キーには値を直接置くか、`key` 属性で文字列キーを指定します。
-
-```xml
-<dl>
-    <dt>key_expr</dt><dd>value_expr</dd>   <!-- 式をキーにする場合 -->
-    <dt key="name"/><dd>value_expr</dd>    <!-- 文字列キーの場合 -->
-</dl>
-```
-
-### テキスト内のフォーマット文字列
-
-テキストを置ける場所では、`{name}` という記法でスコープ内の変数を埋め込めます。
-前処理により `format_string` の適用へ展開されます。波括弧自体を書きたい場合は `{{` `}}` でエスケープします。
-
-```xml
-<template>
-    <param name="c" positional="true"/>
-    <Evidence>Component {c} のテスト結果</Evidence>
-</template>
-```
-
-`{...}` には単純な変数名だけでなく、小さな式言語を書けます。算術演算（`+`・`-`・`*`・`/`・`%`）、比較演算（`==`・`!=`・`<`・`<=`・`>`・`>=`）、論理演算（`and`・`or`・`not`）、整数リテラルが使えます。式は評価され、結果は**必ず文字列に変換されて**テキストに埋め込まれます——`{x == 1}` はテキスト `"True"` や `"False"` になり、Boolean 値そのものにはなりません。
-
-```xml
-<Evidence>Component {c}: {count + 1} / {total}</Evidence>
-<Goal>{n} は範囲内: {n >= 0 and n < 100}</Goal>
-```
-
-式の**生の値**（文字列化されていない値）が必要な場合——例えば `if_then_else` の条件として Boolean を使いたい場合——は `{...}` ではなく下記の `<expr>` 要素を使ってください。
-
-### `<expr>` 要素
-
-同じ式言語を単独の要素として使えます。`{...}` と異なり、式の値をそのまま（Boolean・Integer など）返すので、テキストの中だけでなく値が期待される任意の場所で使えます。
-
-```xml
-<expr>x + y * 2</expr>
-<expr>n == 0</expr>
-<expr>a >= 0 and a < 100</expr>
-```
-
-### 条件分岐（if）
-
-`<if cond="...">` は `if_then_else` の略記です。`cond` 属性は `<expr>` と同じ式言語でパースされるので、単純な変数名でも算術・比較・論理式でも書けます。`<then>` は必須、`<else>` は省略可能（省略時は `undefined` が使われます）。
-
-```xml
-<if cond="n == 0">
-    <then><Evidence>基本ケースを検証済み</Evidence></then>
-    <else><undeveloped/></else>
-</if>
-```
-
-#### `<cond>` 子要素
-
-条件が属性文字列にうまく収まらない場合——例えば `var=` 略記や `<apply>` のような任意の式を使いたい場合——`cond` 属性の代わりに `<cond>` を子要素として書けます。`<cond>` は任意の式（`val_pat`）を受け取り、`var=` 略記も使えます。
-
-```xml
-<if>
-    <cond var="flag"/>
-    <then>yes</then>
-    <else>no</else>
-</if>
-
-<if>
-    <cond><apply template="greater_than"><arg var="x"/><arg>3</arg></apply></cond>
-    <then>big</then>
-    <else>small</else>
-</if>
-```
-
-### 多方向の条件分岐（cases）
-
-条件のカスケード——PythonのmatchやLispのcond、Cのswitchのようなもの——には、`<if>`を入れ子にする代わりに`<cases>`を使います。`<case>`はそれぞれ兄弟要素として並び、入れ子のツリーではなくフラットな条件のリストになります。
-
-```xml
-<cases>
-    <case cond="n == 0">zero</case>
-    <case cond="n == 1">one</case>
-    <case cond="n == 2">two</case>
-    <else>many</else>
-</cases>
-```
-
-各`<case>`は`<if>`と同じ方法で条件を持ちます——`cond`属性または`<cond>`子要素（`var=`略記や任意の式に便利）。`<if>`の`<then>`とは異なり、**`<case>`の本体はその要素自身の残りのコンテンツ**です——`<then>`によるラップは不要です。
-
-```xml
-<cases>
-    <case cond="false">first</case>
-    <case><cond var="flag"/>second</case>
-    <else>third</else>
-</cases>
-```
-
-`<case>`は順に評価され、どれにも一致しなければ`<else>`（省略時は`undefined`）が使われます。内部的には`<if>`/`<else>`を入れ子にした場合と同じネストした`if_then_else`チェーンに展開されますが、XML上の見た目はフラットな兄弟要素のリストになります。
-
-### GSN の地テキストとして description を記述する
-
-GSN ヘッダー要素（`Goal`・`Strategy`・`Evidence`・`Context`・`Assumption`）では、先頭の地テキストが自動的に `description` として扱われます。子要素（`<Strategy>` など）と共存する場合、前処理により `<description>` 要素へ持ち上げられます。`{name}` 展開もここで使えます。
-
-```xml
-<!-- この2つは等価です -->
-<Goal>
-    システム {name} はセキュアである
-    <undeveloped/>
-</Goal>
-
-<Goal>
-    <description>システム {name} はセキュアである</description>
-    <undeveloped/>
-</Goal>
-```
-
----
-
-## GSN ノード
-
-GSN ノードは通常の値と同列に扱われます。クラスとして継承・拡張が可能です。
-
-### 共通ヘッダ（gsn_header）
+### 7.1 共通ヘッダ（`gsn_header`）
 
 Goal・Strategy・Evidence はすべて共通のヘッダ構造を持ちます。
 
@@ -542,7 +497,24 @@ Goal・Strategy・Evidence はすべて共通のヘッダ構造を持ちます�
 - `Context` は議論が成立する文脈・前提となる状況や対象を表します。
 - `Assumption` は議論が置く仮定を表します。
 
-### Goal
+### 7.2 GSNの地テキストを description として扱う
+
+GSN ヘッダー要素（`Goal`・`Strategy`・`Evidence`・`Context`・`Assumption`）では、先頭の地テキストが自動的に `description` として扱われます。子要素（`<Strategy>` など）と共存する場合、前処理により `<description>` 要素へ持ち上げられます。`{name}` 展開（[4.1 テキスト内のフォーマット文字列](#41-テキスト内のフォーマット文字列) 参照）もここで使えます。
+
+```xml
+<!-- この2つは等価です -->
+<Goal>
+    システム {name} はセキュアである
+    <undeveloped/>
+</Goal>
+
+<Goal>
+    <description>システム {name} はセキュアである</description>
+    <undeveloped/>
+</Goal>
+```
+
+### 7.3 Goal
 
 ```xml
 <Goal>
@@ -573,7 +545,28 @@ Goal・Strategy・Evidence はすべて共通のヘッダ構造を持ちます�
 > </Goal>
 > ```
 
-### Strategy
+> **補足: 一般的な式を support に使う場合は `<supportedBy>` で囲む**
+> `<Goal>` の本体は、上記のいずれか1つでなければなりません。条件によって
+> Strategy・Evidence・`<undeveloped/>` のいずれかに評価される
+> [`<if>`/`<cases>`](#4-式と制御構造) のような一般的な式は、
+> 任意の式を受け取れる `<supportedBy>` で囲みます。
+>
+> ```xml
+> <Goal>
+>     System is secure
+>     <supportedBy>
+>         <if cond="hasEvidence == 1">
+>             <then><Evidence>Audit passed</Evidence></then>
+>             <else><undeveloped/></else>
+>         </if>
+>     </supportedBy>
+> </Goal>
+> ```
+>
+> `<undeveloped/>` 自体も `GSNNode` の一員なので、上記のように `<if>`/`<case>`
+> の分岐値としても使えます——`<Goal>` 直下の素のbodyとしてだけではありません。
+
+### 7.4 Strategy
 
 ```xml
 <Strategy>
@@ -598,7 +591,7 @@ Goal・Strategy・Evidence はすべて共通のヘッダ構造を持ちます�
 </Strategy>
 ```
 
-### Evidence
+### 7.5 Evidence
 
 ```xml
 <Evidence>
@@ -609,9 +602,9 @@ Goal・Strategy・Evidence はすべて共通のヘッダ構造を持ちます�
 
 ---
 
-## クラスによる GSN の拡張
+## 8. クラスによる GSN の拡張
 
-GSN ノードはクラスとして継承・拡張できます。
+GSN ノードはクラスとして継承・拡張できます（[6. クラスとオブジェクト](#6-クラスとオブジェクト) 参照）。
 拡張したクラスは `<object>` でインスタンス化します（属性を明示します）。
 
 ```xml
@@ -632,7 +625,83 @@ GSN ノードはクラスとして継承・拡張できます。
 
 ---
 
-## モジュールの例
+## 9. モジュール・パラメーター・import
+
+プログラムが単一ファイルを超えて大きくなってきたら、PGSN では `<PGSNModule>`（`<PGSN>` とは別のルート要素）と `param`・`from`（import）を使って、再利用可能でパラメーター化されたモジュールを定義し、他のファイルから名前を持ち込めます。
+
+### 9.1 `<PGSNModule>`
+
+`<PGSN>`（末尾に単一の値を置く。[1. ドキュメントの構造](#1-ドキュメントの構造) 参照）と異なり、`<PGSNModule>` は呼び出し元からパラメーターを受け取り、自身は最終的な値を生成しません——import 元に対して定義を提供するだけです。
+
+```xml
+<PGSNModule>
+    <param name="p"/>          <!-- パラメーター（0個以上、先頭に書く） -->
+    <from file="..."/>         <!-- import（0個以上） -->
+    <def name="x">...</def>    <!-- 定義（0個以上） -->
+</PGSNModule>
+```
+
+`<param>` は先頭に書く必要があります。`<from>` と `<def>` はその後で自由に混在できます。
+
+### 9.2 パラメーター（`param`）
+
+`param` は `<PGSNModule>` が外部から受け取る変数を宣言します。
+`<param>` は `<PGSNModule>` 内のみ有効で、`<from>` や `<def>` より前に書きます。
+
+```xml
+<!-- Assumption は assumption_class の組み込みエイリアス -->
+<param name="A1" instanceOf="Assumption"/>
+
+<!-- デフォルト値付き -->
+<param name="threshold">100</param>
+```
+
+### 9.3 import（`from`）
+
+外部の PGSN ファイルから名前を持ち込みます。セキュリティ上の理由から、`file` 属性には相対パス（import元ファイルのディレクトリからの相対パス。`..` は禁止されているため、自分のディレクトリツリーより上には出られない）か、後述の jail 経由の絶対パスのどちらかしか使用できません。
+
+#### 単一 import
+
+```xml
+<from file="security.pgsn" import="secureGoal" as="G1"/>
+```
+
+#### 複数 import
+
+```xml
+<from file="evidence.pgsn">
+    <import name="auditEvidence"/>
+    <import name="testReport" as="TR"/>
+</from>
+```
+
+#### パラメーターを渡しながら import
+
+```xml
+<from file="other.pgsn">
+    <import name="someGoal" as="G2"/>
+    <arg name="A1" var="A1"/>
+    <arg name="threshold" var="threshold"/>
+</from>
+```
+
+#### jail 経由の絶対パス import
+
+`file` の値が `/` で始まる場合、それは実際のファイルシステム上の絶対パスではありません。最初のパス要素は *jail* の名前として解釈されます。jail とは、コンパイラの呼び出し側（`compile_pgsn(path, jails={...})`、`load(path, jails={...})`、または `pgsn` CLI の `--jail NAME=PATH`（繰り返し指定可）オプション）が渡す信頼済みの `{名前: ディレクトリ}` の対応表のことで、PGSN文書自身が定義できるものではありません。残りのパス部分は、そのjailのディレクトリ以下の相対パスとして解決されます（`..` 禁止のルールは通常の相対importと同じです）。
+
+```xml
+<!-- jails["cases"] のディレクトリ以下の numpy.xml に解決される -->
+<from file="/cases/numpy.xml" import="secureGoal" as="G1"/>
+
+<!-- jail以下のサブディレクトリも指定できる -->
+<from file="/cases/pkgs/numpy.xml" import="secureGoal" as="G1"/>
+```
+
+これにより、トップレベルの文書は、文書自身のディレクトリツリーの外にある任意のファイル——例えば、pip統合レイヤーのような外部ツールが集めてきたassurance caseファイルなど——に、実際の絶対パスを一切持たせることなく到達できます。呼び出し側が渡した対応表に該当するjail名が無い場合は `Unknown jail: '<name>'` としてコンパイルエラーになります。先頭が `/` でない通常の相対パスの`file`は影響を受けず、これまで通りimport元ファイル自身のディレクトリを基準に解決されるので、1つの文書の中に両方の形式が混在しても構いません。
+
+---
+
+## 10. モジュールの例
 
 パラメーターと import を組み合わせた実例です。
 
@@ -663,3 +732,20 @@ GSN ノードはクラスとして継承・拡張できます。
 
 `param` を受け取るモジュールは、末尾に単一の値を置く `<PGSN>` ではなく `<PGSNModule>` を使います
 （`param` は `<PGSNModule>` の先頭にだけ書けます）。
+
+---
+
+## 付録: 組み込み名一覧
+
+以下の名前はあらかじめ定義済みです。`<var name="..."/>`（または `var=` 略記、`<apply>` の `template="..."`）で参照し、[`apply`](#52-テンプレート適用apply) に適用します。
+
+- リスト操作: `cons`・`head`・`tail`・`index`・`concat`・`map_term`・`fold`
+- 真偽値: `true`・`false`・`if_then_else`・`boolean_and`・`boolean_or`・`boolean_not`・`boolean_xor`・`implies`・`equal`・`guard`
+- 整数: `plus`・`minus`・`times`・`div`・`mod`・`less_than`・`less_eq`・`greater_than`・`greater_eq`
+- レコード: `has_label`・`list_labels`・`add_attribute`・`remove_attribute`・`overwrite_record`
+- 文字列: `format_string`
+- クラス／オブジェクト: `define_class`・`instantiate`・`is_instance`・`is_subclass`・`base_class`
+- その他: `fix`・`undefined`
+- GSN コンストラクタ: `goal`・`strategy`・`evidence`・`context`・`assumption`・`undeveloped`・`immediate`・`evidence_as_goal`
+- GSN クラス（長い名前）: `goal_class`・`strategy_class`・`evidence_class`・`context_class`・`assumption_class`・`gsn_class`・`support_class`・`undeveloped_class`
+- GSN クラス（短いエイリアス）: `Goal`・`Strategy`・`Evidence`・`Context`・`Assumption`・`GSN`・`Support`

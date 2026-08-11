@@ -207,7 +207,7 @@ def test_class_object_get(tmp_path):
                 <attribute name="label">test_label</attribute>
             </object>
         </def>
-        <get label="label" of="obj"/>
+        <get label="label" var="obj"/>
     </PGSN>""", tmp_path)
     assert result == "test_label"
 
@@ -233,7 +233,7 @@ def test_class_inheritance(tmp_path):
                 <attribute name="y">py</attribute>
             </object>
         </def>
-        <get label="y" of="obj"/>
+        <get label="y" var="obj"/>
     </PGSN>""", tmp_path)
     assert result == "py"
 
@@ -416,6 +416,134 @@ def test_wrong_root(tmp_path):
     p.write_text("<PGSNModule><def name='x'>y</def></PGSNModule>")
     with pytest.raises(PGSNError, match="Expected <PGSN>"):
         compile_pgsn(p)
+
+
+# ------------------------------------------------------------------ #
+# Jail-based <from> resolution
+#
+# A <from file="/jailname/rest..."/> (leading '/') resolves "rest..."
+# under a trusted directory supplied by the *caller* of compile_pgsn via
+# the `jails={"jailname": path}` table -- never something the document
+# itself can name arbitrarily. This lets a top-level document reach files
+# placed anywhere on disk (e.g. assurance-case files collected outside its
+# own directory tree by an external tool) without ever handing it a real,
+# literal filesystem absolute path. Plain relative paths (no leading '/')
+# keep resolving against the importing file's own directory, unchanged.
+# ------------------------------------------------------------------ #
+
+def test_jail_from_resolves(tmp_path):
+    jail_dir = tmp_path / "cases"
+    jail_dir.mkdir()
+    (jail_dir / "numpy.xml").write_text("""
+    <PGSNModule>
+        <def name="secureGoal"><Evidence>numpy case</Evidence></def>
+    </PGSNModule>""")
+
+    top = tmp_path / "top.pgsn"
+    top.write_text("""
+    <PGSN>
+        <from file="/cases/numpy.xml" import="secureGoal" as="G1"/>
+        <var name="G1"/>
+    </PGSN>""")
+
+    result = python_value(
+        compile_pgsn(top, jails={"cases": jail_dir}).fully_eval(),
+        with_inherit_chain=True)
+    assert gsn_type(result) == "Evidence"
+    assert result["description"] == "numpy case"
+
+
+def test_jail_nested_path(tmp_path):
+    # The remainder after the jail name can itself contain subdirectories.
+    jail_dir = tmp_path / "cases"
+    (jail_dir / "pkgs").mkdir(parents=True)
+    (jail_dir / "pkgs" / "numpy.xml").write_text("""
+    <PGSNModule>
+        <def name="g"><Evidence>nested case</Evidence></def>
+    </PGSNModule>""")
+
+    top = tmp_path / "top.pgsn"
+    top.write_text("""
+    <PGSN>
+        <from file="/cases/pkgs/numpy.xml" import="g" as="G1"/>
+        <var name="G1"/>
+    </PGSN>""")
+
+    result = python_value(
+        compile_pgsn(top, jails={"cases": jail_dir}).fully_eval(),
+        with_inherit_chain=True)
+    assert result["description"] == "nested case"
+
+
+def test_jail_unknown_name_rejected(tmp_path):
+    jail_dir = tmp_path / "cases"
+    jail_dir.mkdir()
+    (jail_dir / "numpy.xml").write_text("""
+    <PGSNModule><def name="g"><Evidence>x</Evidence></def></PGSNModule>""")
+
+    top = tmp_path / "top.pgsn"
+    top.write_text("""
+    <PGSN>
+        <from file="/other/numpy.xml" import="g" as="G1"/>
+        <var name="G1"/>
+    </PGSN>""")
+
+    with pytest.raises(PGSNError, match="Unknown jail"):
+        compile_pgsn(top, jails={"cases": jail_dir})
+
+
+def test_jail_from_without_jails_table_rejected(tmp_path):
+    # Same jail-style path, but the caller registered no jails at all.
+    top = tmp_path / "top.pgsn"
+    top.write_text("""
+    <PGSN>
+        <from file="/cases/numpy.xml" import="g" as="G1"/>
+        <var name="G1"/>
+    </PGSN>""")
+
+    with pytest.raises(PGSNError, match="Unknown jail"):
+        compile_pgsn(top)
+
+
+def test_jail_traversal_rejected(tmp_path):
+    jail_dir = tmp_path / "cases"
+    jail_dir.mkdir()
+
+    top = tmp_path / "top.pgsn"
+    top.write_text("""
+    <PGSN>
+        <from file="/cases/../../etc/passwd" import="x"/>
+        <var name="x"/>
+    </PGSN>""")
+
+    with pytest.raises(PGSNError, match="Unsafe"):
+        compile_pgsn(top, jails={"cases": jail_dir})
+
+
+def test_jail_and_relative_from_coexist(tmp_path):
+    # A jail-absolute import and a plain relative import can both appear in
+    # the same document; each resolves independently.
+    jail_dir = tmp_path / "cases"
+    jail_dir.mkdir()
+    (jail_dir / "numpy.xml").write_text("""
+    <PGSNModule><def name="g"><Evidence>from jail</Evidence></def></PGSNModule>""")
+
+    (tmp_path / "local.pgsn").write_text("""
+    <PGSNModule><def name="g"><Evidence>from local dir</Evidence></def></PGSNModule>""")
+
+    top = tmp_path / "top.pgsn"
+    top.write_text("""
+    <PGSN>
+        <from file="/cases/numpy.xml" import="g" as="G1"/>
+        <from file="local.pgsn" import="g" as="G2"/>
+        <ul><li var="G1"/><li var="G2"/></ul>
+    </PGSN>""")
+
+    result = python_value(
+        compile_pgsn(top, jails={"cases": jail_dir}).fully_eval(),
+        with_inherit_chain=True)
+    assert result[0]["description"] == "from jail"
+    assert result[1]["description"] == "from local dir"
 
 
 # ------------------------------------------------------------------ #
@@ -869,33 +997,35 @@ def test_apply_template_builtin(tmp_path):
 # send method= / to= shorthand
 # ------------------------------------------------------------------ #
 
-def test_send_method_to(tmp_path):
-    # <send method="m" to="obj"> shorthand: method call on a variable receiver.
+def test_send_method_var(tmp_path):
+    # <send method="m" var="obj"> shorthand: method call on a variable
+    # receiver. var="obj" expands to <var name="obj"/> content, exactly
+    # like the var= shorthand on any other element.
     result = run("""
     <PGSN>
         <def name="Greeter" as="class">
             <attribute name="greeting"/>
             <method name="greet">
-                <get label="greeting" of="self"/>
+                <get label="greeting" var="self"/>
             </method>
         </def>
         <def name="g" as="object">
             <instanceOf var="Greeter"/>
             <attribute name="greeting">hello</attribute>
         </def>
-        <send method="greet" to="g"/>
+        <send method="greet" var="g"/>
     </PGSN>""", tmp_path)
     assert result == "hello"
 
 
-def test_send_method_without_to(tmp_path):
-    # send method= without to= uses the first child element as receiver.
+def test_send_method_without_var(tmp_path):
+    # send method= without var= uses the first child element as receiver.
     result = run("""
     <PGSN>
         <def name="Greeter" as="class">
             <attribute name="greeting"/>
             <method name="greet">
-                <get label="greeting" of="self"/>
+                <get label="greeting" var="self"/>
             </method>
         </def>
         <def name="g" as="object">
@@ -909,15 +1039,16 @@ def test_send_method_without_to(tmp_path):
     assert result == "hello"
 
 
-def test_send_method_to_equiv_without_to(tmp_path):
-    # send method= to= must produce the same result as method= with explicit
-    # child var element as receiver (the two ways of specifying the receiver).
+def test_send_method_var_equiv_without_var(tmp_path):
+    # send method= var= must produce the same result as method= with an
+    # explicit child var element as receiver (the two ways of specifying
+    # the receiver).
     xml_base = """
     <PGSN>
         <def name="Wrapper" as="class">
             <attribute name="val"/>
             <method name="unwrap">
-                <get label="val" of="self"/>
+                <get label="val" var="self"/>
             </method>
         </def>
         <def name="w" as="object">
@@ -927,15 +1058,53 @@ def test_send_method_to_equiv_without_to(tmp_path):
         {send_form}
     </PGSN>"""
 
-    with_to = run(
-        xml_base.format(send_form='<send method="unwrap" to="w"/>'),
+    with_var = run(
+        xml_base.format(send_form='<send method="unwrap" var="w"/>'),
         tmp_path)
 
-    without_to = run(
+    without_var = run(
         xml_base.format(send_form='<send method="unwrap"><var name="w"/></send>'),
         tmp_path)
 
-    assert with_to == without_to
+    assert with_var == without_var
+
+
+def test_get_send_general_expression_receiver(tmp_path):
+    # <get>/<send> accept any expression (val_pat) as their receiver, not
+    # just var="obj" or <var name="obj"/> -- e.g. the result of an <apply>.
+    xml_base = """
+    <PGSN>
+        <def name="Greeter" as="class">
+            <attribute name="greeting"/>
+            <method name="greet">
+                <get label="greeting" var="self"/>
+            </method>
+        </def>
+        <def name="makeGreeter" as="template">
+            <param name="text" positional="true"/>
+            <object>
+                <instanceOf var="Greeter"/>
+                <attribute name="greeting" var="text"/>
+            </object>
+        </def>
+        {expr}
+    </PGSN>"""
+
+    via_get = run(
+        xml_base.format(expr="""
+        <get label="greeting">
+            <apply><var name="makeGreeter"/><arg>hello</arg></apply>
+        </get>"""),
+        tmp_path)
+    assert via_get == "hello"
+
+    via_send = run(
+        xml_base.format(expr="""
+        <send method="greet">
+            <apply><var name="makeGreeter"/><arg>hello</arg></apply>
+        </send>"""),
+        tmp_path)
+    assert via_send == "hello"
 
 
 # ------------------------------------------------------------------ #
