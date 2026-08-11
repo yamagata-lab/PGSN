@@ -40,10 +40,35 @@ def load_term_from_py_file(file_path: str, term_name: str) -> Term:
     return term_object
 
 
-def load_term(input_file: str, term_name: str) -> Term:
+def parse_jails(jail_specs: tuple[str, ...]) -> dict[str, str]:
+    """Parse repeated --jail NAME=PATH options into a {name: path} dict.
+
+    Jails are trusted (name -> directory) entries supplied by the CLI
+    invocation itself, never by the PGSN document being compiled. A
+    <from file="/name/rest..."/> in the document resolves "rest..." under
+    the matching jail's directory -- see pgsn_xml._compile_from.
+    """
+    jails: dict[str, str] = {}
+    for spec in jail_specs:
+        if '=' not in spec:
+            raise ValueError(f"Invalid --jail value '{spec}', expected NAME=PATH")
+        name, path = spec.split('=', 1)
+        if not name:
+            raise ValueError(f"Invalid --jail value '{spec}', jail name is empty")
+        jails[name] = path
+    return jails
+
+
+def load_term(input_file: str, term_name: str,
+              jails: dict[str, str] | None = None) -> Term:
     """
     Load a Term from a .py, .json, or .xml file without evaluating it.
     Evaluation (fully_eval) is the caller's responsibility.
+
+    jails only applies to .xml input: it is forwarded to
+    pgsn_xml.compile_pgsn to resolve jail-absolute <from file="/name/.."/>
+    imports (e.g. assurance case files collected outside the document's own
+    directory tree).
     """
     if input_file.endswith('.py'):
         return load_term_from_py_file(input_file, term_name)
@@ -51,7 +76,7 @@ def load_term(input_file: str, term_name: str) -> Term:
         with open(input_file, 'r', encoding='utf-8') as f:
             return dsl.json_loads(f.read())
     elif input_file.endswith('.xml'):
-        return pgsn_xml.compile_pgsn(input_file)
+        return pgsn_xml.compile_pgsn(input_file, jails=jails)
     else:
         raise ValueError(
             f"Unsupported file type for '{input_file}'. Use .py, .json, or .xml."
@@ -75,13 +100,15 @@ def cli():
               help='The output document format.')
 @click.option('--output', '-o', default=None, help='The output filename.')
 @click.option('--steps', '-s', help='maximum number of evaluation steps', type=int, default=1000000)
-def doc(input_file, term_name, doc_type, output, steps):
+@click.option('--jail', multiple=True, metavar='NAME=PATH',
+              help='Register a jail for <from file="/NAME/..."/> imports (repeatable).')
+def doc(input_file, term_name, doc_type, output, steps, jail):
     """Evaluates a PGSN term and outputs a document in a specified format."""
 
     click.echo(f"Generating '{output}' from '{input_file}'", err=True)
 
     try:
-        term = load_term(input_file, term_name)
+        term = load_term(input_file, term_name, jails=parse_jails(jail))
         click.echo(f"Evaluating term '{term_name}'...", err=True)
         evaluated_gsn = term.fully_eval(steps=steps)
 
@@ -114,13 +141,15 @@ def doc(input_file, term_name, doc_type, output, steps):
 @click.option('--format', '-f', 'image_format', type=click.Choice(['svg', 'png', 'pdf']), default='svg',
               help='The output image format.')
 @click.option('--steps', '-s', help='maximum number of evaluation steps', type=int, default=1000000)
-def render(input_file, term_name, output, image_format, steps):
+@click.option('--jail', multiple=True, metavar='NAME=PATH',
+              help='Register a jail for <from file="/NAME/..."/> imports (repeatable).')
+def render(input_file, term_name, output, image_format, steps, jail):
     """Evaluates a PGSN term and renders it as a graph."""
 
     click.echo(f"Processing '{input_file}' to render a graph...", err=True)
 
     try:
-        term = load_term(input_file, term_name)
+        term = load_term(input_file, term_name, jails=parse_jails(jail))
         click.echo(f"Evaluating term '{term_name}'...", err=True)
         evaluated_gsn = term.fully_eval(steps=steps)
 
@@ -149,12 +178,14 @@ def render(input_file, term_name, output, image_format, steps):
 @click.argument('input_file', type=click.Path(exists=True, dir_okay=False))
 @click.option('--term-name', default='main', help='The name of the Term object to compile.')
 @click.option('--output', '-o', default=None, help='The output JSON filename.')
-def compile(input_file, term_name, output):
+@click.option('--jail', multiple=True, metavar='NAME=PATH',
+              help='Register a jail for <from file="/NAME/..."/> imports (repeatable).')
+def compile(input_file, term_name, output, jail):
     """Compiles a trusted PGSN (.py or .xml) file into a secure JSON format."""
     click.echo(f"Compiling '{input_file}' to JSON...", err=True)
 
     try:
-        term = load_term(input_file, term_name)
+        term = load_term(input_file, term_name, jails=parse_jails(jail))
         json_str = dsl.json_dumps(term, indent=None, separators=(',', ':'))
 
         if output and output != '-':
