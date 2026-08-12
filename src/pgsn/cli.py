@@ -15,11 +15,41 @@ try:
     from pgsn import dsl
     from pgsn import gsn
     from pgsn import pgsn_xml
+    from pgsn.config import Config
+    from pgsn.jail import JailError, Jails
     from pgsn.pgsn_term import Term
 except ImportError as e:
     print(f"Error: Could not import PGSN modules: {e}")
     print("Please ensure gsn.py, dsl.py, pgsn_term.py, and pgsn_xml.py are accessible.")
     sys.exit(1)
+
+
+def jail_option(f):
+    """Add the repeatable --jail option to a command."""
+    return click.option(
+        '--jail', 'jail_specs', multiple=True, metavar='NAME=PATH',
+        help='Register NAME as a jail rooted at PATH, so that XML imports may '
+             'name files as /NAME/sub/file.xml. Repeatable. Only meaningful '
+             'for .xml input.'
+    )(f)
+
+
+def parse_jails(jail_specs: tuple[str, ...]) -> Jails:
+    """Turn --jail NAME=PATH arguments into a Jails table."""
+    roots: dict[str, str] = {}
+    for spec in jail_specs:
+        name, sep, path = spec.partition('=')
+        if not sep or not name or not path:
+            raise click.BadParameter(
+                f"expected NAME=PATH, got {spec!r}", param_hint='--jail')
+        if name in roots:
+            raise click.BadParameter(
+                f"jail {name!r} is defined more than once", param_hint='--jail')
+        roots[name] = path
+    try:
+        return Jails(roots)
+    except JailError as e:
+        raise click.BadParameter(str(e), param_hint='--jail') from None
 
 
 def load_term_from_py_file(file_path: str, term_name: str) -> Term:
@@ -40,18 +70,32 @@ def load_term_from_py_file(file_path: str, term_name: str) -> Term:
     return term_object
 
 
-def load_term(input_file: str, term_name: str) -> Term:
+def load_term(input_file: str, term_name: str,
+              jail_specs: tuple[str, ...] = ()) -> Term:
     """
     Load a Term from a .py, .json, or .xml file without evaluating it.
     Evaluation (fully_eval) is the caller's responsibility.
+
+    Jails apply to XML imports only; supplying them for another input format is
+    an error rather than a silent no-op, so that a mistaken invocation is not
+    read as a granted permission.
     """
     if input_file.endswith('.py'):
+        if jail_specs:
+            raise click.UsageError(
+                "--jail applies to .xml input only; '.py' files are loaded as "
+                "trusted Python and are not confined by jails.")
         return load_term_from_py_file(input_file, term_name)
     elif input_file.endswith('.json'):
+        if jail_specs:
+            raise click.UsageError(
+                "--jail applies to .xml input only; '.json' files contain no "
+                "imports.")
         with open(input_file, 'r', encoding='utf-8') as f:
             return dsl.json_loads(f.read())
     elif input_file.endswith('.xml'):
-        return pgsn_xml.compile_pgsn(input_file)
+        return pgsn_xml.compile_pgsn(
+            input_file, config=Config(jails=parse_jails(jail_specs)))
     else:
         raise ValueError(
             f"Unsupported file type for '{input_file}'. Use .py, .json, or .xml."
@@ -75,13 +119,14 @@ def cli():
               help='The output document format.')
 @click.option('--output', '-o', default=None, help='The output filename.')
 @click.option('--steps', '-s', help='maximum number of evaluation steps', type=int, default=1000000)
-def doc(input_file, term_name, doc_type, output, steps):
+@jail_option
+def doc(input_file, term_name, doc_type, output, steps, jail_specs):
     """Evaluates a PGSN term and outputs a document in a specified format."""
 
     click.echo(f"Generating '{output}' from '{input_file}'", err=True)
 
     try:
-        term = load_term(input_file, term_name)
+        term = load_term(input_file, term_name, jail_specs)
         click.echo(f"Evaluating term '{term_name}'...", err=True)
         evaluated_gsn = term.fully_eval(steps=steps)
 
@@ -103,6 +148,9 @@ def doc(input_file, term_name, doc_type, output, steps):
 
         click.echo("Done.", err=True)
 
+    except click.UsageError:
+        # Malformed invocations must fail loudly, with a non-zero exit status.
+        raise
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
 
@@ -114,13 +162,14 @@ def doc(input_file, term_name, doc_type, output, steps):
 @click.option('--format', '-f', 'image_format', type=click.Choice(['svg', 'png', 'pdf']), default='svg',
               help='The output image format.')
 @click.option('--steps', '-s', help='maximum number of evaluation steps', type=int, default=1000000)
-def render(input_file, term_name, output, image_format, steps):
+@jail_option
+def render(input_file, term_name, output, image_format, steps, jail_specs):
     """Evaluates a PGSN term and renders it as a graph."""
 
     click.echo(f"Processing '{input_file}' to render a graph...", err=True)
 
     try:
-        term = load_term(input_file, term_name)
+        term = load_term(input_file, term_name, jail_specs)
         click.echo(f"Evaluating term '{term_name}'...", err=True)
         evaluated_gsn = term.fully_eval(steps=steps)
 
@@ -141,6 +190,9 @@ def render(input_file, term_name, output, image_format, steps):
 
         click.echo("Done.", err=True)
 
+    except click.UsageError:
+        # Malformed invocations must fail loudly, with a non-zero exit status.
+        raise
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
 
@@ -149,12 +201,13 @@ def render(input_file, term_name, output, image_format, steps):
 @click.argument('input_file', type=click.Path(exists=True, dir_okay=False))
 @click.option('--term-name', default='main', help='The name of the Term object to compile.')
 @click.option('--output', '-o', default=None, help='The output JSON filename.')
-def compile(input_file, term_name, output):
+@jail_option
+def compile(input_file, term_name, output, jail_specs):
     """Compiles a trusted PGSN (.py or .xml) file into a secure JSON format."""
     click.echo(f"Compiling '{input_file}' to JSON...", err=True)
 
     try:
-        term = load_term(input_file, term_name)
+        term = load_term(input_file, term_name, jail_specs)
         json_str = dsl.json_dumps(term, indent=None, separators=(',', ':'))
 
         if output and output != '-':
@@ -166,6 +219,9 @@ def compile(input_file, term_name, output):
 
         click.echo("Done.", err=True)
 
+    except click.UsageError:
+        # Malformed invocations must fail loudly, with a non-zero exit status.
+        raise
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
 

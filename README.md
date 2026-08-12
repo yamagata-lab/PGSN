@@ -64,6 +64,36 @@ Done.
 
 Use "pgsn --help" for other command and option
 
+### Jails for XML imports
+
+An XML document may import other documents. By default it can only reach files under its own directory. To grant access to a shared library of modules, register it as a *jail* — a named directory root — and refer to it from the document as `/<name>/...`:
+
+```shell
+PGSN % pgsn doc main.xml --jail lib=/opt/pgsn-lib
+```
+
+```xml
+<from file="/lib/security.pgsn" import="secureGoal"/>
+```
+
+`--jail` may be given more than once, and applies to `.xml` input only. Nothing outside a registered jail can be imported: `..` may not leave the enclosing root, and symbolic links are expanded before that check. See [README-xml.md](README-xml.md) for the full rules.
+
+## Public API
+
+`import pgsn` gives you the supported interface:
+
+```python
+import pgsn
+
+cfg = pgsn.Config(jails={"lib": "/opt/pgsn-lib"})
+term = pgsn.load_xml("main.xml", config=cfg)
+print(pgsn.gsn_tree(term).show(stdout=False))
+```
+
+It exposes constructors for PGSN constants and terms (`string`, `record`, `lambda_abs`, `map_term`, ...), constructors for GSN nodes and classes (`goal`, `strategy`, `evidence`, `goal_class`, ...), the conversion and rendering functions (`python_value`, `gsn_tree`, `gsn_dot`, `save_gsn`), and the XML front end with its configuration (`load_xml`, `load_xml_string`, `Config`, `Jails`, `configure`).
+
+Everything else in the package — `pgsn.dsl`, `pgsn.gsn`, `pgsn.pgsn_term`, `pgsn.pgsn_xml`, `pgsn.dcom`, `pgsn.helpers`, `pgsn.cli` — is internal and may change without notice. The examples below import from those submodules directly and predate the public API; prefer `import pgsn` in new code.
+
 ## Example
 
 ```python

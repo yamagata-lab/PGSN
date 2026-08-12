@@ -93,7 +93,7 @@ Parameters are only valid inside `<PGSNModule>` and must appear before any `<fro
 
 ## Import (from)
 
-Brings names from external PGSN files into scope. For security reasons, only relative file paths are allowed.
+Brings names from external PGSN files into scope. A document can only reach files it has been granted access to; see [Import paths and jails](#import-paths-and-jails) below.
 
 ### Single import
 
@@ -119,6 +119,54 @@ Brings names from external PGSN files into scope. For security reasons, only rel
     <arg name="threshold" var="threshold"/>
 </from>
 ```
+
+### Import paths and jails
+
+A document is confined to a directory tree, and `file` may only name a file inside it. There are two ways to write a path.
+
+**Relative paths** are resolved against the directory of the document doing the importing:
+
+```xml
+<from file="modules/security.pgsn" import="secureGoal"/>
+<from file="../shared/evidence.pgsn" import="auditEvidence"/>
+```
+
+`..` is permitted, but only as long as the result stays inside the confinement root. The root of a document opened directly by path is the directory that document lives in, so by default a document can reach its neighbours and their subdirectories, and nothing above them.
+
+**Jailed paths** start with `/` and name a *jail* — a directory root registered by whoever runs PGSN:
+
+```xml
+<from file="/lib/security.pgsn" import="secureGoal"/>
+```
+
+Here `lib` is a jail name, not a directory on disk. It is resolved against the jail table supplied on the command line or through the API:
+
+```console
+$ pgsn doc main.xml --jail lib=/opt/pgsn-lib
+```
+
+```python
+import pgsn
+
+cfg = pgsn.Config(jails={"lib": "/opt/pgsn-lib"})
+term = pgsn.load_xml("main.xml", config=cfg)
+```
+
+A document has no way to name a jail that was not registered, and no way to reach the real filesystem layout behind one. Jail names may contain letters, digits, `_` and `-` only.
+
+Once an import crosses into a jail, that jail becomes the confinement root for the imported module. A module inside a jail may import its neighbours relatively, but cannot climb out with `..` — not even back into the tree of the document that imported it. Crossing from one jail to another always requires naming the target jail explicitly.
+
+The following are rejected:
+
+| Path | Reason |
+|------|--------|
+| `../../etc/passwd` | leaves the confinement root |
+| `/etc/passwd` | `etc` is not a registered jail |
+| `/lib/../secret.pgsn` | `..` is not allowed in a jailed path |
+| `/lib/link.pgsn` where `link.pgsn` is a symlink out of the jail | resolves outside the jail root |
+| `C:\lib\mod.pgsn` | absolute paths must name a jail |
+
+Symbolic links are expanded before the containment check, so a link planted inside a jail cannot be used to escape it.
 
 ---
 
