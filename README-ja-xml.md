@@ -260,15 +260,15 @@ import が jail に入ると、その jail が import 先モジュールの封�
 
 ### 組み込み（builtin）
 
-以下の名前はあらかじめ定義済みで、`<var name="..."/>` で参照し `apply` に適用できます。
+以下の名前はあらかじめ定義済みで、`<var name="..."/>` で参照し `apply` に適用できます。これは `pgsn` パッケージが公開する項値の名前とちょうど一致しており、Python から使えるものは同じ名前で XML からも使えます。
 
-- リスト操作: `cons`・`head`・`tail`・`index`・`concat`・`map_term`・`fold`
+- リスト操作: `cons`・`head`・`tail`・`index`・`concat`・`map_term`・`fold`・`foldr`・`list_all`・`empty`
 - 真偽値: `true`・`false`・`if_then_else`・`boolean_and`・`boolean_or`・`boolean_not`・`equal`・`guard`
-- 整数: `plus`・`minus`・`times`・`div`・`mod`
-- レコード: `has_label`・`list_labels`・`add_attribute`・`remove_attribute`・`overwrite_record`
+- 整数: `plus`・`minus`・`times`・`div`・`mod`・`integer_sum`
+- レコード: `has_label`・`list_labels`・`add_attribute`・`remove_attribute`・`overwrite_record`・`empty_record`
 - 文字列: `format_string`
-- クラス／オブジェクト: `define_class`・`instantiate`・`is_instance`・`is_subclass`・`base_class`
-- その他: `fix`・`undefined`
+- クラス／オブジェクト: `define_class`・`instantiate`・`instance`・`is_instance`・`is_subclass`・`base_class`
+- その他: `fix`・`repeat`・`undefined`
 - GSN コンストラクタ: `goal`・`strategy`・`evidence`・`context`・`assumption`・`undeveloped`・`immediate`・`evidence_as_goal`
 - GSN クラス（長い名前）: `goal_class`・`strategy_class`・`evidence_class`・`context_class`・`assumption_class`・`gsn_class`・`support_class`・`undeveloped_class`
 - GSN クラス（短いエイリアス）: `Goal`・`Strategy`・`Evidence`・`Context`・`Assumption`・`GSN`・`Support`

@@ -94,6 +94,8 @@ It exposes constructors for PGSN constants and terms (`string`, `record`, `lambd
 
 Everything else in the package — `pgsn.dsl`, `pgsn.gsn`, `pgsn.pgsn_term`, `pgsn.pgsn_xml`, `pgsn.dcom`, `pgsn.helpers`, `pgsn.cli` — is internal and may change without notice. The examples below import from those submodules directly and predate the public API; prefer `import pgsn` in new code.
 
+[README-api.md](README-api.md) is the full reference.
+
 ## Example
 
 ```python

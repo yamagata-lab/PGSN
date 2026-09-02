@@ -97,6 +97,8 @@ print(pgsn.gsn_tree(term).show(stdout=False))
 
 これら以外 — `pgsn.dsl`、`pgsn.gsn`、`pgsn.pgsn_term`、`pgsn.pgsn_xml`、`pgsn.dcom`、`pgsn.helpers`、`pgsn.cli` — は内部実装であり、予告なく変更されることがあります。以下の例は公開 API の導入前に書かれたもので、これらのサブモジュールを直接 import しています。新しいコードでは `import pgsn` を使ってください。
 
+詳細なリファレンスは [README-ja-api.md](README-ja-api.md) にあります。
+
 ---
 
 ## 基本例

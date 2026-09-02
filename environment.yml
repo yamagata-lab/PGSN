@@ -1,12 +1,14 @@
-name: pgsn
+name: PGSN
 channels:
   - conda-forge
 dependencies:
   - python=3.12
   - pytest
-  - attrs~=24.3.0
-  - typeguard
-  - cattrs
-  - treelib
+  # Keep the runtime pins in step with pyproject.toml
+  - attrs>=25.3
+  - cattrs>=25.1
+  - treelib>=1.7
+  - click>=8.2
   - graphviz
   - python-graphviz
+  - typeguard

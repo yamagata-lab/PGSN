@@ -46,6 +46,7 @@ from pgsn.dsl import (
     # Aggregates
     list_term,
     record,
+    empty,
     empty_record,
     # Abstraction and binding
     lambda_abs,
@@ -90,6 +91,7 @@ from pgsn.dsl import (
     base_class,
     define_class,
     instantiate,
+    instance,
     is_instance,
     is_subclass,
     # Conversion
@@ -148,6 +150,7 @@ __all__ = [
     # Aggregates
     "list_term",
     "record",
+    "empty",
     "empty_record",
     # Abstraction and binding
     "lambda_abs",
@@ -192,6 +195,7 @@ __all__ = [
     "base_class",
     "define_class",
     "instantiate",
+    "instance",
     "is_instance",
     "is_subclass",
     # GSN node constructors

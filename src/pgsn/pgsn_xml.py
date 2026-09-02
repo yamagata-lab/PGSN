@@ -13,10 +13,11 @@ from pgsn.jail import JailError, is_within
 from pgsn.dsl import (
     variable, string, list_term, record, empty_record, let,
     lambda_abs, lambda_abs_keywords, lambda_abs_vars,
-    fix, map_term, fold, concat, cons, head, tail, index,
+    fix, map_term, fold, foldr, concat, cons, head, tail, index, repeat,
+    list_all, integer_sum,
     true, false, if_then_else, guard,
     equal, plus, minus, times, div, mod,
-    define_class, instantiate, is_instance, is_subclass,
+    define_class, instantiate, instance, is_instance, is_subclass,
     base_class, undefined, empty,
     boolean_and, boolean_or, boolean_not,
     has_label, list_labels, add_attribute, remove_attribute, overwrite_record,
@@ -212,10 +213,16 @@ def _preprocess(elem: ET.Element) -> None:
         _preprocess(child)
 
 
-# Builtins substituted inline during compilation (not at evaluation time)
+# Builtins substituted inline during compilation (not at evaluation time).
+#
+# Every term-valued name the `pgsn` package exports is bound here under the
+# same name, so that the two front ends offer the same standard library; see
+# tests/test_api_consistency.py, which fails if the two drift apart.
 _BUILTINS: dict[str, Term] = {
-    "fix": fix, "map_term": map_term, "fold": fold, "concat": concat,
-    "cons": cons, "head": head, "tail": tail, "index": index,
+    "fix": fix, "map_term": map_term, "fold": fold, "foldr": foldr,
+    "concat": concat, "list_all": list_all,
+    "cons": cons, "head": head, "tail": tail, "index": index, "empty": empty,
+    "repeat": repeat, "integer_sum": integer_sum,
     "equal": equal, "guard": guard, "if_then_else": if_then_else,
     "plus": plus, "minus": minus, "times": times, "div": div, "mod": mod,
     "boolean_and": boolean_and, "boolean_or": boolean_or,
@@ -223,10 +230,10 @@ _BUILTINS: dict[str, Term] = {
     "has_label": has_label, "list_labels": list_labels,
     "add_attribute": add_attribute, "remove_attribute": remove_attribute,
     "overwrite_record": overwrite_record, "format_string": format_string,
-    "undefined": undefined,
+    "empty_record": empty_record, "undefined": undefined,
     "define_class": define_class, "instantiate": instantiate,
-    "is_instance": is_instance, "is_subclass": is_subclass,
-    "base_class": base_class,
+    "instance": instance, "is_instance": is_instance,
+    "is_subclass": is_subclass, "base_class": base_class,
     "goal": goal, "strategy": strategy, "evidence": evidence,
     "context": context, "assumption": assumption,
     "immediate": immediate, "undeveloped": undeveloped,

@@ -262,15 +262,15 @@ References a previously defined name.
 
 ### Built-ins
 
-The following names are predefined; reference them with `<var name="..."/>` and apply them via `apply`.
+The following names are predefined; reference them with `<var name="..."/>` and apply them via `apply`. They are exactly the term-valued names exported by the `pgsn` Python package, so anything usable from Python is usable here under the same name.
 
-- List operations: `cons`, `head`, `tail`, `index`, `concat`, `map_term`, `fold`
+- List operations: `cons`, `head`, `tail`, `index`, `concat`, `map_term`, `fold`, `foldr`, `list_all`, `empty`
 - Booleans: `true`, `false`, `if_then_else`, `boolean_and`, `boolean_or`, `boolean_not`, `equal`, `guard`
-- Integers: `plus`, `minus`, `times`, `div`, `mod`
-- Records: `has_label`, `list_labels`, `add_attribute`, `remove_attribute`, `overwrite_record`
+- Integers: `plus`, `minus`, `times`, `div`, `mod`, `integer_sum`
+- Records: `has_label`, `list_labels`, `add_attribute`, `remove_attribute`, `overwrite_record`, `empty_record`
 - Strings: `format_string`
-- Classes / objects: `define_class`, `instantiate`, `is_instance`, `is_subclass`, `base_class`
-- Misc: `fix`, `undefined`
+- Classes / objects: `define_class`, `instantiate`, `instance`, `is_instance`, `is_subclass`, `base_class`
+- Misc: `fix`, `repeat`, `undefined`
 - GSN constructors: `goal`, `strategy`, `evidence`, `context`, `assumption`, `undeveloped`, `immediate`, `evidence_as_goal`
 - GSN classes (long form): `goal_class`, `strategy_class`, `evidence_class`, `context_class`, `assumption_class`, `gsn_class`, `support_class`, `undeveloped_class`
 - GSN classes (short aliases): `Goal`, `Strategy`, `Evidence`, `Context`, `Assumption`, `GSN`, `Support`

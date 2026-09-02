@@ -9,7 +9,6 @@ v = lambda_abs(self, if_then_else(self(a))(self(b))(self(c)))
 # attrs1 = inherit(defaults)(record_term.record({'value': get_value_term}))
 attrs1 = record({'a': true})
 cls = define_class(inherit=base_class, defaults=defaults, attributes=["a"], methods={})
-test = string('test')
 
 
 cls1 = define_class(inherit=cls, attributes=[])
