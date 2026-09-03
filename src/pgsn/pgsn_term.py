@@ -1124,6 +1124,24 @@ class Guard(ConstMixin, Builtin):
         return terms[1]
 
 
+# Ordering. Only integers are ordered; the other comparisons in the expression
+# syntax are derived from this one and from Equal.
+@frozen
+class LessThan(ConstMixin, Builtin):
+
+    @classmethod
+    def build(cls, is_named: bool, **kwarg) -> Term:
+        return super().build(arity=2, is_named=is_named, **kwarg)
+
+    def _applicable_args(self, args: tuple[Term, ...]):
+        return (len(args) >= 2
+                and isinstance(args[0], Integer) and isinstance(args[1], Integer))
+
+    def _apply_args(self, args: tuple[Term, ...]):
+        return Boolean.build(is_named=self.is_named,
+                             value=args[0].value < args[1].value)
+
+
 # Comparison. does not compare App and Abs
 @frozen
 class Equal(ConstMixin, Builtin):
