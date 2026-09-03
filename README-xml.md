@@ -61,69 +61,6 @@ In PGSN, **everything is a value**. Every element that accepts content expects a
 <inherit><apply template="makeBaseClass"><arg>...</arg></apply></inherit>
 ```
 
-### Literals
-
-Bare text is a string, so the other literal forms are written out.
-
-| Element | Value |
-|---------|-------|
-| bare text | a `String`. Leading and trailing whitespace is removed, and `{name}` fields are interpolated — see [Format Strings in Text](#format-strings-in-text) |
-| `<num>3</num>` | an `Integer`. PGSN has no floating point numbers |
-| `<str> a {b} </str>` | a `String`, taken exactly as written: whitespace is kept and `{...}` is not interpolated |
-| `<builtin name="plus"/>` | the builtin itself, without going through name resolution |
-
-`<num>` matters because bare text stays a string even when it looks like a number, which is what lets a goal say `2024 audit passed` without the year turning into an integer. The arithmetic builtins only accept integers, so `<arg>3</arg>` gives them a string and leaves the term unreduced; write `<arg><num>3</num></arg>`.
-
-`<builtin>` differs from `<var>` in what it asks for: `<var name="plus"/>` asks for whatever `plus` denotes at that point in the document, while `<builtin name="plus"/>` asks for the builtin regardless. It is what [`<expr>`](#expressions-expr) expands its operators into.
-
-### Expressions (expr)
-
-Writing arithmetic with `<apply>` is heavy, so `<expr>` accepts the usual infix notation:
-
-```xml
-<def name="next"><expr>i + 1</expr></def>
-<def name="label"><expr>f"component {i} of {total}"</expr></def>
-```
-
-`<expr>` is a shorthand and nothing more. It is expanded into the XML you could have written by hand, before compilation begins, so nothing is reachable through an expression that is not reachable without one. `<expr>1 + 2</expr>` becomes:
-
-```xml
-<apply><builtin name="plus"/>
-  <arg><num>1</num></arg>
-  <arg><num>2</num></arg>
-</apply>
-```
-
-**What may appear in an expression**
-
-| | |
-|---|---|
-| literals | `3`, `"text"`, `True`, `False` |
-| variables | `i` — becomes `<var name="i"/>` |
-| arithmetic | `+`, `-`, `*`, `//`, `%`, and unary `-` |
-| comparison | `==`, `!=`, `<`, `<=`, `>`, `>=` |
-| boolean | `and`, `or`, `not` |
-| f-strings | `f"component {i} of {total}"`, including format specifications such as `{i:>3}` |
-
-Everything else is rejected with an error naming what was found. There are no function calls, no attribute access and no subscripting: use `<apply>`, `<get>` and the list elements, which state plainly what they do.
-
-**Three things to know**
-
-`<` must be escaped in XML. Write `i &lt; n`, or wrap the expression in `CDATA`:
-
-```xml
-<expr>i &lt; n</expr>
-<expr><![CDATA[i < n]]></expr>
-```
-
-`>` needs no escaping, so `n > i` is often the easier way to say the same thing.
-
-`//` is integer division: `7 // 2` is `3`. `/` is rejected rather than treated as a synonym, so that it stays available for true division if PGSN ever gains a floating point type.
-
-Ordering compares integers only. `"a" < "b"` does not reduce; equality, however, works on any value, so `"a" == "a"` is `True`.
-
-**Operators cannot be redefined.** They expand to `<builtin>`, so `1 + 2` is addition even inside a scope that binds the name `plus`.
-
 ### Shorthand for Variable References
 
 When an element's content is a single variable reference, the `var` attribute can be used as shorthand.
@@ -328,7 +265,7 @@ References a previously defined name.
 The following names are predefined; reference them with `<var name="..."/>` and apply them via `apply`. They are exactly the term-valued names exported by the `pgsn` Python package, so anything usable from Python is usable here under the same name.
 
 - List operations: `cons`, `head`, `tail`, `index`, `concat`, `map_term`, `fold`, `foldr`, `list_all`, `empty`
-- Booleans: `true`, `false`, `if_then_else`, `boolean_and`, `boolean_or`, `boolean_not`, `equal`, `less_than`, `guard`
+- Booleans: `true`, `false`, `if_then_else`, `boolean_and`, `boolean_or`, `boolean_not`, `equal`, `guard`
 - Integers: `plus`, `minus`, `times`, `div`, `mod`, `integer_sum`
 - Records: `has_label`, `list_labels`, `add_attribute`, `remove_attribute`, `overwrite_record`, `empty_record`
 - Strings: `format_string`
@@ -551,14 +488,6 @@ For GSN header elements (`Goal`, `Strategy`, `Evidence`, `Context`, `Assumption`
     <undeveloped/>
 </Goal>
 ```
-
-A header with no leading text takes a single value child as its description, so a computed description needs no `<description>` wrapper:
-
-```xml
-<Evidence><expr>f"test report {i}"</expr></Evidence>
-```
-
-A header carrying more than one value child is an error; say which one is the description by writing it out.
 
 ---
 
