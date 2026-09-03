@@ -28,8 +28,19 @@ Nothing outside a registered jail â€” or outside the document's own directory â€
 can be imported.
 """
 
+from importlib.metadata import PackageNotFoundError as _PackageNotFoundError
+from importlib.metadata import version as _installed_version
+
 from pgsn.config import Config, configure, get_config
 from pgsn.jail import Jails, JailError
+
+try:
+    # pyproject.toml is the single source of truth for the version number.
+    __version__ = _installed_version("pgsn")
+except _PackageNotFoundError:
+    # Running from a source tree that was never installed (for instance with
+    # PYTHONPATH=src), where there is no package metadata to read.
+    __version__ = "0.0.0+source"
 
 from pgsn.dsl import (
     # Terms and variables
@@ -126,6 +137,8 @@ from pgsn.gsn import (
 from pgsn.pgsn_xml import PGSNError, load_xml, load_xml_string
 
 __all__ = [
+    # Package metadata
+    "__version__",
     # Configuration
     "Config",
     "configure",
