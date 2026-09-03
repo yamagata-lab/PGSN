@@ -59,6 +59,69 @@ PGSN では**すべてが値**です。コンテンツを受け取る要素は�
 <inherit><apply template="makeBaseClass"><arg>...</arg></apply></inherit>
 ```
 
+### リテラル
+
+裸のテキストは文字列になるので、それ以外のリテラルは明示的に書きます。
+
+| 要素 | 値 |
+|------|-----|
+| 裸のテキスト | `String`。前後の空白は除去され、`{name}` は補間されます（[テキスト中の書式文字列](#テキスト中の書式文字列)を参照） |
+| `<num>3</num>` | `Integer`。PGSN に浮動小数点数はありません |
+| `<str> a {b} </str>` | `String`。書いたとおりに解釈され、空白は保たれ `{...}` は補間されません |
+| `<builtin name="plus"/>` | 組み込みそのもの。名前解決を経由しません |
+
+`<num>` が必要なのは、数字に見えても裸のテキストは文字列のままだからです。おかげでゴールに「2024年度の監査に合格」と書いても年が整数になりません。逆に算術の組み込みは整数しか受け取らないので、`<arg>3</arg>` は文字列を渡すことになり項が簡約されません。`<arg><num>3</num></arg>` と書いてください。
+
+`<builtin>` と `<var>` は要求するものが違います。`<var name="plus"/>` は「その位置で `plus` が指しているもの」を要求しますが、`<builtin name="plus"/>` は何が束縛されていようと組み込みそのものを要求します。[`<expr>`](#式expr) が演算子を展開する先がこれです。
+
+### 式（expr）
+
+算術を `<apply>` で書くのは重いので、`<expr>` では通常の中置記法が使えます。
+
+```xml
+<def name="next"><expr>i + 1</expr></def>
+<def name="label"><expr>f"コンポーネント {i} / {total}"</expr></def>
+```
+
+`<expr>` は略記であって、それ以上のものではありません。コンパイルが始まる前に、手で書けたはずの XML へ展開されます。式を通してしか到達できない機能は存在しません。`<expr>1 + 2</expr>` はこう展開されます。
+
+```xml
+<apply><builtin name="plus"/>
+  <arg><num>1</num></arg>
+  <arg><num>2</num></arg>
+</apply>
+```
+
+**式の中に書けるもの**
+
+| | |
+|---|---|
+| リテラル | `3`、`"text"`、`True`、`False` |
+| 変数 | `i` — `<var name="i"/>` になります |
+| 算術 | `+`、`-`、`*`、`//`、`%`、単項の `-` |
+| 比較 | `==`、`!=`、`<`、`<=`、`>`、`>=` |
+| 論理 | `and`、`or`、`not` |
+| f-string | `f"コンポーネント {i} / {total}"`。`{i:>3}` のような書式指定も使えます |
+
+これ以外は、何が見つかったかを示すエラーで拒否されます。関数呼び出し・属性アクセス・添字はありません。`<apply>`・`<get>`・リスト要素を使ってください。そちらのほうが何をしているか明確です。
+
+**注意点が3つ**
+
+XML では `<` をエスケープする必要があります。`i &lt; n` と書くか、`CDATA` で囲みます。
+
+```xml
+<expr>i &lt; n</expr>
+<expr><![CDATA[i < n]]></expr>
+```
+
+`>` はエスケープ不要なので、`n > i` と書き換えるほうが楽なことも多いです。
+
+`//` が整数除算です。`7 // 2` は `3` になります。`/` は同義語として受け付けるのではなくエラーにしています。将来 PGSN に浮動小数点数を導入したとき、`/` を通常の除算に割り当てられるようにするためです。
+
+大小比較は整数のみです。`"a" < "b"` は簡約されません。等価比較はどんな値にも使えるので `"a" == "a"` は `True` です。
+
+**演算子は再定義できません。** `<builtin>` に展開されるため、`plus` という名前を束縛しているスコープの中でも `1 + 2` は加算のままです。
+
 ### 変数参照の略記
 
 要素のコンテンツが変数参照のみの場合、`var` 属性で略記できます。
@@ -263,7 +326,7 @@ import が jail に入ると、その jail が import 先モジュールの封�
 以下の名前はあらかじめ定義済みで、`<var name="..."/>` で参照し `apply` に適用できます。これは `pgsn` パッケージが公開する項値の名前とちょうど一致しており、Python から使えるものは同じ名前で XML からも使えます。
 
 - リスト操作: `cons`・`head`・`tail`・`index`・`concat`・`map_term`・`fold`・`foldr`・`list_all`・`empty`
-- 真偽値: `true`・`false`・`if_then_else`・`boolean_and`・`boolean_or`・`boolean_not`・`equal`・`guard`
+- 真偽値: `true`・`false`・`if_then_else`・`boolean_and`・`boolean_or`・`boolean_not`・`equal`・`less_than`・`guard`
 - 整数: `plus`・`minus`・`times`・`div`・`mod`・`integer_sum`
 - レコード: `has_label`・`list_labels`・`add_attribute`・`remove_attribute`・`overwrite_record`・`empty_record`
 - 文字列: `format_string`
@@ -485,6 +548,14 @@ GSN ヘッダー要素（`Goal`・`Strategy`・`Evidence`・`Context`・`Assumpt
     <undeveloped/>
 </Goal>
 ```
+
+先頭の地テキストが無い場合、値を表す子要素が1つだけあればそれが description になります。計算した description に `<description>` を被せる必要はありません。
+
+```xml
+<Evidence><expr>f"テスト報告書 {i}"</expr></Evidence>
+```
+
+値を表す子要素が複数ある場合はエラーになります。どれが description なのかを明示してください。
 
 ---
 
