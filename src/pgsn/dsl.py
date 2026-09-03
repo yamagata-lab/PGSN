@@ -85,9 +85,6 @@ boolean_or = lambda_abs_vars(
 boolean_not = lambda_abs(_x, if_then_else(_x)(false)(true))
 
 equal = Equal.named()
-# Ordering is defined on integers only. The remaining comparisons are derived:
-# a > b is less_than(b)(a), a <= b is boolean_not(less_than(b)(a)).
-less_than = LessThan.named()
 
 
 # Integer related

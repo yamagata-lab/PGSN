@@ -87,7 +87,7 @@ pgsn.python_value(double(pgsn.integer(21)).fully_eval())   # 42
 
 **リスト** — `cons`・`head`・`tail`・`index`・`concat`・`map_term`・`fold`・`foldr`・`list_all`・`empty`
 
-**真偽値** — `true`・`false`・`if_then_else`・`boolean_and`・`boolean_or`・`boolean_not`・`equal`・`less_than`・`guard`
+**真偽値** — `true`・`false`・`if_then_else`・`boolean_and`・`boolean_or`・`boolean_not`・`equal`・`guard`
 
 **整数** — `plus`・`minus`・`times`・`div`・`mod`・`integer_sum`・`repeat`
 
