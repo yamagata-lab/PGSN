@@ -165,7 +165,8 @@ GSN_SHAPES = {
     }
 
 
-def gsn_dot(gsn: pgsn.pgsn_term.Term, layout_attrs: dict[str] = None) -> graphviz.Digraph:
+def gsn_dot(gsn: pgsn.pgsn_term.Term,
+            layout_attrs: dict[str, str] | None = None) -> graphviz.Digraph:
     """
     treelib.Treeオブジェクトを受け取り、GSNのルールに基づいて
     ノードの形をカスタマイズしたdotファイルを生成する。
