@@ -1,3 +1,15 @@
-/__pycache__
+# Python bytecode, at any depth
+__pycache__/
+*.py[cod]
+
+# Build and packaging artifacts
+*.egg-info/
+build/
+dist/
+
+# Tool caches
+.pytest_cache/
+
+# Editors and OS
 .idea
-.DStore
+.DS_Store
