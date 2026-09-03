@@ -93,7 +93,7 @@ Parameters are only valid inside `<PGSNModule>` and must appear before any `<fro
 
 ## Import (from)
 
-Brings names from external PGSN files into scope. For security reasons, only relative file paths are allowed.
+Brings names from external PGSN files into scope. A document can only reach files it has been granted access to; see [Import paths and jails](#import-paths-and-jails) below.
 
 ### Single import
 
@@ -119,6 +119,54 @@ Brings names from external PGSN files into scope. For security reasons, only rel
     <arg name="threshold" var="threshold"/>
 </from>
 ```
+
+### Import paths and jails
+
+A document is confined to a directory tree, and `file` may only name a file inside it. There are two ways to write a path.
+
+**Relative paths** are resolved against the directory of the document doing the importing:
+
+```xml
+<from file="modules/security.pgsn" import="secureGoal"/>
+<from file="../shared/evidence.pgsn" import="auditEvidence"/>
+```
+
+`..` is permitted, but only as long as the result stays inside the confinement root. The root of a document opened directly by path is the directory that document lives in, so by default a document can reach its neighbours and their subdirectories, and nothing above them.
+
+**Jailed paths** start with `/` and name a *jail* — a directory root registered by whoever runs PGSN:
+
+```xml
+<from file="/lib/security.pgsn" import="secureGoal"/>
+```
+
+Here `lib` is a jail name, not a directory on disk. It is resolved against the jail table supplied on the command line or through the API:
+
+```console
+$ pgsn doc main.xml --jail lib=/opt/pgsn-lib
+```
+
+```python
+import pgsn
+
+cfg = pgsn.Config(jails={"lib": "/opt/pgsn-lib"})
+term = pgsn.load_xml("main.xml", config=cfg)
+```
+
+A document has no way to name a jail that was not registered, and no way to reach the real filesystem layout behind one. Jail names may contain letters, digits, `_` and `-` only.
+
+Once an import crosses into a jail, that jail becomes the confinement root for the imported module. A module inside a jail may import its neighbours relatively, but cannot climb out with `..` — not even back into the tree of the document that imported it. Crossing from one jail to another always requires naming the target jail explicitly.
+
+The following are rejected:
+
+| Path | Reason |
+|------|--------|
+| `../../etc/passwd` | leaves the confinement root |
+| `/etc/passwd` | `etc` is not a registered jail |
+| `/lib/../secret.pgsn` | `..` is not allowed in a jailed path |
+| `/lib/link.pgsn` where `link.pgsn` is a symlink out of the jail | resolves outside the jail root |
+| `C:\lib\mod.pgsn` | absolute paths must name a jail |
+
+Symbolic links are expanded before the containment check, so a link planted inside a jail cannot be used to escape it.
 
 ---
 
@@ -214,15 +262,15 @@ References a previously defined name.
 
 ### Built-ins
 
-The following names are predefined; reference them with `<var name="..."/>` and apply them via `apply`.
+The following names are predefined; reference them with `<var name="..."/>` and apply them via `apply`. They are exactly the term-valued names exported by the `pgsn` Python package, so anything usable from Python is usable here under the same name.
 
-- List operations: `cons`, `head`, `tail`, `index`, `concat`, `map_term`, `fold`
+- List operations: `cons`, `head`, `tail`, `index`, `concat`, `map_term`, `fold`, `foldr`, `list_all`, `empty`
 - Booleans: `true`, `false`, `if_then_else`, `boolean_and`, `boolean_or`, `boolean_not`, `equal`, `guard`
-- Integers: `plus`, `minus`, `times`, `div`, `mod`
-- Records: `has_label`, `list_labels`, `add_attribute`, `remove_attribute`, `overwrite_record`
+- Integers: `plus`, `minus`, `times`, `div`, `mod`, `integer_sum`
+- Records: `has_label`, `list_labels`, `add_attribute`, `remove_attribute`, `overwrite_record`, `empty_record`
 - Strings: `format_string`
-- Classes / objects: `define_class`, `instantiate`, `is_instance`, `is_subclass`, `base_class`
-- Misc: `fix`, `undefined`
+- Classes / objects: `define_class`, `instantiate`, `instance`, `is_instance`, `is_subclass`, `base_class`
+- Misc: `fix`, `repeat`, `undefined`
 - GSN constructors: `goal`, `strategy`, `evidence`, `context`, `assumption`, `undeveloped`, `immediate`, `evidence_as_goal`
 - GSN classes (long form): `goal_class`, `strategy_class`, `evidence_class`, `context_class`, `assumption_class`, `gsn_class`, `support_class`, `undeveloped_class`
 - GSN classes (short aliases): `Goal`, `Strategy`, `Evidence`, `Context`, `Assumption`, `GSN`, `Support`

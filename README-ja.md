@@ -65,6 +65,40 @@ Goal: System is secure
 Done.
 ````
 
+### XML import のための jail
+
+XML ドキュメントは他のドキュメントを import できますが、既定では自身のディレクトリ配下のファイルにしか届きません。共有モジュール群へのアクセスを許可するには、それを *jail*（名前の付いたディレクトリルート）として登録し、ドキュメント側からは `/<名前>/...` で参照します。
+
+```shell
+PGSN % pgsn doc main.xml --jail lib=/opt/pgsn-lib
+```
+
+```xml
+<from file="/lib/security.pgsn" import="secureGoal"/>
+```
+
+`--jail` は複数回指定でき、`.xml` 入力にのみ適用されます。登録された jail の外にあるものは import できません。`..` で封じ込めルートの外に出ることはできず、シンボリックリンクは検証前に展開されます。詳細は [README-ja-xml.md](README-ja-xml.md) を参照してください。
+
+---
+
+## 公開 API
+
+`import pgsn` がサポート対象のインターフェースです。
+
+```python
+import pgsn
+
+cfg = pgsn.Config(jails={"lib": "/opt/pgsn-lib"})
+term = pgsn.load_xml("main.xml", config=cfg)
+print(pgsn.gsn_tree(term).show(stdout=False))
+```
+
+公開しているのは、PGSN 定数および項を構築する関数（`string`、`record`、`lambda_abs`、`map_term` など）、GSN ノードとクラスを構築する関数（`goal`、`strategy`、`evidence`、`goal_class` など）、変換・描画の関数（`python_value`、`gsn_tree`、`gsn_dot`、`save_gsn`）、そして XML フロントエンドとその設定（`load_xml`、`load_xml_string`、`Config`、`Jails`、`configure`）です。
+
+これら以外 — `pgsn.dsl`、`pgsn.gsn`、`pgsn.pgsn_term`、`pgsn.pgsn_xml`、`pgsn.dcom`、`pgsn.helpers`、`pgsn.cli` — は内部実装であり、予告なく変更されることがあります。以下の例は公開 API の導入前に書かれたもので、これらのサブモジュールを直接 import しています。新しいコードでは `import pgsn` を使ってください。
+
+詳細なリファレンスは [README-ja-api.md](README-ja-api.md) にあります。
+
 ---
 
 ## 基本例

@@ -91,7 +91,7 @@ PGSN では**すべてが値**です。コンテンツを受け取る要素は�
 
 ## import（from）
 
-外部の PGSN ファイルから名前を持ち込みます。セキュリティ上の理由から、ファイルパスは相対パスのみ使用できます。
+外部の PGSN ファイルから名前を持ち込みます。ドキュメントがアクセスできるのは許可された範囲のファイルだけです。詳しくは下の [import パスと jail](#import-パスと-jail) を参照してください。
 
 ### 単一 import
 
@@ -117,6 +117,54 @@ PGSN では**すべてが値**です。コンテンツを受け取る要素は�
     <arg name="threshold" var="threshold"/>
 </from>
 ```
+
+### import パスと jail
+
+ドキュメントはあるディレクトリツリーに閉じ込められており、`file` にはその中のファイルしか書けません。パスの書き方は 2 通りあります。
+
+**相対パス**は、import する側のドキュメントがあるディレクトリを基準に解決されます。
+
+```xml
+<from file="modules/security.pgsn" import="secureGoal"/>
+<from file="../shared/evidence.pgsn" import="auditEvidence"/>
+```
+
+`..` は使えますが、結果が封じ込めルートの内側に留まる場合に限ります。パスを指定して直接開いたドキュメントのルートは、そのドキュメント自身が置かれているディレクトリです。つまり既定では、隣接するファイルとその配下には届き、それより上には届きません。
+
+**jail パス**は `/` で始まり、先頭の要素が *jail* の名前になります。jail は PGSN を実行する側が登録するディレクトリルートです。
+
+```xml
+<from file="/lib/security.pgsn" import="secureGoal"/>
+```
+
+ここで `lib` はディスク上のディレクトリ名ではなく jail 名です。コマンドラインまたは API で与えた jail テーブルを使って解決されます。
+
+```console
+$ pgsn doc main.xml --jail lib=/opt/pgsn-lib
+```
+
+```python
+import pgsn
+
+cfg = pgsn.Config(jails={"lib": "/opt/pgsn-lib"})
+term = pgsn.load_xml("main.xml", config=cfg)
+```
+
+ドキュメント側から未登録の jail を指定する手段はなく、jail の背後にある実際のディレクトリ構成を知る手段もありません。jail 名に使えるのは英数字と `_`、`-` のみです。
+
+import が jail に入ると、その jail が import 先モジュールの封じ込めルートになります。jail 内のモジュールは相対パスで近傍を import できますが、`..` で外に出ることはできません。import 元のドキュメントがあるツリーに戻ることもできません。ある jail から別の jail へ移るには、必ず対象の jail 名を明示する必要があります。
+
+以下はいずれも拒否されます。
+
+| パス | 理由 |
+|------|------|
+| `../../etc/passwd` | 封じ込めルートの外に出る |
+| `/etc/passwd` | `etc` は登録された jail ではない |
+| `/lib/../secret.pgsn` | jail パスに `..` は使えない |
+| `/lib/link.pgsn`（`link.pgsn` が jail 外へのシンボリックリンク） | 解決結果が jail の外になる |
+| `C:\lib\mod.pgsn` | 絶対パスは jail 名で始まらなければならない |
+
+シンボリックリンクは封じ込め検証の前に展開されるため、jail 内に仕込まれたリンクで脱獄することはできません。
 
 ---
 
@@ -212,15 +260,15 @@ PGSN では**すべてが値**です。コンテンツを受け取る要素は�
 
 ### 組み込み（builtin）
 
-以下の名前はあらかじめ定義済みで、`<var name="..."/>` で参照し `apply` に適用できます。
+以下の名前はあらかじめ定義済みで、`<var name="..."/>` で参照し `apply` に適用できます。これは `pgsn` パッケージが公開する項値の名前とちょうど一致しており、Python から使えるものは同じ名前で XML からも使えます。
 
-- リスト操作: `cons`・`head`・`tail`・`index`・`concat`・`map_term`・`fold`
+- リスト操作: `cons`・`head`・`tail`・`index`・`concat`・`map_term`・`fold`・`foldr`・`list_all`・`empty`
 - 真偽値: `true`・`false`・`if_then_else`・`boolean_and`・`boolean_or`・`boolean_not`・`equal`・`guard`
-- 整数: `plus`・`minus`・`times`・`div`・`mod`
-- レコード: `has_label`・`list_labels`・`add_attribute`・`remove_attribute`・`overwrite_record`
+- 整数: `plus`・`minus`・`times`・`div`・`mod`・`integer_sum`
+- レコード: `has_label`・`list_labels`・`add_attribute`・`remove_attribute`・`overwrite_record`・`empty_record`
 - 文字列: `format_string`
-- クラス／オブジェクト: `define_class`・`instantiate`・`is_instance`・`is_subclass`・`base_class`
-- その他: `fix`・`undefined`
+- クラス／オブジェクト: `define_class`・`instantiate`・`instance`・`is_instance`・`is_subclass`・`base_class`
+- その他: `fix`・`repeat`・`undefined`
 - GSN コンストラクタ: `goal`・`strategy`・`evidence`・`context`・`assumption`・`undeveloped`・`immediate`・`evidence_as_goal`
 - GSN クラス（長い名前）: `goal_class`・`strategy_class`・`evidence_class`・`context_class`・`assumption_class`・`gsn_class`・`support_class`・`undeveloped_class`
 - GSN クラス（短いエイリアス）: `Goal`・`Strategy`・`Evidence`・`Context`・`Assumption`・`GSN`・`Support`
