@@ -12,13 +12,21 @@ authors = [
 ]
 description = "PGSN: a programming language for GSN generation and manipulation"
 readme = "README.md"
-requires-python = ">=3.8"
+# 3.10 is the true floor: pgsn_term.cast uses a match statement, and
+# annotations such as `str | Path` are evaluated at runtime. 3.10 reaches
+# end of life in October 2026, so 3.11 is declared instead.
+requires-python = ">=3.11"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
 # このパッケージが依存する他のライブラリがあればここに書く
+# Ranges belong here, exact pins in requirements.txt. A pin in this table
+# constrains the user's whole environment, not just PGSN's own copy, and it
+# says nothing about transitive dependencies. See #10 for the per-release
+# hash-pinned constraints file and SBOM that record what a release was
+# actually verified against.
 dependencies = [
     "attrs>=25.3",
     "cattrs>=25.1",
