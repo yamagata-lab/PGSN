@@ -87,7 +87,7 @@ These are terms, not Python functions: they are values you apply. XML exposes ex
 
 **Lists** — `cons`, `head`, `tail`, `index`, `concat`, `map_term`, `fold`, `foldr`, `list_all`, `empty`
 
-**Booleans** — `true`, `false`, `if_then_else`, `boolean_and`, `boolean_or`, `boolean_not`, `equal`, `guard`
+**Booleans** — `true`, `false`, `if_then_else`, `boolean_and`, `boolean_or`, `boolean_not`, `equal`, `less_than`, `guard`
 
 **Integers** — `plus`, `minus`, `times`, `div`, `mod`, `integer_sum`, `repeat`
 

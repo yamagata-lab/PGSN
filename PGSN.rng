@@ -263,9 +263,23 @@
 </define>
 
 
+<define name="literal_pat">
+  <choice>
+    <element name="num"><text/></element>
+    <element name="str"><text/></element>
+    <element name="builtin"><attribute name="name"/></element>
+  </choice>
+</define>
+
+<define name="expr_pat">
+  <element name="expr"><text/></element>
+</define>
+
 <define name="expression_pat">
   <choice>
     <text/>
+    <ref name="literal_pat"/>
+    <ref name="expr_pat"/>
     <ref name="class_pat"/>
     <ref name="object_pat"/>
     <ref name="apply_pat"/>

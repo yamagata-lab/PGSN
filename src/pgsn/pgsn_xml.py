@@ -5,6 +5,7 @@ No shorthand expansion (var-attribute, def-as) in this implementation.
 Semantic errors surface as non-terminating reduction.
 """
 
+import ast
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -14,9 +15,9 @@ from pgsn.dsl import (
     variable, string, list_term, record, empty_record, let,
     lambda_abs, lambda_abs_keywords, lambda_abs_vars,
     fix, map_term, fold, foldr, concat, cons, head, tail, index, repeat,
-    list_all, integer_sum,
+    list_all, integer_sum, integer,
     true, false, if_then_else, guard,
-    equal, plus, minus, times, div, mod,
+    equal, less_than, plus, minus, times, div, mod,
     define_class, instantiate, instance, is_instance, is_subclass,
     base_class, undefined, empty,
     boolean_and, boolean_or, boolean_not,
@@ -147,8 +148,221 @@ class _Chroot:
 _GSN_HEADER_TAGS = {"Goal", "Strategy", "Evidence", "Context", "Assumption"}
 
 
+# ------------------------------------------------------------------ #
+# <expr>: infix notation for the terms that are already expressible
+#
+# The text of an <expr> is parsed with Python's own parser and the resulting
+# syntax tree is *translated* into the XML the document could have written by
+# hand. Nothing is evaluated, and no node type is translated unless it appears
+# in the tables below, so the syntax cannot reach anything `<apply>` could not.
+#
+# Operators expand to <builtin>, not <var>, so that `1 + 2` means addition
+# whatever the surrounding document happens to bind.
+# ------------------------------------------------------------------ #
+
+_BIN_OPS = {
+    ast.Add: "plus",
+    ast.Sub: "minus",
+    ast.Mult: "times",
+    # `//` is integer division. `/` is left unassigned so that it can mean
+    # true division if PGSN ever gains a floating point type.
+    ast.FloorDiv: "div",
+    ast.Mod: "mod",
+}
+
+_BOOL_OPS = {ast.And: "boolean_and", ast.Or: "boolean_or"}
+
+
+def _call_builtin(name: str, *args: ET.Element) -> ET.Element:
+    """Build <apply><builtin name="..."/><arg>..</arg>..</apply>."""
+    apply_elem = ET.Element("apply")
+    fn = ET.SubElement(apply_elem, "builtin")
+    fn.set("name", name)
+    for a in args:
+        arg = ET.SubElement(apply_elem, "arg")
+        arg.append(a)
+    return apply_elem
+
+
+def _expr_error(node: ast.AST) -> PGSNError:
+    return PGSNError(
+        f"{type(node).__name__} is not allowed in <expr>. The expression "
+        "syntax covers arithmetic, comparison, boolean operators and "
+        "f-strings; use <apply>, <get> or <ul>/<dl> for anything else.")
+
+
+def _translate(node: ast.AST) -> ET.Element:
+    """Translate one allowed AST node into the XML element it stands for."""
+    match node:
+        case ast.Expression():
+            return _translate(node.body)
+
+        case ast.Constant(value=bool() as b):
+            # Checked before int: in Python, bool is a subclass of int.
+            elem = ET.Element("builtin")
+            elem.set("name", "true" if b else "false")
+            return elem
+
+        case ast.Constant(value=int() as i):
+            elem = ET.Element("num")
+            elem.text = str(i)
+            return elem
+
+        case ast.Constant(value=str() as s):
+            elem = ET.Element("str")
+            elem.text = s
+            return elem
+
+        case ast.Name():
+            elem = ET.Element("var")
+            elem.set("name", node.id)
+            return elem
+
+        case ast.BinOp() if type(node.op) in _BIN_OPS:
+            return _call_builtin(_BIN_OPS[type(node.op)],
+                                 _translate(node.left), _translate(node.right))
+
+        case ast.BinOp(op=ast.Div()):
+            raise PGSNError(
+                "'/' is not defined in <expr>. PGSN has integers only, so "
+                "write '//' for integer division; '/' is reserved for true "
+                "division should a floating point type be added.")
+
+        case ast.UnaryOp(op=ast.USub()):
+            zero = ET.Element("num")
+            zero.text = "0"
+            return _call_builtin("minus", zero, _translate(node.operand))
+
+        case ast.UnaryOp(op=ast.Not()):
+            return _call_builtin("boolean_not", _translate(node.operand))
+
+        case ast.BoolOp() if type(node.op) in _BOOL_OPS:
+            name = _BOOL_OPS[type(node.op)]
+            result = _translate(node.values[0])
+            for value in node.values[1:]:
+                result = _call_builtin(name, result, _translate(value))
+            return result
+
+        case ast.Compare():
+            if len(node.ops) != 1:
+                raise PGSNError(
+                    "chained comparison is not allowed in <expr>; "
+                    "write it with 'and'")
+            return _translate_compare(node.ops[0],
+                                      _translate(node.left),
+                                      _translate(node.comparators[0]))
+
+        case ast.JoinedStr():
+            return _translate_fstring(node)
+
+        case _:
+            raise _expr_error(node)
+
+
+def _translate_compare(op: ast.cmpop, left: ET.Element,
+                       right: ET.Element) -> ET.Element:
+    """Derive every comparison from `equal` and `less_than`."""
+    match op:
+        case ast.Eq():
+            return _call_builtin("equal", left, right)
+        case ast.NotEq():
+            return _call_builtin("boolean_not",
+                                 _call_builtin("equal", left, right))
+        case ast.Lt():
+            return _call_builtin("less_than", left, right)
+        case ast.Gt():
+            return _call_builtin("less_than", right, left)
+        case ast.LtE():
+            # a <= b is not (b < a); using or would evaluate both sides.
+            return _call_builtin("boolean_not",
+                                 _call_builtin("less_than", right, left))
+        case ast.GtE():
+            return _call_builtin("boolean_not",
+                                 _call_builtin("less_than", left, right))
+        case _:
+            raise _expr_error(op)
+
+
+def _translate_fstring(node: ast.JoinedStr) -> ET.Element:
+    """Expand an f-string into an application of `format_string`.
+
+    Each interpolated expression is bound to a generated name in a record, and
+    the template refers to that name, so `str.format` never sees an expression.
+    Literal text is escaped, since the template is a format string.
+    """
+    template: list[str] = []
+    fields: list[tuple[str, ET.Element]] = []
+
+    for part in node.values:
+        match part:
+            case ast.Constant(value=str() as text):
+                template.append(text.replace("{", "{{").replace("}", "}}"))
+            case ast.FormattedValue():
+                name = f"_e{len(fields)}"
+                fields.append((name, _translate(part.value)))
+                spec = ""
+                if part.format_spec is not None:
+                    spec = _constant_format_spec(part.format_spec)
+                conversion = ""
+                if part.conversion != -1:
+                    conversion = "!" + chr(part.conversion)
+                template.append("{" + name + conversion + spec + "}")
+            case _:
+                raise _expr_error(part)
+
+    text_elem = ET.Element("str")
+    text_elem.text = "".join(template)
+    if not fields:
+        return text_elem
+
+    record_elem = ET.Element("dl")
+    for name, value in fields:
+        dt = ET.SubElement(record_elem, "dt")
+        dt.text = name
+        dd = ET.SubElement(record_elem, "dd")
+        dd.append(value)
+    return _call_builtin("format_string", text_elem, record_elem)
+
+
+def _constant_format_spec(spec: ast.JoinedStr) -> str:
+    """Accept `{x:>3}` but not a spec that is itself computed."""
+    parts = []
+    for piece in spec.values:
+        if not isinstance(piece, ast.Constant) or not isinstance(piece.value, str):
+            raise PGSNError(
+                "a computed format specification is not allowed in <expr>")
+        parts.append(piece.value)
+    return ":" + "".join(parts)
+
+
+def _expand_expr(elem: ET.Element) -> None:
+    """Replace an <expr> element, in place, with the XML it stands for."""
+    if len(elem):
+        raise PGSNError("<expr> takes an expression as text, not child elements")
+    source = (elem.text or "").strip()
+    if not source:
+        raise PGSNError("<expr> is empty")
+    try:
+        tree = ast.parse(source, mode="eval")
+    except SyntaxError as exc:
+        raise PGSNError(f"Cannot parse <expr>: {source!r}: {exc.msg}") from None
+
+    expansion = _translate(tree)
+    elem.tag = expansion.tag
+    elem.attrib.clear()
+    elem.attrib.update(expansion.attrib)
+    elem.text = expansion.text
+    elem[:] = list(expansion)
+
+
 def _preprocess(elem: ET.Element) -> None:
     """Recursively expand shorthand notations in place."""
+    # expr: replace with the XML it stands for, before anything else looks at
+    # it. The expansion contains no shorthands, so it needs no further passes.
+    if elem.tag == "expr":
+        _expand_expr(elem)
+        return
+
     # def-as: wrap the def body in an element named by the `as` attribute
     if elem.tag == "def" and "as" in elem.attrib:
         tag = elem.attrib.pop("as")
@@ -223,7 +437,8 @@ _BUILTINS: dict[str, Term] = {
     "concat": concat, "list_all": list_all,
     "cons": cons, "head": head, "tail": tail, "index": index, "empty": empty,
     "repeat": repeat, "integer_sum": integer_sum,
-    "equal": equal, "guard": guard, "if_then_else": if_then_else,
+    "equal": equal, "less_than": less_than,
+    "guard": guard, "if_then_else": if_then_else,
     "plus": plus, "minus": minus, "times": times, "div": div, "mod": mod,
     "boolean_and": boolean_and, "boolean_or": boolean_or,
     "boolean_not": boolean_not, "true": true, "false": false,
@@ -494,6 +709,9 @@ def _expr(elem: ET.Element, chroot: _Chroot,
           visiting: frozenset[Path]) -> Term:
     dispatch = {
         "var":      _e_var,
+        "num":      _e_num,
+        "str":      _e_str,
+        "builtin":  _e_builtin,
         "template": _e_template,
         "apply":    _e_apply,
         "class":    _e_class,
@@ -516,6 +734,47 @@ def _expr(elem: ET.Element, chroot: _Chroot,
 
 def _e_var(elem: ET.Element, _ch: "_Chroot", _v: frozenset) -> Term:
     return _resolve(elem.get("name"), elem.get("instanceOf"))
+
+
+def _e_num(elem: ET.Element, _ch: "_Chroot", _v: frozenset) -> Term:
+    """An integer literal. Bare text is a String, so numbers are written out."""
+    if len(elem):
+        raise PGSNError("<num> takes text, not child elements")
+    text = (elem.text or "").strip()
+    try:
+        return integer(int(text))
+    except ValueError:
+        raise PGSNError(f"<num> is not an integer: {text!r}") from None
+
+
+def _e_str(elem: ET.Element, _ch: "_Chroot", _v: frozenset) -> Term:
+    """A verbatim string literal.
+
+    Unlike bare text, the content is taken exactly as written: whitespace is
+    kept and `{...}` is not interpolated. This is what `<expr>` expands string
+    literals into, and what makes a template for `format_string` expressible.
+    """
+    if len(elem):
+        raise PGSNError("<str> takes text, not child elements")
+    return string(elem.text or "")
+
+
+def _e_builtin(elem: ET.Element, _ch: "_Chroot", _v: frozenset) -> Term:
+    """A builtin, reached without going through name resolution.
+
+    `<var name="plus"/>` asks for whatever `plus` denotes at that point in the
+    document; `<builtin name="plus"/>` asks for the builtin itself. `<expr>`
+    expands its operators into this form, so that `1 + 2` keeps meaning
+    addition regardless of what the surrounding document binds.
+    """
+    name = elem.get("name")
+    if name is None:
+        raise PGSNError("<builtin> requires a 'name' attribute")
+    if name not in _BUILTINS:
+        raise PGSNError(
+            f"Unknown builtin: {name!r}. "
+            f"Known builtins: {', '.join(sorted(_BUILTINS))}")
+    return _BUILTINS[name]
 
 
 def _e_template(elem: ET.Element, chroot: _Chroot,
@@ -706,11 +965,41 @@ def _e_dict(elem: ET.Element, chroot: _Chroot,
 # GSN node compilers
 # ------------------------------------------------------------------ #
 
+# Tags that stand for a value, as opposed to the tags that give a GSN node its
+# structure. A lone value child of a GSN header is its description.
+_VALUE_TAGS = {"var", "num", "str", "builtin", "apply", "get", "send",
+               "div", "ul", "ol", "dl", "template", "class", "object"}
+
+
+def _header_description(elem: ET.Element, chroot: _Chroot,
+                        visiting: frozenset[Path]) -> Term:
+    """The description of a GSN header element.
+
+    Written as a `<description>` element, as the element's leading text, or —
+    when neither is present — as a single value child, so that a computed
+    description can be given directly:
+
+        <Evidence><expr>f"test report {i}"</expr></Evidence>
+    """
+    desc_elem = elem.find("description")
+    if desc_elem is not None:
+        return _content(desc_elem, chroot, visiting)
+    text = (elem.text or "").strip()
+    if text:
+        return _text_to_term(text)
+    values = [c for c in elem if c.tag in _VALUE_TAGS]
+    if len(values) == 1:
+        return _expr(values[0], chroot, visiting)
+    if len(values) > 1:
+        raise PGSNError(
+            f"<{elem.tag}> has several value children; "
+            "put the description in a <description> element")
+    return _text_to_term("")
+
+
 def _gsn_header(elem: ET.Element, chroot: _Chroot,
                 visiting: frozenset[Path]) -> tuple[Term, list, list]:
-    desc_elem = elem.find("description")
-    desc = (_content(desc_elem, chroot, visiting) if desc_elem is not None
-            else _text_to_term((elem.text or "").strip()))
+    desc = _header_description(elem, chroot, visiting)
     contexts = [_e_annotation(c, chroot, visiting, context)
                 for c in elem if c.tag == "Context"]
     assumptions = [_e_annotation(c, chroot, visiting, assumption)
