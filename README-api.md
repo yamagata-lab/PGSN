@@ -114,6 +114,7 @@ Each constructor takes keyword arguments and returns a term.
 | `evidence` | `description` |
 | `context` | `description`, `value` (default `""`) |
 | `assumption` | `description`, `value` (default `""`) |
+| `defeater`, `rebuttal`, `undercutter` | `description`, `support` (default undeveloped), `defeaters` (default empty) |
 
 `support` has no default: an unsupported goal is written explicitly with `support=pgsn.undeveloped`.
 

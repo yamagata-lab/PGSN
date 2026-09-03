@@ -6,9 +6,13 @@ import graphviz
 import pgsn.dsl
 import pgsn.pgsn_term
 
+# Every GSN node carries `defeaters`: the dialectic extension of GSN v3 lets a
+# defeater challenge a goal, a strategy or a solution, and a defeater is itself
+# a GSN node, so it can be challenged in turn.
 gsn_class = pgsn.dsl.define_class(inherit=pgsn.dsl.base_class,
                                      name='GSN_Node',
-                                     attributes=["description"])
+                                     attributes=["description", "defeaters"],
+                                     defaults={"defeaters": []})
 
 support_class = pgsn.dsl.define_class(inherit=gsn_class, name='Support')
 undeveloped_class = pgsn.dsl.define_class(inherit=support_class,
@@ -31,28 +35,48 @@ context_class = pgsn.dsl.define_class(inherit=gsn_class, name='Context',
                                        attributes=["value"],
                                        defaults={"value": pgsn.dsl.string("")})
 
+# Dialectic extension (GSN v3). A defeater challenges the node that holds it.
+# A rebutting defeater is a supported counter-argument, so it carries a support
+# of its own; an undercutting defeater states facts that break the link between
+# a claim and what is offered for it, and usually leaves its support undeveloped.
+defeater_class = pgsn.dsl.define_class(inherit=gsn_class, name='Defeater',
+                                       attributes=["support"],
+                                       defaults={"support": undeveloped})
+rebuttal_class = pgsn.dsl.define_class(inherit=defeater_class, name='Rebuttal')
+undercutter_class = pgsn.dsl.define_class(inherit=defeater_class,
+                                          name='Undercutter')
+
 _d = pgsn.dsl.variable('x')
 _support = pgsn.dsl.variable('support')
 _assumptions = pgsn.dsl.variable('assumptions')
 _contexts = pgsn.dsl.variable('contexts')
 _sub_goals = pgsn.dsl.variable('sub_goals')
 _value = pgsn.dsl.variable('value')
+_defeaters = pgsn.dsl.variable('defeaters')
 
-evidence = pgsn.dsl.lambda_abs_keywords(arguments={'description': _d},
-                                           body=evidence_class(description=_d))
-strategy = pgsn.dsl.lambda_abs_keywords(arguments={'description': _d, 'sub_goals': _sub_goals},
-                                           body=strategy_class
-                               (description=_d, sub_goals=_sub_goals))
+evidence = pgsn.dsl.lambda_abs_keywords(
+    arguments={'description': _d, 'defeaters': _defeaters},
+    defaults=pgsn.dsl.record({'defeaters': pgsn.dsl.empty}),
+    body=evidence_class(description=_d, defeaters=_defeaters))
+strategy = pgsn.dsl.lambda_abs_keywords(
+    arguments={'description': _d, 'sub_goals': _sub_goals,
+               'defeaters': _defeaters},
+    defaults=pgsn.dsl.record({'defeaters': pgsn.dsl.empty}),
+    body=strategy_class(description=_d, sub_goals=_sub_goals,
+                        defeaters=_defeaters))
 goal = pgsn.dsl.lambda_abs_keywords(arguments={'description': _d,
                                       'assumptions': _assumptions,
                                       'contexts': _contexts,
+                                      'defeaters': _defeaters,
                                       'support': _support},
                                        defaults=pgsn.dsl.record({
                                'assumptions': pgsn.dsl.empty,
-                               'contexts': pgsn.dsl.empty}),
+                               'contexts': pgsn.dsl.empty,
+                               'defeaters': pgsn.dsl.empty}),
                                        body=goal_class(description=_d,
                                                        contexts=_contexts,
                                                        assumptions=_assumptions,
+                                                       defeaters=_defeaters,
                                                        support=_support))
 assumption = pgsn.dsl.lambda_abs_keywords(
     arguments={'description': _d, 'value': _value},
@@ -63,18 +87,39 @@ context = pgsn.dsl.lambda_abs_keywords(
     defaults=pgsn.dsl.record({'value': pgsn.dsl.string("")}),
     body=context_class(description=_d, value=_value))
 
+_defeater_args = {'description': _d, 'support': _support,
+                  'defeaters': _defeaters}
+_defeater_defaults = pgsn.dsl.record({'support': undeveloped,
+                                      'defeaters': pgsn.dsl.empty})
+defeater = pgsn.dsl.lambda_abs_keywords(
+    arguments=_defeater_args, defaults=_defeater_defaults,
+    body=defeater_class(description=_d, support=_support,
+                        defeaters=_defeaters))
+rebuttal = pgsn.dsl.lambda_abs_keywords(
+    arguments=_defeater_args, defaults=_defeater_defaults,
+    body=rebuttal_class(description=_d, support=_support,
+                        defeaters=_defeaters))
+undercutter = pgsn.dsl.lambda_abs_keywords(
+    arguments=_defeater_args, defaults=_defeater_defaults,
+    body=undercutter_class(description=_d, support=_support,
+                           defeaters=_defeaters))
+
 _goals = pgsn.dsl.variable('goals')
 immediate = pgsn.dsl.lambda_abs(_goals, strategy(description="immediate", sub_goals=_goals))
 
 _evd = pgsn.dsl.variable('evidence')
 evidence_as_goal = pgsn.dsl.lambda_abs(_evd, goal(description=_evd('description'), support=_evd))
 
-# Keys for lists that should be hidden if empty
-GSN_KEYS_TO_HIDE_IF_EMPTY = {"contexts", "assumptions"}
+# Keys for lists whose children should be attached directly to the parent.
+# An empty list therefore contributes nothing, which is what keeps a node
+# without contexts, assumptions or defeaters from showing empty entries.
+GSN_KEYS_TO_FLATTEN = {"support", "sub_goals", "contexts", "assumptions",
+                       "defeaters"}
+GSN_TYPES = {"Goal", "Strategy", "Evidence", "Context", "Assumption",
+             "Undeveloped", "Defeater", "Rebuttal", "Undercutter"}
 
-# Keys for lists whose children should be attached directly to the parent
-GSN_KEYS_TO_FLATTEN = {"support", "sub_goals", "contexts", "assumptions"}
-GSN_TYPES = {"Goal", "Strategy", "Evidence", "Context", "Assumption", "Undeveloped"}
+# The kinds of node that challenge rather than support what holds them.
+GSN_DEFEATER_TYPES = {"Defeater", "Rebuttal", "Undercutter"}
 
 
 # Term and to_python are assumed to be in your module
@@ -161,11 +206,17 @@ GSN_SHAPES = {
         'Solution': 'ellipse',  # Solutionも円で
         'Context': 'box',  # 本来は角丸だけど、まずは四角で
         'Assumption': 'ellipse',
-        'Undeveloped': 'diamond'
+        'Undeveloped': 'diamond',
+        # The dialectic extension draws every defeater with one glyph, so the
+        # two kinds share a shape and are told apart by their label.
+        'Defeater': 'hexagon',
+        'Rebuttal': 'hexagon',
+        'Undercutter': 'hexagon',
     }
 
 
-def gsn_dot(gsn: pgsn.pgsn_term.Term, layout_attrs: dict[str] = None) -> graphviz.Digraph:
+def gsn_dot(gsn: pgsn.pgsn_term.Term,
+            layout_attrs: dict[str, str] | None = None) -> graphviz.Digraph:
     """
     treelib.Treeオブジェクトを受け取り、GSNのルールに基づいて
     ノードの形をカスタマイズしたdotファイルを生成する。
@@ -228,7 +279,11 @@ def gsn_dot(gsn: pgsn.pgsn_term.Term, layout_attrs: dict[str] = None) -> graphvi
         style = ''
         node_attrs = {}
 
-        if node_type == 'Context':
+        if node_type in GSN_DEFEATER_TYPES:
+            # A defeater challenges rather than supports, so it is drawn with a
+            # broken outline to keep it from reading as part of the argument.
+            style = 'dashed'
+        elif node_type == 'Context':
             style = 'rounded'
         elif node_type == 'Strategy':
             node_attrs['sides'] = '4'
@@ -255,6 +310,13 @@ def gsn_dot(gsn: pgsn.pgsn_term.Term, layout_attrs: dict[str] = None) -> graphvi
 
             if node_type in ('Assumption', 'Context'):
                 edge_attrs['dir'] = 'back'
+                horizontal_pairs.append((parent_id, node_obj.identifier))
+
+            if node_type in GSN_DEFEATER_TYPES:
+                # Challenges point at what they attack, and are dashed so the
+                # relation is not mistaken for SupportedBy.
+                edge_attrs['dir'] = 'back'
+                edge_attrs['style'] = 'dashed'
                 horizontal_pairs.append((parent_id, node_obj.identifier))
 
             if parent_node_type == 'Goal' and node_type == 'Evidence':

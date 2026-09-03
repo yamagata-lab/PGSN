@@ -334,8 +334,8 @@ The following names are predefined; reference them with `<var name="..."/>` and 
 - Strings: `format_string`
 - Classes / objects: `define_class`, `instantiate`, `instance`, `is_instance`, `is_subclass`, `base_class`
 - Misc: `fix`, `repeat`, `undefined`
-- GSN constructors: `goal`, `strategy`, `evidence`, `context`, `assumption`, `undeveloped`, `immediate`, `evidence_as_goal`
-- GSN classes (long form): `goal_class`, `strategy_class`, `evidence_class`, `context_class`, `assumption_class`, `gsn_class`, `support_class`, `undeveloped_class`
+- GSN constructors: `goal`, `strategy`, `evidence`, `context`, `assumption`, `defeater`, `rebuttal`, `undercutter`, `undeveloped`, `immediate`, `evidence_as_goal`
+- GSN classes (long form): `goal_class`, `strategy_class`, `evidence_class`, `context_class`, `assumption_class`, `defeater_class`, `rebuttal_class`, `undercutter_class`, `gsn_class`, `support_class`, `undeveloped_class`
 - GSN classes (short aliases): `Goal`, `Strategy`, `Evidence`, `Context`, `Assumption`, `GSN`, `Support`
 
 Example (mapping a template over a list):
@@ -657,6 +657,37 @@ A set (`ul`) or list (`ol`) can be passed to `subGoals` to specify sub-goals dyn
     <Context>description of the test environment</Context>
 </Evidence>
 ```
+
+### Defeaters
+
+GSN v3 adds a dialectic extension: a *defeater* records a doubt about part of an argument rather than support for it. Two kinds are distinguished by what they attack. A **rebutting** defeater argues against the claim itself and carries its own support; an **undercutting** defeater states facts that break the link between a claim and what is offered for it.
+
+Any GSN node can hold defeaters, and a defeater is itself a GSN node, so it can be challenged in turn.
+
+```xml
+<Goal>the system is safe
+    <Rebuttal>hazard H4 is unmitigated
+        <Evidence>incident report 2026-03</Evidence>
+    </Rebuttal>
+    <Undercutter>the test suite is out of date
+        <Undercutter>it was refreshed in revision 7</Undercutter>
+    </Undercutter>
+    <Evidence>test report</Evidence>
+</Goal>
+```
+
+`<Defeater>` is available when the distinction is not yet decided. Each is written like any other GSN node: leading text or a `<description>` gives the description, a nested `<Evidence>`, `<Strategy>`, `<Goal>` or `<supportedBy>` gives its support, and nested defeater elements challenge it.
+
+Defeaters attach to strategies and to evidence as well as to goals:
+
+```xml
+<Strategy>argue over each hazard
+    <Undercutter>the hazard list is incomplete</Undercutter>
+    <Goal>H1 is mitigated<Evidence>report H1</Evidence></Goal>
+</Strategy>
+```
+
+The corresponding builtins are `defeater`, `rebuttal` and `undercutter`, with the class values `defeater_class`, `rebuttal_class` and `undercutter_class`. In a rendered graph a defeater is drawn as a hexagon with a broken outline, and the challenge is drawn with a dashed arrow, so that it does not read as SupportedBy.
 
 ---
 

@@ -114,6 +114,7 @@ pgsn.python_value(double(pgsn.integer(21)).fully_eval())   # 42
 | `evidence` | `description` |
 | `context` | `description`・`value`（既定は `""`） |
 | `assumption` | `description`・`value`（既定は `""`） |
+| `defeater`・`rebuttal`・`undercutter` | `description`・`support`（既定は undeveloped）・`defeaters`（既定は空） |
 
 `support` に既定値はありません。支持のないゴールは `support=pgsn.undeveloped` と明示的に書きます。
 

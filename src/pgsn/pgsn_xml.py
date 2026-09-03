@@ -27,9 +27,11 @@ from pgsn.dsl import (
 )
 from pgsn.gsn import (
     goal, strategy, evidence, context, assumption,
+    defeater, rebuttal, undercutter,
     goal_class, strategy_class, evidence_class,
     context_class, assumption_class, gsn_class,
     support_class, undeveloped_class,
+    defeater_class, rebuttal_class, undercutter_class,
     undeveloped, immediate, evidence_as_goal,
 )
 
@@ -145,7 +147,12 @@ class _Chroot:
 #                       (label/method are user-facing; name= is internal)
 # ------------------------------------------------------------------ #
 
-_GSN_HEADER_TAGS = {"Goal", "Strategy", "Evidence", "Context", "Assumption"}
+_GSN_HEADER_TAGS = {"Goal", "Strategy", "Evidence", "Context", "Assumption",
+                    "Defeater", "Rebuttal", "Undercutter"}
+
+# Tags that attach a defeater to the node holding them.
+_DEFEATER_TAGS = {"Defeater": defeater, "Rebuttal": rebuttal,
+                  "Undercutter": undercutter}
 
 
 # ------------------------------------------------------------------ #
@@ -451,16 +458,21 @@ _BUILTINS: dict[str, Term] = {
     "is_subclass": is_subclass, "base_class": base_class,
     "goal": goal, "strategy": strategy, "evidence": evidence,
     "context": context, "assumption": assumption,
+    "defeater": defeater, "rebuttal": rebuttal, "undercutter": undercutter,
     "immediate": immediate, "undeveloped": undeveloped,
     "evidence_as_goal": evidence_as_goal,
     "gsn_class": gsn_class, "goal_class": goal_class,
     "strategy_class": strategy_class, "evidence_class": evidence_class,
     "context_class": context_class, "assumption_class": assumption_class,
     "support_class": support_class, "undeveloped_class": undeveloped_class,
+    "defeater_class": defeater_class, "rebuttal_class": rebuttal_class,
+    "undercutter_class": undercutter_class,
     # Intuitive aliases for GSN class values
     "Goal": goal_class, "Strategy": strategy_class, "Evidence": evidence_class,
     "Context": context_class, "Assumption": assumption_class,
     "GSN": gsn_class, "Support": support_class,
+    "Defeater": defeater_class, "Rebuttal": rebuttal_class,
+    "Undercutter": undercutter_class,
 }
 
 _SUPPORT_TAGS = {"Strategy", "Evidence", "Goal", "supportedBy", "undeveloped"}
@@ -725,6 +737,9 @@ def _expr(elem: ET.Element, chroot: _Chroot,
         "Goal":     _e_goal,
         "Strategy": _e_strategy,
         "Evidence": _e_evidence,
+        "Defeater": _e_defeater,
+        "Rebuttal": _e_defeater,
+        "Undercutter": _e_defeater,
     }
     fn = dispatch.get(elem.tag)
     if fn is None:
@@ -998,13 +1013,44 @@ def _header_description(elem: ET.Element, chroot: _Chroot,
 
 
 def _gsn_header(elem: ET.Element, chroot: _Chroot,
-                visiting: frozenset[Path]) -> tuple[Term, list, list]:
+                visiting: frozenset[Path]) -> tuple[Term, list, list, list]:
     desc = _header_description(elem, chroot, visiting)
     contexts = [_e_annotation(c, chroot, visiting, context)
                 for c in elem if c.tag == "Context"]
     assumptions = [_e_annotation(c, chroot, visiting, assumption)
                    for c in elem if c.tag == "Assumption"]
-    return desc, contexts, assumptions
+    defeaters = [_e_defeater(c, chroot, visiting)
+                 for c in elem if c.tag in _DEFEATER_TAGS]
+    return desc, contexts, assumptions, defeaters
+
+
+def _e_defeater(elem: ET.Element, chroot: _Chroot,
+                visiting: frozenset[Path]) -> Term:
+    """A defeater challenging the node that holds it.
+
+    It is written like any other GSN node — a description, and optionally a
+    support of its own and further defeaters challenging it in turn:
+
+        <Rebuttal>hazard H4 is unmitigated
+          <Evidence>incident report 2026-03</Evidence>
+        </Rebuttal>
+    """
+    ctor = _DEFEATER_TAGS[elem.tag]
+    desc, _, _, defeaters = _gsn_header(elem, chroot, visiting)
+    body = [c for c in elem if c.tag in _SUPPORT_TAGS]
+    support = undeveloped
+    if body:
+        first = body[0]
+        if first.tag in ("Strategy", "Evidence"):
+            support = _expr(first, chroot, visiting)
+        elif first.tag == "Goal":
+            support = immediate(list_term(tuple(
+                _e_goal(c, chroot, visiting) for c in body if c.tag == "Goal"
+            )))
+        elif first.tag == "supportedBy":
+            support = _content(first, chroot, visiting)
+    return ctor(description=desc, support=support,
+                defeaters=list_term(tuple(defeaters)))
 
 
 def _e_annotation(elem: ET.Element, chroot: _Chroot, visiting: frozenset[Path],
@@ -1029,7 +1075,7 @@ def _e_annotation(elem: ET.Element, chroot: _Chroot, visiting: frozenset[Path],
 
 def _e_goal(elem: ET.Element, chroot: _Chroot,
             visiting: frozenset[Path]) -> Term:
-    desc, contexts, assumptions = _gsn_header(elem, chroot, visiting)
+    desc, contexts, assumptions, defeaters = _gsn_header(elem, chroot, visiting)
     body = [c for c in elem if c.tag in _SUPPORT_TAGS]
     support = undeveloped
     if body:
@@ -1048,13 +1094,14 @@ def _e_goal(elem: ET.Element, chroot: _Chroot,
         description=desc,
         contexts=list_term(tuple(contexts)),
         assumptions=list_term(tuple(assumptions)),
+        defeaters=list_term(tuple(defeaters)),
         support=support,
     )
 
 
 def _e_strategy(elem: ET.Element, chroot: _Chroot,
                 visiting: frozenset[Path]) -> Term:
-    desc, _, _ = _gsn_header(elem, chroot, visiting)
+    desc, _, _, defeaters = _gsn_header(elem, chroot, visiting)
     sub_goal_elems = [c for c in elem if c.tag == "Goal"]
     sub_goals_elem = elem.find("subGoals")
     if sub_goal_elems:
@@ -1065,13 +1112,14 @@ def _e_strategy(elem: ET.Element, chroot: _Chroot,
         sub_goals = _content(sub_goals_elem, chroot, visiting)
     else:
         raise PGSNError("<Strategy> requires sub-goals or <subGoals>")
-    return strategy(description=desc, sub_goals=sub_goals)
+    return strategy(description=desc, sub_goals=sub_goals,
+                    defeaters=list_term(tuple(defeaters)))
 
 
 def _e_evidence(elem: ET.Element, chroot: _Chroot,
                 visiting: frozenset[Path]) -> Term:
-    desc, _, _ = _gsn_header(elem, chroot, visiting)
-    return evidence(description=desc)
+    desc, _, _, defeaters = _gsn_header(elem, chroot, visiting)
+    return evidence(description=desc, defeaters=list_term(tuple(defeaters)))
 
 
 # ------------------------------------------------------------------ #
