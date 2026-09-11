@@ -13,3 +13,8 @@ dist/
 # Editors and OS
 .idea
 .DS_Store
+
+# Claude
+.claude
+CLAUDE.md
+Claude outputs
