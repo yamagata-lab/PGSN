@@ -1302,21 +1302,29 @@ def _e_defeater(elem: ET.Element, chroot: _Chroot,
 def _e_annotation(elem: ET.Element, chroot: _Chroot, visiting: frozenset[Path],
                   ctor: Term) -> Term:
     """
-    Context and Assumption share the same structure (documentation +
-    optional payload). ctor is the constructor (context or assumption).
+    Context and Assumption are documentation nodes: each carries a statement
+    and nothing else. The statement can be written as plain text, as a
+    <description> child, or as an expression -- which is what `var=` and
+    `expr=` expand to -- and all three land in `description`.
+    ctor is the constructor (context or assumption).
     """
     desc_elem = elem.find("description")
-    val_children = [c for c in elem if c.tag != "description"]
+    other = [c for c in elem if c.tag != "description"]
     if desc_elem is not None:
+        if other:
+            raise PGSNError(
+                f"<{elem.tag}> carries both a <description> and <{other[0].tag}>; "
+                f"it holds a single statement, so give it only one")
         desc = _content(desc_elem, chroot, visiting)
-        val = _expr(val_children[0], chroot, visiting) if val_children else string("")
-    elif val_children:
-        val = _expr(val_children[0], chroot, visiting)
-        desc = _text_to_term((elem.text or "").strip())
+    elif other:
+        if len(other) > 1:
+            raise PGSNError(
+                f"<{elem.tag}> holds a single statement, but was given "
+                f"{len(other)} children")
+        desc = _expr(other[0], chroot, visiting)
     else:
         desc = _text_to_term((elem.text or "").strip())
-        val = string("")
-    return ctor(description=desc, value=val)
+    return ctor(description=desc)
 
 
 def _e_goal(elem: ET.Element, chroot: _Chroot,
