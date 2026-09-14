@@ -19,7 +19,7 @@
         Xはセキュア
         <Context>規格XXXXによる認証</Context>
         <Context var="c"/>
-        <Assumption>ゼロデイ攻撃はない<var name="A1"/></Assumption>
+        <Assumption>ゼロデイ攻撃はない</Assumption>
         <Strategy>
             YYYYYY
             <subGoals>
