@@ -147,7 +147,6 @@ print(pgsn.gsn_tree(g.fully_eval()).show(stdout=False))
 ```
 Goal: System is secure
 ├── Context: Deployment: cloud
-│   └── value:
 └── Strategy: Argue over properties
     ├── Goal: Input is validated
     │   └── Evidence: Static analysis report
