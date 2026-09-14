@@ -1,0 +1,47 @@
+<PGSNModule>
+  <!--
+    Shapes shared by every system record.
+
+    The generator asks each provision a question and expects a fact plus the
+    evidence for that fact. These templates give that pair a name so the
+    records read as answers rather than as dictionary literals.
+  -->
+
+  <def name="doesApply" as="template">
+    <param name="evidence" positional="true"/>
+    <dl>
+      <dt key="applies"/><dd var="true"/>
+      <dt key="evidence"/><dd var="evidence"/>
+    </dl>
+  </def>
+
+  <def name="doesNotApply" as="template">
+    <param name="evidence" positional="true"/>
+    <dl>
+      <dt key="applies"/><dd var="false"/>
+      <dt key="evidence"/><dd var="evidence"/>
+    </dl>
+  </def>
+
+  <!--
+    All eight Art. 5 practices dismissed against a single assessment.
+
+    The generator looks the eight up separately, so the sharing is declared
+    here rather than assumed there. A provider who commissioned eight
+    separate assessments would write the eight answers out instead of
+    calling this.
+  -->
+  <def name="noProhibitedPractice" as="template">
+    <param name="report" positional="true"/>
+    <dl>
+      <dt key="Art. 5(1)(a)"/><dd><apply template="doesNotApply"><arg var="report"/></apply></dd>
+      <dt key="Art. 5(1)(b)"/><dd><apply template="doesNotApply"><arg var="report"/></apply></dd>
+      <dt key="Art. 5(1)(c)"/><dd><apply template="doesNotApply"><arg var="report"/></apply></dd>
+      <dt key="Art. 5(1)(d)"/><dd><apply template="doesNotApply"><arg var="report"/></apply></dd>
+      <dt key="Art. 5(1)(e)"/><dd><apply template="doesNotApply"><arg var="report"/></apply></dd>
+      <dt key="Art. 5(1)(f)"/><dd><apply template="doesNotApply"><arg var="report"/></apply></dd>
+      <dt key="Art. 5(1)(g)"/><dd><apply template="doesNotApply"><arg var="report"/></apply></dd>
+      <dt key="Art. 5(1)(h)"/><dd><apply template="doesNotApply"><arg var="report"/></apply></dd>
+    </dl>
+  </def>
+</PGSNModule>

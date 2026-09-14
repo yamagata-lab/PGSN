@@ -1,0 +1,542 @@
+<PGSN>
+  <!--
+    A compliance case generator for the EU AI Act (Regulation 2024/1689).
+
+    The document is a function of a system record, not a hand-drawn argument:
+    swap the import below for a different record and the whole case is
+    regenerated, with the branches that record's answers select.
+
+    WHAT IS ARGUED, AND ABOUT WHAT
+
+    The Act classifies by intended purpose, not by product. A product with
+    several AI functions is, in the Act's terms, several AI systems, each
+    classified and regulated on its own. So the top-level goal decomposes
+    into one sub-goal per function, and every function carries its own
+    classification, its own obligations and its own evidence.
+
+    THE GUARD CHAIN
+
+    The Act reads as a chain of guarded clauses:
+
+        if prohibited use           then it may not be placed on the market
+        elsif high-risk             then Art. 8-17, 43, 48, 49 apply
+        elsif limited risk          then Art. 50 applies
+        else                        no obligation follows from the risk tier
+        (and, orthogonally, if GPAI then Art. 53, plus Art. 55 under systemic risk)
+
+    Reaching a clause means every guard before it was false, and that is a
+    claim about the function, not a given. Each guard the argument steps over
+    therefore appears as a Defeater on that function's goal - the objection
+    "this function might have fallen into the earlier clause" - and the
+    objection is in turn defeated by the argument that it does not.
+
+    A guard whose condition is a disjunction is not one objection but as many
+    as it has disjuncts, because each disjunct attacks the argument on its
+    own. De Morgan,
+
+        not (P1 or ... or Pn)  ==  (not P1) and ... and (not Pn)
+
+    is what says so, and here it is the shape of the defeater list itself
+    rather than a strategy nested inside a single objection.
+
+    WHY THERE IS NO OR-NODE
+
+    High-risk status is a disjunction over nine independent routes: Art. 6(1)
+    (a product or safety component covered by Annex I harmonisation
+    legislation) and the eight areas listed in Annex III. A function can
+    satisfy several of them at once - a proctoring function that reads
+    biometric data during an examination is listed under both Annex III
+    point 1 and point 3 - and an exclusive OR node cannot say so.
+
+    Nothing here branches on the disjunction. Every route is asked
+    separately, the answers are folded with `any_true`, and a route that
+    applies contributes a classification goal while a route that does not
+    contributes a dismissed defeater. Two routes answering yes is not a
+    conflict; it is two goals.
+
+    WHO CHOOSES GOAL OR DEFEATER
+
+    The record never chooses. For each route and each prohibited practice it
+    states a fact - `applies`, true or false - together with the evidence for
+    that fact. The generator derives the shape. A record therefore cannot
+    supply both a goal and a defeater for the same provision, and if it
+    supplies neither the lookup does not reduce and evaluation stops.
+
+    WHAT THIS CANNOT CHECK
+
+    Every enumeration this document owns - the eight prohibited practices,
+    the nine high-risk routes, the eleven high-risk obligations - is checked:
+    a record that fails to answer one of them halts the evaluation. The list
+    of functions is not owned here; it comes from the record. Nothing in the
+    mechanism notices a function that was left out, and the incentive runs
+    the wrong way, since declaring a prohibited function is what stops the
+    case from being produced.
+
+    Completeness of that list is therefore assumed. It cannot be verified
+    from inside, because the record is all the generator has. What can be
+    done is to make the assumption impossible to skip: it is stated as a
+    goal, not an assumption node, and the evidence key it rests on is
+    mandatory like any other. See `inventoryGoal`.
+  -->
+
+  <from file="proctoring_system.xml" import="system"/>
+
+  <def name="systemName"><get label="name" of="system"/></def>
+
+  <!-- ================================================================
+       Helpers. Folding a list of conditions and flattening a list of
+       lists are both `foldr`, but naming them keeps `foldr` out of the
+       argument text below.
+  ================================================================ -->
+  <def name="all_true" as="template">
+    <param name="conditions" positional="true"/>
+    <apply template="foldr"><arg var="boolean_and"/><arg var="true"/><arg var="conditions"/></apply>
+  </def>
+
+  <def name="any_true" as="template">
+    <param name="conditions" positional="true"/>
+    <apply template="foldr"><arg var="boolean_or"/><arg var="false"/><arg var="conditions"/></apply>
+  </def>
+
+  <def name="concat_all" as="template">
+    <param name="lists" positional="true"/>
+    <apply template="foldr"><arg var="concat"/><arg var="empty"/><arg var="lists"/></apply>
+  </def>
+
+  <!-- A provision the Act enumerates: the reference it is enumerated under,
+       which is also the key its answer is filed under in the record, and the
+       text that names it. -->
+  <def name="provision" as="template">
+    <param name="ref" positional="true"/>
+    <param name="text" positional="true"/>
+    <dl>
+      <dt key="ref"/><dd var="ref"/>
+      <dt key="text"/><dd var="text"/>
+    </dl>
+  </def>
+
+  <!-- A guard that the argument stepped over.
+
+       The objection is raised but not argued for - it is the Act's own
+       structure that raises it - so it carries no support of its own. What
+       carries an argument is the defeater attached to it, which denies the
+       guard and supplies the evidence for the denial. -->
+  <def name="dismissedGuard" as="template">
+    <param name="objection" positional="true"/>
+    <param name="denial" positional="true"/>
+    <param name="argument" positional="true"/>
+    <apply template="defeater">
+      <arg name="description" var="objection"/>
+      <arg name="defeaters">
+        <ol>
+          <li>
+            <apply template="defeater">
+              <arg name="description" var="denial"/>
+              <arg name="support" var="argument"/>
+            </apply>
+          </li>
+        </ol>
+      </arg>
+    </apply>
+  </def>
+
+  <!-- ================================================================
+       Art. 5: prohibited practices (all eight).
+
+       Dismissal only. There is no "applies, and is complied with" for a
+       prohibited practice: a function that deploys one may not be placed on
+       the market, and no compliance argument exists to be written. A record
+       that answers `applies` with true therefore routes to `undefined`, and
+       the evaluation stops on that function's Art. 5 list rather than
+       producing a case with a prohibited practice quietly inside it.
+  ================================================================ -->
+  <def name="prohibitedPractices" as="ol">
+    <li><apply template="provision"><arg>Art. 5(1)(a)</arg><arg>subliminal, purposefully manipulative or deceptive techniques</arg></apply></li>
+    <li><apply template="provision"><arg>Art. 5(1)(b)</arg><arg>exploitation of vulnerabilities of age, disability or a specific social or economic situation</arg></apply></li>
+    <li><apply template="provision"><arg>Art. 5(1)(c)</arg><arg>social scoring leading to detrimental or unfavourable treatment</arg></apply></li>
+    <li><apply template="provision"><arg>Art. 5(1)(d)</arg><arg>prediction of criminal offences based solely on profiling or personality traits</arg></apply></li>
+    <li><apply template="provision"><arg>Art. 5(1)(e)</arg><arg>untargeted scraping of facial images to create or expand facial recognition databases</arg></apply></li>
+    <li><apply template="provision"><arg>Art. 5(1)(f)</arg><arg>inference of emotions in the workplace or in education institutions</arg></apply></li>
+    <li><apply template="provision"><arg>Art. 5(1)(g)</arg><arg>biometric categorisation deducing race, political opinions, trade union membership, religious or philosophical beliefs, sex life or sexual orientation</arg></apply></li>
+    <li><apply template="provision"><arg>Art. 5(1)(h)</arg><arg>real-time remote biometric identification in publicly accessible spaces for law enforcement</arg></apply></li>
+  </def>
+
+  <!-- ================================================================
+       High-risk routes: Art. 6(1) and the eight areas of Annex III.
+
+       Nine independent disjuncts, folded rather than branched. The first is
+       a different legal route from the other eight, which is exactly why an
+       exclusive choice would be wrong: a product covered by Annex I can also
+       be listed in Annex III.
+  ================================================================ -->
+  <def name="highRiskRoutes" as="ol">
+    <li><apply template="provision"><arg>Art. 6(1)</arg><arg>a product, or the safety component of a product, covered by the Union harmonisation legislation listed in Annex I and required to undergo third-party conformity assessment</arg></apply></li>
+    <li><apply template="provision"><arg>Annex III, point 1</arg><arg>biometrics, so far as permitted under Union or national law</arg></apply></li>
+    <li><apply template="provision"><arg>Annex III, point 2</arg><arg>critical infrastructure: safety components in critical digital infrastructure, road traffic, or the supply of water, gas, heating or electricity</arg></apply></li>
+    <li><apply template="provision"><arg>Annex III, point 3</arg><arg>education and vocational training</arg></apply></li>
+    <li><apply template="provision"><arg>Annex III, point 4</arg><arg>employment, workers management and access to self-employment</arg></apply></li>
+    <li><apply template="provision"><arg>Annex III, point 5</arg><arg>access to and enjoyment of essential private services and essential public services and benefits</arg></apply></li>
+    <li><apply template="provision"><arg>Annex III, point 6</arg><arg>law enforcement, so far as permitted under Union or national law</arg></apply></li>
+    <li><apply template="provision"><arg>Annex III, point 7</arg><arg>migration, asylum and border control management</arg></apply></li>
+    <li><apply template="provision"><arg>Annex III, point 8</arg><arg>administration of justice and democratic processes</arg></apply></li>
+  </def>
+
+  <!-- ================================================================
+       Obligations. All of the same shape: a claim, and the record key that
+       carries its evidence. Listing the pairs and mapping over them keeps
+       the regulation's text in one place and the plumbing in another.
+
+       Note that obligations do not multiply with the number of routes. A
+       function listed under three Annex III points owes Art. 9 once.
+  ================================================================ -->
+  <def name="obligation" as="template">
+    <param name="claim" positional="true"/>
+    <param name="key" positional="true"/>
+    <dl>
+      <dt key="claim"/><dd var="claim"/>
+      <dt key="key"/><dd var="key"/>
+    </dl>
+  </def>
+
+  <def name="highRiskObligations" as="ol">
+    <li><apply template="obligation"><arg>Risk management system established and maintained (Art. 9)</arg><arg>risk_management</arg></apply></li>
+    <li><apply template="obligation"><arg>Data and data governance requirements met (Art. 10)</arg><arg>data_governance</arg></apply></li>
+    <li><apply template="obligation"><arg>Technical documentation drawn up and kept up to date (Art. 11)</arg><arg>technical_documentation</arg></apply></li>
+    <li><apply template="obligation"><arg>Automatic logging and record-keeping capability in place (Art. 12)</arg><arg>record_keeping</arg></apply></li>
+    <li><apply template="obligation"><arg>Transparency information provided to deployers (Art. 13)</arg><arg>transparency_deployers</arg></apply></li>
+    <li><apply template="obligation"><arg>Human oversight mechanisms designed and implemented (Art. 14)</arg><arg>human_oversight</arg></apply></li>
+    <li><apply template="obligation"><arg>Appropriate accuracy, robustness, and cybersecurity achieved (Art. 15)</arg><arg>accuracy_robustness</arg></apply></li>
+    <li><apply template="obligation"><arg>Quality management system established (Art. 17)</arg><arg>quality_management_system</arg></apply></li>
+    <li><apply template="obligation"><arg>Conformity assessment procedure completed (Art. 43)</arg><arg>conformity_assessment</arg></apply></li>
+    <li><apply template="obligation"><arg>CE marking affixed (Art. 48)</arg><arg>ce_marking</arg></apply></li>
+    <li><apply template="obligation"><arg>EU declaration of conformity drawn up and registered (Art. 49)</arg><arg>declaration_of_conformity</arg></apply></li>
+  </def>
+
+  <def name="limitedRiskObligations" as="ol">
+    <li><apply template="obligation"><arg>Users are informed they are interacting with an AI system (Art. 50(1))</arg><arg>ai_disclosure_mechanism</arg></apply></li>
+    <li><apply template="obligation"><arg>AI-generated or manipulated content is marked as such (Art. 50(2))</arg><arg>ai_content_labeling</arg></apply></li>
+  </def>
+
+  <def name="art53Obligations" as="ol">
+    <li><apply template="obligation"><arg>Technical documentation for the GPAI model drawn up (Art. 53(1)(a))</arg><arg>gpai_technical_documentation</arg></apply></li>
+    <li><apply template="obligation"><arg>Information and documentation provided to downstream providers (Art. 53(1)(b))</arg><arg>gpai_instructions_for_use</arg></apply></li>
+    <li><apply template="obligation"><arg>Policy to comply with copyright law established (Art. 53(1)(c))</arg><arg>copyright_policy</arg></apply></li>
+    <li><apply template="obligation"><arg>Summary of training content published (Art. 53(1)(d))</arg><arg>training_data_summary</arg></apply></li>
+  </def>
+
+  <def name="art55Obligations" as="ol">
+    <li><apply template="obligation"><arg>Adversarial testing conducted to identify systemic risks (Art. 55(1)(a))</arg><arg>adversarial_testing</arg></apply></li>
+    <li><apply template="obligation"><arg>Serious incident reporting procedure in place (Art. 55(1)(b))</arg><arg>incident_reporting_procedure</arg></apply></li>
+    <li><apply template="obligation"><arg>Adequate cybersecurity protection ensured (Art. 55(1)(c))</arg><arg>cybersecurity_measures</arg></apply></li>
+  </def>
+
+  <!-- ================================================================
+       One function's case.
+
+       `f` is a function record. Everything below reads only from `f`, so
+       the same code serves every function of every system.
+  ================================================================ -->
+  <def name="functionGoal" as="template">
+    <param name="f" positional="true"/>
+
+    <def name="fname"><get label="name" of="f"/></def>
+    <def name="purpose"><get label="intendedPurpose" of="f"/></def>
+
+    <!-- The record's answer for one provision: a fact plus its evidence. -->
+    <def name="prohibitedAnswer" as="template">
+      <param name="p" positional="true"/>
+      <apply><get label="prohibitedUse" of="f"/><arg><get label="ref" of="p"/></arg></apply>
+    </def>
+
+    <def name="routeAnswer" as="template">
+      <param name="p" positional="true"/>
+      <apply><get label="classification" of="f"/><arg><get label="ref" of="p"/></arg></apply>
+    </def>
+
+    <!-- Art. 5. A practice that does not apply is dismissed; a practice that
+         applies leaves nothing to write, so the term does not reduce. -->
+    <def name="prohibitedGuardOrStop" as="template">
+      <param name="p" positional="true"/>
+      <def name="ref"><get label="ref" of="p"/></def>
+      <def name="text"><get label="text" of="p"/></def>
+      <def name="a"><apply template="prohibitedAnswer"><arg var="p"/></apply></def>
+      <if>
+        <cond><get label="applies" of="a"/></cond>
+        <then var="undefined"/>
+        <else>
+          <ol>
+            <li>
+              <apply template="dismissedGuard">
+                <arg>{fname} may deploy {text} ({ref}), in which case Art. 5 forbids placing it on the market at all</arg>
+                <arg>{fname} does not deploy {text} ({ref})</arg>
+                <arg><get label="evidence" of="a"/></arg>
+              </apply>
+            </li>
+          </ol>
+        </else>
+      </if>
+    </def>
+
+    <!-- A high-risk route that does not apply is dismissed. -->
+    <def name="routeGuardOrNothing" as="template">
+      <param name="p" positional="true"/>
+      <def name="ref"><get label="ref" of="p"/></def>
+      <def name="text"><get label="text" of="p"/></def>
+      <def name="a"><apply template="routeAnswer"><arg var="p"/></apply></def>
+      <if>
+        <cond><get label="applies" of="a"/></cond>
+        <then><ol/></then>
+        <else>
+          <ol>
+            <li>
+              <apply template="dismissedGuard">
+                <arg>{fname} may be high-risk as {text} ({ref}), in which case Art. 8-17, 43, 48 and 49 apply</arg>
+                <arg>{fname} is not {text} ({ref})</arg>
+                <arg><get label="evidence" of="a"/></arg>
+              </apply>
+            </li>
+          </ol>
+        </else>
+      </if>
+    </def>
+
+    <!-- A high-risk route that does apply is claimed, with its evidence.
+         Several may apply at once; each contributes its own goal. -->
+    <def name="routeGoalOrNothing" as="template">
+      <param name="p" positional="true"/>
+      <def name="ref"><get label="ref" of="p"/></def>
+      <def name="text"><get label="text" of="p"/></def>
+      <def name="a"><apply template="routeAnswer"><arg var="p"/></apply></def>
+      <if>
+        <cond><get label="applies" of="a"/></cond>
+        <then>
+          <ol>
+            <li>
+              <Goal>
+                {fname} is high-risk as {text} ({ref})
+                <supportedBy><get label="evidence" of="a"/></supportedBy>
+              </Goal>
+            </li>
+          </ol>
+        </then>
+        <else><ol/></else>
+      </if>
+    </def>
+
+    <def name="routeApplies" as="template">
+      <param name="p" positional="true"/>
+      <get label="applies"><apply template="routeAnswer"><arg var="p"/></apply></get>
+    </def>
+
+    <!-- The disjunction the Act states and GSN cannot draw: high-risk if any
+         one of the nine routes applies. A fold, not a branch. -->
+    <def name="isHighRisk">
+      <apply template="any_true">
+        <arg><apply template="map_term"><arg var="routeApplies"/><arg var="highRiskRoutes"/></apply></arg>
+      </apply>
+    </def>
+
+    <def name="art5Defeaters">
+      <apply template="concat_all">
+        <arg><apply template="map_term"><arg var="prohibitedGuardOrStop"/><arg var="prohibitedPractices"/></apply></arg>
+      </apply>
+    </def>
+
+    <def name="routeDefeaters">
+      <apply template="concat_all">
+        <arg><apply template="map_term"><arg var="routeGuardOrNothing"/><arg var="highRiskRoutes"/></apply></arg>
+      </apply>
+    </def>
+
+    <def name="routeGoals">
+      <apply template="concat_all">
+        <arg><apply template="map_term"><arg var="routeGoalOrNothing"/><arg var="highRiskRoutes"/></apply></arg>
+      </apply>
+    </def>
+
+    <!-- Obligations. The claim comes from the enumeration, the evidence from
+         the function record, under the key the enumeration names. -->
+    <def name="obligationGoal" as="template">
+      <param name="o" positional="true"/>
+      <def name="claim"><get label="claim" of="o"/></def>
+      <Goal>
+        {claim}
+        <supportedBy><apply><var name="f"/><arg><get label="key" of="o"/></arg></apply></supportedBy>
+      </Goal>
+    </def>
+
+    <def name="obligationGoals" as="template">
+      <param name="obligations" positional="true"/>
+      <apply template="map_term"><arg var="obligationGoal"/><arg var="obligations"/></apply>
+    </def>
+
+    <def name="gpaiObligations">
+      <if>
+        <cond><get label="isSystemicRisk" of="f"/></cond>
+        <then><apply template="concat"><arg var="art53Obligations"/><arg var="art55Obligations"/></apply></then>
+        <else var="art53Obligations"/>
+      </if>
+    </def>
+
+    <!-- The risk tier the routes select, and the GPAI obligations that run
+         orthogonally to it. -->
+    <def name="tierGoals">
+      <cases>
+        <case>
+          <cond var="isHighRisk"/>
+          <then>
+            <ol>
+              <li>
+                <Goal>
+                  {fname} is properly managed as a high-risk AI system (Art. 8-17, 43-49)
+                  <Context>EU AI Act Art. 8-17, 43, 48, 49</Context>
+                  <Strategy>
+                    Argument over each high-risk provider obligation
+                    <subGoals><apply template="obligationGoals"><arg var="highRiskObligations"/></apply></subGoals>
+                  </Strategy>
+                </Goal>
+              </li>
+            </ol>
+          </then>
+        </case>
+        <case>
+          <cond><get label="isLimitedRisk" of="f"/></cond>
+          <then>
+            <ol>
+              <li>
+                <Goal>
+                  {fname} meets the transparency obligations for limited-risk AI (Art. 50)
+                  <Context>EU AI Act Art. 50</Context>
+                  <Strategy>
+                    Argument over Art. 50 transparency obligations
+                    <subGoals><apply template="obligationGoals"><arg var="limitedRiskObligations"/></apply></subGoals>
+                  </Strategy>
+                </Goal>
+              </li>
+            </ol>
+          </then>
+        </case>
+        <else><ol/></else>
+      </cases>
+    </def>
+
+    <def name="gpaiGoals">
+      <if>
+        <cond><get label="isGPAI" of="f"/></cond>
+        <then>
+          <ol>
+            <li>
+              <Goal>
+                {fname} meets its GPAI model obligations
+                <Context>EU AI Act Art. 53, 55</Context>
+                <Strategy>
+                  Argument over each GPAI provider obligation
+                  <subGoals><apply template="obligationGoals"><arg var="gpaiObligations"/></apply></subGoals>
+                </Strategy>
+              </Goal>
+            </li>
+          </ol>
+        </then>
+        <else><ol/></else>
+      </if>
+    </def>
+
+    <!-- A function that is not a GPAI model owes nothing under Art. 53-55,
+         but it has to say so. "Is not a GPAI model" is an objection to
+         dismiss, not a goal to claim. -->
+    <def name="gpaiDefeaters">
+      <if>
+        <cond><get label="isGPAI" of="f"/></cond>
+        <then><ol/></then>
+        <else>
+          <ol>
+            <li>
+              <apply template="dismissedGuard">
+                <arg>{fname} may be a general-purpose AI model, in which case Art. 53 and, under systemic risk, Art. 55 apply</arg>
+                <arg>{fname} is not a general-purpose AI model within the meaning of Art. 3(63)</arg>
+                <arg><get label="notGpaiAssessment" of="f"/></arg>
+              </apply>
+            </li>
+          </ol>
+        </else>
+      </if>
+    </def>
+
+    <apply template="goal">
+      <arg name="description">{fname} complies with the EU AI Act</arg>
+      <arg name="contexts">
+        <ol>
+          <li><apply template="context"><arg name="description">Intended purpose: {purpose}</arg></apply></li>
+        </ol>
+      </arg>
+      <arg name="defeaters">
+        <apply template="concat_all">
+          <arg>
+            <ol>
+              <li var="art5Defeaters"/>
+              <li var="routeDefeaters"/>
+              <li var="gpaiDefeaters"/>
+            </ol>
+          </arg>
+        </apply>
+      </arg>
+      <arg name="support">
+        <apply template="immediate">
+          <arg>
+            <apply template="concat_all">
+              <arg>
+                <ol>
+                  <li var="routeGoals"/>
+                  <li var="tierGoals"/>
+                  <li var="gpaiGoals"/>
+                </ol>
+              </arg>
+            </apply>
+          </arg>
+        </apply>
+      </arg>
+    </apply>
+  </def>
+
+  <!-- ================================================================
+       The boundary of what this document can check.
+
+       Everything the generator enumerates is verified by construction: a
+       record that fails to answer halts the evaluation. The list of
+       functions is not enumerated here, so its completeness is an
+       assumption. It is written as a goal rather than an assumption node so
+       that it carries a burden of proof, and the evidence key is mandatory
+       like any other, so the claim cannot be silently skipped.
+  ================================================================ -->
+  <def name="inventoryGoal" as="Goal">
+    The AI functions enumerated for {systemName} are all of the AI functions it provides
+    <Context>EU AI Act Art. 11 and Annex IV: the technical documentation states the intended purpose and the components of the system</Context>
+    <supportedBy><get label="functionInventoryEvidence" of="system"/></supportedBy>
+  </def>
+
+  <def name="functionGoals">
+    <apply template="map_term">
+      <arg var="functionGoal"/>
+      <arg><get label="functions" of="system"/></arg>
+    </apply>
+  </def>
+
+  <Goal>
+    {systemName} complies with the EU AI Act
+    <Context>EU AI Act (Regulation 2024/1689)</Context>
+    <Strategy>
+      Argument over each AI function of the system, and over the completeness of that enumeration
+      <subGoals>
+        <apply template="concat_all">
+          <arg>
+            <ol>
+              <li><ol><li var="inventoryGoal"/></ol></li>
+              <li var="functionGoals"/>
+            </ol>
+          </arg>
+        </apply>
+      </subGoals>
+    </Strategy>
+  </Goal>
+
+</PGSN>

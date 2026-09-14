@@ -1,0 +1,74 @@
+<PGSNModule>
+  <!--
+    System record: Recruitment Screening AI. One AI function.
+
+    High-risk through Annex III point 4. One obligation key is deliberately
+    missing: `human_oversight` (Art. 14). The generator looks it up like any
+    other, the lookup does not reduce, and `pgsn doc` stops instead of
+    emitting a case with a hole in it. The gap surfaces while the case is
+    being generated rather than in review.
+  -->
+
+  <from file="record_helpers.xml">
+    <import name="doesApply"/>
+    <import name="doesNotApply"/>
+    <import name="noProhibitedPractice"/>
+  </from>
+
+  <def name="art5Report" as="Evidence">Art. 5 prohibited-use self-assessment report</def>
+  <def name="scopeAssessment" as="Evidence">Annex I and Annex III scope assessment: applicant tracking only</def>
+
+  <def name="candidateScreening" as="dl">
+    <dt key="name"/><dd>Candidate Screening</dd>
+    <dt key="intendedPurpose"/>
+    <dd>ranking submitted applications against the requirements of a vacancy, to produce a shortlist for human review</dd>
+
+    <dt key="prohibitedUse"/>
+    <dd><apply template="noProhibitedPractice"><arg var="art5Report"/></apply></dd>
+
+    <dt key="classification"/>
+    <dd>
+      <dl>
+        <dt key="Art. 6(1)"/><dd><apply template="doesNotApply"><arg var="scopeAssessment"/></apply></dd>
+        <dt key="Annex III, point 1"/>
+        <dd><apply template="doesNotApply"><arg><Evidence>Feature inventory: no biometric input; applications are processed as text</Evidence></arg></apply></dd>
+        <dt key="Annex III, point 2"/><dd><apply template="doesNotApply"><arg var="scopeAssessment"/></apply></dd>
+        <dt key="Annex III, point 3"/><dd><apply template="doesNotApply"><arg var="scopeAssessment"/></apply></dd>
+        <dt key="Annex III, point 4"/>
+        <dd><apply template="doesApply"><arg><Evidence>Intended purpose statement: filtering applications and ranking candidates for recruitment (Annex III, point 4(a))</Evidence></arg></apply></dd>
+        <dt key="Annex III, point 5"/><dd><apply template="doesNotApply"><arg var="scopeAssessment"/></apply></dd>
+        <dt key="Annex III, point 6"/><dd><apply template="doesNotApply"><arg var="scopeAssessment"/></apply></dd>
+        <dt key="Annex III, point 7"/><dd><apply template="doesNotApply"><arg var="scopeAssessment"/></apply></dd>
+        <dt key="Annex III, point 8"/><dd><apply template="doesNotApply"><arg var="scopeAssessment"/></apply></dd>
+      </dl>
+    </dd>
+
+    <dt key="isLimitedRisk"/><dd var="false"/>
+    <dt key="isGPAI"/><dd var="false"/>
+    <dt key="notGpaiAssessment"/>
+    <dd><Evidence>Model architecture and capability assessment against Art. 3(63)</Evidence></dd>
+
+    <dt key="risk_management"/><dd><Evidence>Algorithmic risk management report (Art. 9)</Evidence></dd>
+    <dt key="data_governance"/><dd><Evidence>Candidate data bias audit (Art. 10)</Evidence></dd>
+    <dt key="technical_documentation"/><dd><Evidence>Annex IV technical documentation package (Art. 11)</Evidence></dd>
+    <dt key="record_keeping"/><dd><Evidence>Screening decision logging specification (Art. 12)</Evidence></dd>
+    <dt key="transparency_deployers"/><dd><Evidence>Instructions for use for HR deployers (Art. 13)</Evidence></dd>
+
+    <!-- human_oversight (Art. 14): evidence not yet available.
+         The key is absent on purpose - see the header comment. -->
+
+    <dt key="accuracy_robustness"/><dd><Evidence>Screening accuracy validation report (Art. 15)</Evidence></dd>
+    <dt key="quality_management_system"/><dd><Evidence>ISO 9001-aligned quality management system certificate (Art. 17)</Evidence></dd>
+    <dt key="conformity_assessment"/><dd><Evidence>Internal control conformity assessment record (Art. 43)</Evidence></dd>
+    <dt key="ce_marking"/><dd><Evidence>CE marking affixation record (Art. 48)</Evidence></dd>
+    <dt key="declaration_of_conformity"/><dd><Evidence>EU declaration of conformity and EU database registration (Art. 49)</Evidence></dd>
+  </def>
+
+  <def name="system" as="dl">
+    <dt key="name"/><dd>Recruitment Screening AI</dd>
+    <dt key="functionInventoryEvidence"/>
+    <dd><Evidence>Annex IV technical documentation section 1(b): one AI component, the ranking model</Evidence></dd>
+    <dt key="functions"/>
+    <dd><ol><li var="candidateScreening"/></ol></dd>
+  </def>
+</PGSNModule>
