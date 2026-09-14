@@ -112,8 +112,8 @@ Each constructor takes keyword arguments and returns a term.
 | `goal` | `description`, `support`, `contexts` (default empty), `assumptions` (default empty), `defeaters` (default empty) |
 | `strategy` | `description`, `sub_goals`, `defeaters` (default empty) |
 | `evidence` | `description`, `defeaters` (default empty) |
-| `context` | `description`, `value` (default `""`) |
-| `assumption` | `description`, `value` (default `""`) |
+| `context` | `description` |
+| `assumption` | `description` |
 | `defeater` | `description`, `support` (default undeveloped), `defeaters` (default empty) |
 
 `support` has no default: an unsupported goal is written explicitly with `support=pgsn.undeveloped`.

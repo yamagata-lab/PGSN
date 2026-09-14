@@ -112,8 +112,8 @@ pgsn.python_value(double(pgsn.integer(21)).fully_eval())   # 42
 | `goal` | `description`・`support`・`contexts`（既定は空）・`assumptions`（既定は空）・`defeaters`（既定は空） |
 | `strategy` | `description`・`sub_goals`・`defeaters`（既定は空） |
 | `evidence` | `description`・`defeaters`（既定は空） |
-| `context` | `description`・`value`（既定は `""`） |
-| `assumption` | `description`・`value`（既定は `""`） |
+| `context` | `description` |
+| `assumption` | `description` |
 | `defeater` | `description`・`support`（既定は undeveloped）・`defeaters`（既定は空） |
 
 `support` に既定値はありません。支持のないゴールは `support=pgsn.undeveloped` と明示的に書きます。

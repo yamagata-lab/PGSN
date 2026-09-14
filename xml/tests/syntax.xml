@@ -177,7 +177,7 @@
         <description>X is secure</description>
         <Context>certified under standard XXXX</Context>
         <Context><get name="version"><var name="ubuntu"/></get></Context>
-        <Assumption>no zero-day attacks<var name="A1"/></Assumption>
+        <Assumption>no zero-day attacks</Assumption>
         <Strategy var="mainStrategy"/>
     </Goal>
 
