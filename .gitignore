@@ -13,8 +13,9 @@ dist/
 # Editors and OS
 .idea
 .DS_Store
+*.code-workspace
 
 # Claude
 .claude
-CLAUDE.md
+CLAUDE*.md
 Claude outputs
