@@ -1,0 +1,39 @@
+<PGSNModule>
+  <!--
+    ssl_lib: an assurance-carrying wrapper for the `cryptography` pip package.
+
+    The module ships alongside the package itself, so any application that
+    depends on `cryptography` can import this file, discharge its SOUP
+    obligations (IEC 62304 §8) and reuse the hazard-level goals below without
+    re-doing the evaluation.
+
+    This is assurance carrying code in the concrete: the package carries its
+    own safety case, expressed as a PGSN module rather than as prose.
+  -->
+  <def name="componentGoal" as="dl">
+    <dt key="name"/><dd>cryptography 41.0.7 (SSL/TLS library)</dd>
+
+    <!-- SOUP evaluation per IEC 62304 §8: anomaly list reviewed, published
+         errata assessed, regression test plan established for known issues -->
+    <dt key="soup_evaluation"/>
+    <dd><Evidence>SOUP evaluation report: cryptography 41.0.7 (IEC 62304 §8)</Evidence></dd>
+
+    <!-- Hazard: eavesdropping on communications -->
+    <dt key="eavesdropping"/>
+    <dd>
+      <Goal>Communications are protected against eavesdropping
+        <Context>TLS 1.3 enforced; CBC cipher suites disabled</Context>
+        <Evidence>TLS 1.3 implementation verification test report</Evidence>
+      </Goal>
+    </dd>
+
+    <!-- Hazard: connection to a malicious server via certificate spoofing -->
+    <dt key="certificate_spoofing"/>
+    <dd>
+      <Goal>Server identity is verified against certificate spoofing
+        <Context>Certificate chain validation and hostname checking enabled</Context>
+        <Evidence>Certificate validation test suite results</Evidence>
+      </Goal>
+    </dd>
+  </def>
+</PGSNModule>
