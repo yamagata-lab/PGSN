@@ -28,12 +28,10 @@ goal_class = pgsn.dsl.define_class(inherit=gsn_class,
                                       attributes=["assumptions", "contexts", "support"],
                                       defaults={"assumptions":[], "contexts": [], "support": undeveloped}
                                       )
-assumption_class = pgsn.dsl.define_class(inherit=gsn_class, name='Assumption',
-                                          attributes=["value"],
-                                          defaults={"value": pgsn.dsl.string("")})
-context_class = pgsn.dsl.define_class(inherit=gsn_class, name='Context',
-                                       attributes=["value"],
-                                       defaults={"value": pgsn.dsl.string("")})
+# Context and Assumption are documentation nodes. In GSN each carries a
+# statement and nothing else, so `description` is the only field they need.
+assumption_class = pgsn.dsl.define_class(inherit=gsn_class, name='Assumption')
+context_class = pgsn.dsl.define_class(inherit=gsn_class, name='Context')
 
 # Dialectic extension (GSN v3). A defeater challenges the node that holds it.
 #
@@ -53,7 +51,6 @@ _support = pgsn.dsl.variable('support')
 _assumptions = pgsn.dsl.variable('assumptions')
 _contexts = pgsn.dsl.variable('contexts')
 _sub_goals = pgsn.dsl.variable('sub_goals')
-_value = pgsn.dsl.variable('value')
 _defeaters = pgsn.dsl.variable('defeaters')
 
 evidence = pgsn.dsl.lambda_abs_keywords(
@@ -81,13 +78,11 @@ goal = pgsn.dsl.lambda_abs_keywords(arguments={'description': _d,
                                                        defeaters=_defeaters,
                                                        support=_support))
 assumption = pgsn.dsl.lambda_abs_keywords(
-    arguments={'description': _d, 'value': _value},
-    defaults=pgsn.dsl.record({'value': pgsn.dsl.string("")}),
-    body=assumption_class(description=_d, value=_value))
+    arguments={'description': _d},
+    body=assumption_class(description=_d))
 context = pgsn.dsl.lambda_abs_keywords(
-    arguments={'description': _d, 'value': _value},
-    defaults=pgsn.dsl.record({'value': pgsn.dsl.string("")}),
-    body=context_class(description=_d, value=_value))
+    arguments={'description': _d},
+    body=context_class(description=_d))
 
 defeater = pgsn.dsl.lambda_abs_keywords(
     arguments={'description': _d, 'support': _support,

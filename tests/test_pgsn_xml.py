@@ -327,42 +327,99 @@ def test_assumption_text(tmp_path):
     assert assm["description"] == "no zero-day attacks"
 
 
-def test_context_with_value(tmp_path):
-    # Context carrying an arbitrary expression as payload
+def test_context_description_from_variable(tmp_path):
+    # `var=` expands to a <var> child, and for a documentation node that
+    # child is the statement itself: the string lands in `description`.
     result = run("""
     <PGSN>
-        <def name="version">v1.2</def>
+        <def name="version">certified under IEC 61508</def>
         <Goal>
             <description>G1</description>
-            <Context>
-                <description>software version</description>
-                <var name="version"/>
-            </Context>
+            <Context var="version"/>
             <undeveloped/>
         </Goal>
     </PGSN>""", tmp_path)
     ctx = result["contexts"][0]
-    assert ctx["description"] == "software version"
-    assert ctx["value"] == "v1.2"
+    assert gsn_type(ctx) == "Context"
+    assert ctx["description"] == "certified under IEC 61508"
 
 
-def test_assumption_with_value(tmp_path):
-    # Assumption carrying an arbitrary expression as payload
+def test_assumption_description_from_variable(tmp_path):
     result = run("""
     <PGSN>
         <def name="threat_model">no insider threat</def>
         <Goal>
             <description>G1</description>
-            <Assumption>
-                <description>threat assumption</description>
-                <var name="threat_model"/>
-            </Assumption>
+            <Assumption var="threat_model"/>
             <undeveloped/>
         </Goal>
     </PGSN>""", tmp_path)
     assm = result["assumptions"][0]
-    assert assm["description"] == "threat assumption"
-    assert assm["value"] == "no insider threat"
+    assert gsn_type(assm) == "Assumption"
+    assert assm["description"] == "no insider threat"
+
+
+def test_context_description_from_expression_child(tmp_path):
+    # The expanded spelling means the same thing as the attribute shorthand.
+    result = run("""
+    <PGSN>
+        <def name="version">v1.2</def>
+        <Goal>
+            <description>G1</description>
+            <Context><var name="version"/></Context>
+            <undeveloped/>
+        </Goal>
+    </PGSN>""", tmp_path)
+    assert result["contexts"][0]["description"] == "v1.2"
+
+
+def test_context_rejects_description_and_expression(tmp_path):
+    # A documentation node holds one statement, so writing both a
+    # <description> and an expression is rejected rather than silently
+    # dropping one of them.
+    with pytest.raises(PGSNError, match="single statement"):
+        run("""
+        <PGSN>
+            <def name="version">v1.2</def>
+            <Goal>
+                <description>G1</description>
+                <Context>
+                    <description>software version</description>
+                    <var name="version"/>
+                </Context>
+                <undeveloped/>
+            </Goal>
+        </PGSN>""", tmp_path)
+
+
+def test_assumption_rejects_description_and_expression(tmp_path):
+    with pytest.raises(PGSNError, match="single statement"):
+        run("""
+        <PGSN>
+            <def name="threat_model">no insider threat</def>
+            <Goal>
+                <description>G1</description>
+                <Assumption>
+                    <description>threat assumption</description>
+                    <var name="threat_model"/>
+                </Assumption>
+                <undeveloped/>
+            </Goal>
+        </PGSN>""", tmp_path)
+
+
+def test_context_rejects_two_expressions(tmp_path):
+    with pytest.raises(PGSNError, match="single statement"):
+        run("""
+        <PGSN>
+            <def name="a">one</def>
+            <def name="b">two</def>
+            <Goal>
+                <description>G1</description>
+                <Context><var name="a"/><var name="b"/></Context>
+                <undeveloped/>
+            </Goal>
+        </PGSN>""", tmp_path)
 
 
 # ------------------------------------------------------------------ #
