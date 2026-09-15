@@ -1,0 +1,33 @@
+<PGSNModule>
+  <!--
+    db_driver: an assurance-carrying wrapper for the `psycopg2` pip package.
+
+    Same shape as ssl_lib.xml: a SOUP evaluation (IEC 62304 §8) plus one goal
+    per hazard the package is responsible for.
+  -->
+  <def name="componentGoal" as="dl">
+    <dt key="name"/><dd>psycopg2 2.9.9 (PostgreSQL driver)</dd>
+
+    <!-- SOUP evaluation per IEC 62304 §8 -->
+    <dt key="soup_evaluation"/>
+    <dd><Evidence>SOUP evaluation report: psycopg2 2.9.9 (IEC 62304 §8)</Evidence></dd>
+
+    <!-- Hazard: data corruption via SQL injection -->
+    <dt key="sql_injection"/>
+    <dd>
+      <Goal>Database is protected against SQL injection
+        <Context>Parameterized queries enforced; raw string concatenation prohibited by code review</Context>
+        <Evidence>SQL injection penetration test report</Evidence>
+      </Goal>
+    </dd>
+
+    <!-- Hazard: unauthorized access to stored data -->
+    <dt key="unauthorized_access"/>
+    <dd>
+      <Goal>Database access is restricted to authorised roles only
+        <Context>PostgreSQL role-based access control; least-privilege principle applied</Context>
+        <Evidence>Access control configuration audit report</Evidence>
+      </Goal>
+    </dd>
+  </def>
+</PGSNModule>

@@ -1,0 +1,83 @@
+<PGSN>
+  <!--
+    Figure 6 of the GSN Community Standard, written out node by node.
+    "Control System is acceptably safe to operate"
+
+    No programming feature is used here: this is GSN in XML syntax and nothing
+    more, kept as the baseline that figure6_programmatic.xml is compared with.
+
+    What the transcription costs, visible in the file itself:
+      - J1 (Justification) has no native node in PGSN and is modelled as a
+        Context, so its text has to be repeated in S1 and S2.
+      - G4/G5/G6 and G7/G8 follow an obvious pattern each, but every node is
+        still written by hand.
+  -->
+
+  <!-- G1 -->
+  <Goal>
+    <description>Control System is acceptably safe to operate</description>
+    <!-- C1 --> <Context>Operating Role and Context</Context>
+    <!-- C2 --> <Context>Control System Definition</Context>
+
+    <!-- G2 -->
+    <Goal>
+      <description>All identified hazards have been eliminated or sufficiently mitigated</description>
+      <!-- C3 --> <Context>Tolerability targets (Ref Z)</Context>
+      <!-- C4 --> <Context>Hazards identified from FHA (Ref Y)</Context>
+
+      <!-- S1 -->
+      <Strategy>
+        Argument over each identified hazard
+        <!-- A1 -->
+        <Assumption>All hazards have been identified</Assumption>
+        <!-- J1: a Justification in the standard, modelled here as a Context.
+                 The same text is repeated in S2 below. -->
+        <Context>SIL apportionment is correct and complete</Context>
+
+        <!-- G4 / Sn1 -->
+        <Goal>
+          <description>Hazard H1 has been eliminated</description>
+          <Evidence>Formal Verification</Evidence>
+        </Goal>
+
+        <!-- G5 / Sn2 -->
+        <Goal>
+          <description>Probability of Hazard H2 occurring &lt; 1x10-6 per year</description>
+          <Evidence>Fault Tree Analysis</Evidence>
+        </Goal>
+
+        <!-- G6 / Sn2 -->
+        <Goal>
+          <description>Probability of Hazard H3 occurring &lt; 1x10-3 per year</description>
+          <Evidence>Fault Tree Analysis</Evidence>
+        </Goal>
+      </Strategy>
+    </Goal>
+
+    <!-- G3 -->
+    <Goal>
+      <description>Software in the Control System has been developed to SIL appropriate to hazards involved</description>
+      <!-- C5 --> <Context>SIL Guidelines and Processes</Context>
+      <!-- C6 --> <Context>Identified software hazards</Context>
+
+      <!-- S2 -->
+      <Strategy>
+        Argument over allocated SIL for Primary and Secondary elements
+        <!-- J1 again, character for character: plain GSN has no way to share it. -->
+        <Context>SIL apportionment is correct and complete</Context>
+
+        <!-- G7 / Sn3 -->
+        <Goal>
+          <description>Primary Protection System developed to SIL 4</description>
+          <Evidence>Process Evidence for SIL 4</Evidence>
+        </Goal>
+
+        <!-- G8 / Sn4 -->
+        <Goal>
+          <description>Secondary Protection System developed to SIL 2</description>
+          <Evidence>Process Evidence for SIL 2</Evidence>
+        </Goal>
+      </Strategy>
+    </Goal>
+  </Goal>
+</PGSN>

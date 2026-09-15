@@ -1,0 +1,135 @@
+<PGSN>
+  <!--
+    The same Figure 6 as figure6_plain.xml, generated rather than transcribed.
+    Both files evaluate to the same argument; this one says where each part
+    comes from instead of writing every node out.
+
+    What changes:
+      - The hazards become data. A HazardRecord class holds the claim and the
+        evidence that discharges it, and one template turns a record into a
+        Goal, so G4/G5/G6 are a map over the hazard list.
+      - G7/G8 come from one template applied twice, with the system name and
+        the SIL level interpolated into both the claim and the evidence.
+      - J1 is defined once and referenced by S1 and S2, so the two strategies
+        cannot drift apart.
+
+    Adding a hazard is a line in hazardList; adding a protection element is
+    one more apply.
+  -->
+
+  <!-- Hazard data. Sn1 (Formal Verification) discharges H1; Sn2 (Fault Tree
+       Analysis) discharges H2 and H3. -->
+  <def name="HazardRecord" as="class">
+    <attribute name="claim"/>     <!-- the goal text, as it appears in the standard -->
+    <attribute name="evidence"/>  <!-- the solution that discharges it -->
+  </def>
+
+  <def name="h1" as="object">
+    <instanceOf var="HazardRecord"/>
+    <attribute name="claim">Hazard H1 has been eliminated</attribute>
+    <attribute name="evidence">Formal Verification</attribute>
+  </def>
+
+  <def name="h2" as="object">
+    <instanceOf var="HazardRecord"/>
+    <attribute name="claim">Probability of Hazard H2 occurring &lt; 1x10-6 per year</attribute>
+    <attribute name="evidence">Fault Tree Analysis</attribute>
+  </def>
+
+  <def name="h3" as="object">
+    <instanceOf var="HazardRecord"/>
+    <attribute name="claim">Probability of Hazard H3 occurring &lt; 1x10-3 per year</attribute>
+    <attribute name="evidence">Fault Tree Analysis</attribute>
+  </def>
+
+  <def name="hazardList" as="ol">
+    <li var="h1"/>
+    <li var="h2"/>
+    <li var="h3"/>
+  </def>
+
+  <!-- One hazard record becomes one Goal supported by its solution. -->
+  <def name="makeHazardGoal" as="template">
+    <param name="h" positional="true"/>
+    <Goal>
+      <description><get label="claim" of="h"/></description>
+      <Evidence><get label="evidence" of="h"/></Evidence>
+    </Goal>
+  </def>
+
+  <!-- G4, G5, G6 -->
+  <def name="hazardGoals">
+    <apply template="map_term">
+      <arg var="makeHazardGoal"/>
+      <arg var="hazardList"/>
+    </apply>
+  </def>
+
+  <!-- G7 and G8 differ only in the element name and the SIL level, so both
+       the claim and the evidence label are interpolated from the arguments. -->
+  <def name="makeSILGoal" as="template">
+    <param name="element" positional="true"/>
+    <param name="silLevel" positional="true"/>
+    <Goal>
+      <description>{element} Protection System developed to SIL {silLevel}</description>
+      <Evidence>Process Evidence for SIL {silLevel}</Evidence>
+    </Goal>
+  </def>
+
+  <def name="G7"><apply template="makeSILGoal"><arg>Primary</arg><arg>4</arg></apply></def>
+  <def name="G8"><apply template="makeSILGoal"><arg>Secondary</arg><arg>2</arg></apply></def>
+
+  <!-- J1, the Justification. Defined once; the plain version repeats its text
+       in both strategies. PGSN has no native Justification node, so it is
+       modelled as a Context, exactly as in figure6_plain.xml. -->
+  <def name="J1">SIL apportionment is correct and complete</def>
+
+  <!-- S1 -->
+  <def name="S1" as="Strategy">
+    Argument over each identified hazard
+    <Assumption>All hazards have been identified</Assumption>
+    <Context var="J1"/>
+    <subGoals var="hazardGoals"/>
+  </def>
+
+  <!-- S2 -->
+  <def name="S2" as="Strategy">
+    Argument over allocated SIL for Primary and Secondary elements
+    <Context var="J1"/>
+    <subGoals>
+      <ol>
+        <li var="G7"/>
+        <li var="G8"/>
+      </ol>
+    </subGoals>
+  </def>
+
+  <!-- G2 -->
+  <def name="G2" as="Goal">
+    <description>All identified hazards have been eliminated or sufficiently mitigated</description>
+    <Context>Tolerability targets (Ref Z)</Context>
+    <Context>Hazards identified from FHA (Ref Y)</Context>
+    <supportedBy var="S1"/>
+  </def>
+
+  <!-- G3 -->
+  <def name="G3" as="Goal">
+    <description>Software in the Control System has been developed to SIL appropriate to hazards involved</description>
+    <Context>SIL Guidelines and Processes</Context>
+    <Context>Identified software hazards</Context>
+    <supportedBy var="S2"/>
+  </def>
+
+  <!-- G1. Writing several Goals under a Goal is sugar for `immediate`; here
+       the sub-goals are named values, so `immediate` is applied directly. -->
+  <Goal>
+    <description>Control System is acceptably safe to operate</description>
+    <Context>Operating Role and Context</Context>
+    <Context>Control System Definition</Context>
+    <supportedBy>
+      <apply template="immediate">
+        <arg><ol><li var="G2"/><li var="G3"/></ol></arg>
+      </apply>
+    </supportedBy>
+  </Goal>
+</PGSN>
