@@ -65,6 +65,9 @@ class ConstMixin(ABC):
     def _subst_or_none(self, variable: int, term: Term) -> Term | None:
         return None
 
+    def _compute_free_bound(self) -> int:
+        return 0
+
     def _free_variables(self) -> set[str]:
         return set()
 
@@ -77,6 +80,8 @@ class Term(ABC):
     # meta_info is always not empty
     meta_info: dict = field(default={}, eq=False)
     is_named: bool = field(validator=helpers.not_none)
+    # Cache for free_bound(). Terms are immutable, so it is computed at most once.
+    _free_bound: int | None = field(default=None, init=False, eq=False, repr=False)
 
     @classmethod
     def build(cls, is_named: bool, **kwarg) -> Term:
@@ -136,12 +141,26 @@ class Term(ABC):
             t = t_reduced
         raise LambdaInterpreterError('Reduction did not terminate', t)
 
+    # One more than the largest de Bruijn index free in this term, 0 if closed.
+    @abstractmethod
+    def _compute_free_bound(self) -> int:
+        pass
+
+    def free_bound(self) -> int:
+        assert not self.is_named
+        if self._free_bound is None:
+            object.__setattr__(self, "_free_bound", self._compute_free_bound())
+        return self._free_bound
+
     @abstractmethod
     def _shift_or_none(self, num: int, cutoff: int) -> Term | None:
         pass
 
     def shift_or_none(self, num: int, cutoff: int) -> Term | None:
         assert not self.is_named
+        # No free index reaches the cutoff, so nothing moves.
+        if self.free_bound() <= cutoff:
+            return None
         shifted = self._shift_or_none(num, cutoff)
         if shifted is None:
             return None
@@ -158,6 +177,9 @@ class Term(ABC):
     def subst_or_none(self, variable: int, term: Term) -> Term | None:
         assert not self.is_named
         assert not term.is_named
+        # The variable does not occur free here.
+        if self.free_bound() <= variable:
+            return None
         substituted = self._subst_or_none(variable, term)
         assert substituted is None or not substituted.is_named
         return substituted
@@ -251,6 +273,9 @@ class Variable(Term):
     def _eval_or_none(self):
         return None
 
+    def _compute_free_bound(self) -> int:
+        return self.num + 1
+
     def _shift_or_none(self, d, cutoff):
         if self.num < cutoff:
             return None
@@ -298,6 +323,10 @@ class Abs(Term):
     def _eval_or_none(self) -> Term | None:
         t_evaluated = self.t.eval_or_none()
         return None if t_evaluated is None else self.evolve(t=t_evaluated)
+
+    def _compute_free_bound(self) -> int:
+        # Index 0 in the body is bound by this abstraction.
+        return max(self.t.free_bound() - 1, 0)
 
     def _shift_or_none(self, num: int, cutoff: int) -> Term | None:
         t_shifted = self.t.shift_or_none(num, cutoff + 1)
@@ -378,6 +407,9 @@ class App(Term):
             return None
         else:
             return c_reduced.to_term()
+
+    def _compute_free_bound(self) -> int:
+        return max(self.t1.free_bound(), self.t2.free_bound())
 
     def _shift_or_none(self, num: int, cutoff: int) -> Term | None:
         t1_shifted_or_none = self.t1.shift_or_none(num, cutoff)
@@ -503,6 +535,9 @@ class List(Unary):
             evaluated_expanded = (x[0] if x[1] is None else x[1] for x in zip(self.terms, evaluated))
             return self.evolve(terms=tuple(evaluated_expanded))
 
+    def _compute_free_bound(self) -> int:
+        return max((t.free_bound() for t in self.terms), default=0)
+
     def _shift_or_none(self, d, c):
         shifted_or_none = [t.shift_or_none(d, c) for t in self.terms]
         if all(s is None for s in shifted_or_none):
@@ -561,6 +596,9 @@ class Record(Unary):
                 if evaluated_expand[k] is None:
                     evaluated_expand[k] = self.attributes()[k]
             return self.evolve(attributes=evaluated_expand)
+
+    def _compute_free_bound(self) -> int:
+        return max((t.free_bound() for t in self._attributes.values()), default=0)
 
     def _shift_or_none(self, d, c):
         shifted = dict((label, t.shift_or_none(d, c)) for label, t in self.attributes().items())
@@ -680,6 +718,12 @@ class PGSNClass(Unary):
 
     def _eval_or_none(self):
         return self._traverse(lambda t: t.eval_or_none())
+
+    def _compute_free_bound(self) -> int:
+        children = [*self._defaults.values(), *self._methods.values()]
+        if self.inherit is not None:
+            children.append(self.inherit)
+        return max((t.free_bound() for t in children), default=0)
 
     def _shift_or_none(self, num: int, cutoff: int) -> Term | None:
         return self._traverse(lambda t: t.shift_or_none(num, cutoff))
@@ -859,6 +903,10 @@ class PGSNObject(Unary):
 
     def _shift_or_none(self, num: int, cutoff: int) -> Term | None:
         return self._traverse(lambda t: t.shift_or_none(num, cutoff))
+
+    def _compute_free_bound(self) -> int:
+        children = [self.instance, *self._attributes.values(), *self._methods.values()]
+        return max(t.free_bound() for t in children)
 
     def _shift(self, num: int, cutoff: int) -> Term:
         return self._traverse(lambda t: helpers.default(t.shift(num, cutoff), t))
