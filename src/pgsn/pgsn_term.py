@@ -320,9 +320,12 @@ class Abs(Term):
         else:
             assert False
 
+    # Evaluation stops at an abstraction and leaves its body as written, so a
+    # term evaluates to a weak normal form. Every term the evaluator reduces is
+    # then closed, which keeps builtin reductions stable under substitution,
+    # and recursion through `fix` cannot unfold under a binder.
     def _eval_or_none(self) -> Term | None:
-        t_evaluated = self.t.eval_or_none()
-        return None if t_evaluated is None else self.evolve(t=t_evaluated)
+        return None
 
     def _compute_free_bound(self) -> int:
         # Index 0 in the body is bound by this abstraction.
