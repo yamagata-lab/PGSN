@@ -1,3 +1,5 @@
+import pytest
+
 from pgsn.dsl import *
 from pgsn import pgsn_term
 
@@ -259,3 +261,43 @@ def test_format():
     assert pgsn_term.value_of(format_string(f_string, {'x':1, 'y': 'hoge', 'z': [1, 2]})) == '1, hoge, [1, 2]'
 
 
+
+
+# Conditionals are lazy in their branches.  `undefined` is a constant, so
+# applying it to anything leaves an application no rule fires on: a condition
+# built from it never becomes a boolean.  `fix` of the identity reduces forever.
+_stuck = undefined(integer(0))
+_diverging = fix(lambda_abs(variable('x'), variable('x')))
+
+
+def test_conditional_still_selects_a_branch():
+    assert if_then_else(true)(integer(1))(integer(2)).fully_eval().value == 1
+    assert if_then_else(false)(integer(1))(integer(2)).fully_eval().value == 2
+    # An integer condition counts as true when it is positive.
+    assert if_then_else(integer(3))(integer(1))(integer(2)).fully_eval().value == 1
+    assert if_then_else(integer(0))(integer(1))(integer(2)).fully_eval().value == 2
+
+
+def test_stuck_condition_leaves_both_branches_alone():
+    # The evaluator reduces the arguments of a head it cannot apply.  Unless the
+    # branches sit under a lambda, this reduces them both and never terminates.
+    t = if_then_else(_stuck)(_diverging)(_diverging)
+    t.fully_eval(steps=1000)
+
+
+def test_fold_over_a_stuck_list_terminates():
+    # `equal(_stuck)(empty)` never becomes a boolean, so the recursive call in
+    # the else branch must stay unexpanded instead of unfolding forever.
+    fold(plus)(integer(0))(_stuck).fully_eval(steps=1000)
+
+
+def test_boolean_operators_over_a_stuck_argument_terminate():
+    boolean_and(_stuck)(_diverging).fully_eval(steps=1000)
+    boolean_or(_stuck)(_diverging).fully_eval(steps=1000)
+    boolean_not(_stuck).fully_eval(steps=1000)
+
+
+def test_diverging_term_really_diverges():
+    # Guards the tests above: they would pass trivially if `_diverging` stopped.
+    with pytest.raises(pgsn_term.LambdaInterpreterError):
+        _diverging.fully_eval(steps=1000)
