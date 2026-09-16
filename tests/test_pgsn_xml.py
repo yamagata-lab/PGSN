@@ -239,6 +239,103 @@ def test_class_inheritance(tmp_path):
 
 
 # ------------------------------------------------------------------ #
+# typeOf
+# ------------------------------------------------------------------ #
+
+def test_type_of_admits_a_goal(tmp_path):
+    """The check that used to stall. `goal_class` defaults `support` to an
+    application, and the predicate behind the old `instanceOf` compared
+    classes structurally, so it answered False for every goal.
+    """
+    result = run("""
+    <PGSN>
+        <def name="g" typeOf="Goal">
+            <Goal>
+                <description>system is safe</description>
+                <undeveloped/>
+            </Goal>
+        </def>
+        <var name="g"/>
+    </PGSN>""", tmp_path)
+    assert gsn_type(result) == "Goal"
+    assert result["description"] == "system is safe"
+
+
+def test_type_of_is_structural(tmp_path):
+    """A class of one's own satisfies Evidence by carrying its labels. Nothing
+    connects MyNode to the GSN classes.
+    """
+    result = run("""
+    <PGSN>
+        <def name="MyNode" as="class">
+            <attribute name="description"/>
+            <attribute name="defeaters"/>
+            <attribute name="owner"/>
+        </def>
+        <def name="n" typeOf="Evidence">
+            <object>
+                <instanceOf var="MyNode"/>
+                <attribute name="description">an audit</attribute>
+                <attribute name="defeaters"><ul/></attribute>
+                <attribute name="owner">QA</attribute>
+            </object>
+        </def>
+        <get label="owner" of="n"/>
+    </PGSN>""", tmp_path)
+    assert result == "QA"
+
+
+def test_type_of_stalls_when_a_label_is_missing(tmp_path):
+    """An evidence node carries no `support`, so it does not satisfy Goal. A
+    failed check leaves the document unreduced, and the readback says where.
+    """
+    with pytest.raises(ValueError, match="unexpected term type"):
+        run("""
+        <PGSN>
+            <def name="e" typeOf="Goal">
+                <Evidence><description>a report</description></Evidence>
+            </def>
+            <var name="e"/>
+        </PGSN>""", tmp_path)
+
+
+def test_type_of_on_a_var_reference(tmp_path):
+    result = run("""
+    <PGSN>
+        <def name="g">
+            <Goal>
+                <description>system is safe</description>
+                <undeveloped/>
+            </Goal>
+        </def>
+        <var name="g" typeOf="Goal"/>
+    </PGSN>""", tmp_path)
+    assert gsn_type(result) == "Goal"
+
+
+@pytest.mark.parametrize("source", [
+    '<def name="x" instanceOf="MyClass">v</def><var name="x"/>',
+    '<def name="x">v</def><var name="x" instanceOf="MyClass"/>',
+])
+def test_the_old_instance_of_spelling_is_rejected(source, tmp_path):
+    """An unknown attribute would be ignored in silence, and the check would
+    disappear with it.
+    """
+    with pytest.raises(PGSNError, match="typeOf"):
+        run(f"<PGSN>{source}</PGSN>", tmp_path)
+
+
+def test_type_of_on_a_param_is_rejected(tmp_path):
+    """A parameter is bound by a lambda, so it cannot carry a guard. The
+    attribute was accepted and ignored before either spelling existed.
+    """
+    with pytest.raises(PGSNError, match="typeOf"):
+        run('<PGSN><def name="t" as="template">'
+            '<param name="p" typeOf="Goal"/>v</def><var name="t"/></PGSN>',
+            tmp_path)
+
+
+# ------------------------------------------------------------------ #
 # GSN: Evidence
 # ------------------------------------------------------------------ #
 

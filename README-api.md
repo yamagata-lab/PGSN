@@ -95,7 +95,7 @@ These are terms, not Python functions: they are values you apply. XML exposes ex
 
 **Strings** — `format_string`
 
-**Classes and objects** — `define_class`, `instantiate`, `instance`, `is_instance`, `is_subclass`, `base_class`
+**Classes and objects** — `define_class`, `instantiate`, `type_of`, `is_subtype`, `base_class`
 
 **Other** — `fix`, `undefined`
 
@@ -156,13 +156,34 @@ Goal: System is secure
 
 ### Classes
 
-The class values behind the constructors are `gsn_class`, `goal_class`, `strategy_class`, `evidence_class`, `context_class`, `assumption_class`, `defeater_class`, `support_class` and `undeveloped_class`. Use them with `define_class` to derive your own node types, and with `is_instance` to check one:
+The class values behind the constructors are `gsn_class`, `goal_class`, `strategy_class`, `evidence_class`, `context_class`, `assumption_class`, `defeater_class`, `support_class` and `undeveloped_class`. Use them with `define_class` to derive your own node types:
 
 ```python
 my_goal_class = pgsn.define_class(
     inherit=pgsn.goal_class,
     attributes=pgsn.list_term((pgsn.string("owner"),)),
 )
+```
+
+`type_of` returns the class of an object and `is_subtype` compares two classes,
+so a value is checked against a type like this:
+
+```python
+pgsn.is_subtype(pgsn.type_of(node))(pgsn.goal_class).fully_eval().value
+```
+
+Typing is structural: `is_subtype` compares the attribute and method names the
+two classes declare, and `inherit` plays no part. A class of your own
+satisfies `evidence_class` by carrying `description` and `defeaters`, and a
+goal satisfies it too, since it declares those and more. There is no predicate
+that asks which class a value belongs to — `is_instance` and `is_subclass`
+were removed, because class equality was structural and two copies of one
+class compared unequal once evaluation had reduced them to different degrees.
+To ask where a class came from, read the inheritance chain off the object:
+
+```python
+pgsn.python_value(node.fully_eval(),
+                  with_inherit_chain=True)["__parent_classes__"]
 ```
 
 ### Templates

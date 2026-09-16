@@ -118,7 +118,7 @@ Ordering compares integers only. `"a" < "b"` does not reduce; equality, however,
 
 ### Names
 
-A *name* is what `<def>` and `<param>` introduce and what `<var>` refers to. The same rule applies to every attribute that holds one: `name` and `instanceOf` on `<def>`, `<param>` and `<var>`, `as` on `<from>` and `<import>`, `template` on `<apply>`, `of` on `<get>`, `to` on `<send>`, `name` on `<arg>`, and the `var` shorthand attribute.
+A *name* is what `<def>` and `<param>` introduce and what `<var>` refers to. The same rule applies to every attribute that holds one: `name` on `<def>`, `<param>` and `<var>`, `typeOf` on `<def>` and `<var>`, `as` on `<from>` and `<import>`, `template` on `<apply>`, `of` on `<get>`, `to` on `<send>`, `name` on `<arg>`, and the `var` shorthand attribute.
 
 A name must begin with a letter and may continue with letters, digits and underscores. Letters are not restricted to ASCII, so `ゴール` is a name. A name may **not** begin with an underscore; those are reserved by the implementation.
 
@@ -196,8 +196,7 @@ This is expanded by a preprocessor before evaluation.
 Parameters are only valid inside `<PGSNModule>` and must appear before any `<from>` or `<def>` elements.
 
 ```xml
-<!-- Assumption is a built-in alias for assumption_class -->
-<param name="A1" instanceOf="Assumption"/>
+<param name="A1"/>
 
 <!-- with a default value -->
 <param name="threshold">100</param>
@@ -322,6 +321,34 @@ This is also expanded by the preprocessor before compilation.
 
 `<def name="x" as="T">C</def>` is purely syntactic: the preprocessor rewrites it to `<def name="x"><T>C</T></def>` before compilation. Any tag name that is valid in that position can be used — including user-defined class instantiation tags like `object`. The only restriction is that tags requiring a mandatory attribute of their own (such as `var`, `get`, and `send`, which require `name=`) cannot be used, because the desugared form would be missing that attribute.
 
+### `typeOf` Attribute
+
+Checks a value against a type. `<def>` and `<var>` both take it; the attribute
+value is a **variable name** bound to a class.
+
+```xml
+<def name="g" typeOf="Goal">
+    <Goal><description>system is safe</description><undeveloped/></Goal>
+</def>
+
+<var name="g" typeOf="Goal"/>
+```
+
+**Typing is structural.** A value satisfies a type when its class declares at
+least the attributes and methods the type declares. Where the class came from
+does not enter into it: a class of your own that carries `description` and
+`defeaters` satisfies `Evidence` without inheriting from it, and a `Goal`
+satisfies `Evidence` too, since it declares those labels and more. Nothing
+compares class *identities*, which is what makes the answer independent of
+how far evaluation has gone.
+
+A check that fails does not raise. The guard behind it simply does not
+reduce, so the document stalls and the readback reports the path.
+
+`<param>` does not take `typeOf`: a parameter is bound by a lambda, and a
+guard on it would have to be planted in the body. Check the value where it is
+used instead.
+
 ### Local Definitions
 
 Use `<def>` elements inside a `<div>` to scope definitions locally.
@@ -342,26 +369,6 @@ Use `<def>` elements inside a `<div>` to scope definitions locally.
     <def name="doubled"><apply><var name="plus"/><arg var="x"/><arg var="x"/></apply></def>
     <var name="doubled"/>   <!-- final value -->
 </template>
-```
-
-### `instanceOf` Attribute
-
-Adds a runtime type check: the value must be an instance of the specified class.
-The attribute value is a **variable name** that refers to a class expression.
-For complex class expressions (e.g. a computed class), use the `<instanceOf>` child element form instead.
-
-> **PGSN has no class names.** Classes are ordinary values bound to variables.
-> `instanceOf="x"` means "the variable `x`", not a string literal class name.
-
-```xml
-<!-- myClass must be a variable bound to a class definition -->
-<def name="x" instanceOf="myClass">...</def>
-
-<!-- same for var references -->
-<var name="x" instanceOf="myClass"/>
-
-<!-- for complex class expressions, use the child element form -->
-<instanceOf><apply template="computeClass"><arg>...</arg></apply></instanceOf>
 ```
 
 ### Local Definitions (div)
@@ -385,8 +392,8 @@ References a previously defined name.
 ```xml
 <var name="x"/>
 
-<!-- with explicit type -->
-<var name="x" instanceOf="MyClass"/>
+<!-- with a type check -->
+<var name="x" typeOf="MyClass"/>
 ```
 
 ### Built-ins
@@ -398,7 +405,7 @@ The following names are predefined; reference them with `<var name="..."/>` and 
 - Integers: `plus`, `minus`, `times`, `div`, `mod`, `integer_sum`
 - Records: `has_label`, `list_labels`, `add_attribute`, `remove_attribute`, `overwrite_record`, `empty_record`
 - Strings: `format_string`
-- Classes / objects: `define_class`, `instantiate`, `instance`, `is_instance`, `is_subclass`, `base_class`
+- Classes / objects: `define_class`, `instantiate`, `type_of`, `is_subtype`, `base_class`
 - Misc: `fix`, `repeat`, `undefined`
 - GSN constructors: `goal`, `strategy`, `evidence`, `context`, `assumption`, `defeater`, `undeveloped`, `immediate`, `evidence_as_goal`
 - GSN classes (long form): `goal_class`, `strategy_class`, `evidence_class`, `context_class`, `assumption_class`, `defeater_class`, `gsn_class`, `support_class`, `undeveloped_class`
@@ -508,11 +515,21 @@ When the function is a named variable, the `template` attribute provides a short
 
 > **Note: PGSN has no class names.**
 > Classes are ordinary values; there is no registry of named classes.
-> `<inherit>`, `<instanceOf>`, and the `instanceOf` attribute all accept
-> **expressions that evaluate to a class**, not string literals.
+> `<inherit>` and `<instanceOf>` both accept **expressions that evaluate to a
+> class**, not string literals.
 > Writing `<inherit>SomeClass</inherit>` is a text node and becomes
 > `"SomeClass"` as a string value, which is not a class — use `<inherit var="someClass"/>`
 > (or any other expression) instead.
+
+> **Note: a type is not a class.**
+> `is_subtype` compares the attribute and method *names* two classes declare,
+> and `inherit` plays no part in it. So a class satisfies every type whose
+> labels it covers, related to it or not, and asking which class a value
+> belongs to has no answer — only asking what it carries does. The predicates
+> that did compare classes, `is_instance` and `is_subclass`, are gone: class
+> equality was structural, so two copies of one class compared unequal once
+> evaluation had reduced them to different degrees. `<instanceOf>` inside
+> `<object>` names the class to instantiate and is a different thing again.
 
 ### Object Instantiation (object)
 

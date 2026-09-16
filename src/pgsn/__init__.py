@@ -103,9 +103,8 @@ from pgsn.dsl import (
     base_class,
     define_class,
     instantiate,
-    instance,
-    is_instance,
-    is_subclass,
+    type_of,
+    is_subtype,
     # Conversion
     python_value,
 )
@@ -212,9 +211,8 @@ __all__ = [
     "base_class",
     "define_class",
     "instantiate",
-    "instance",
-    "is_instance",
-    "is_subclass",
+    "type_of",
+    "is_subtype",
     # GSN node constructors
     "goal",
     "strategy",

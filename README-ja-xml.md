@@ -116,7 +116,7 @@ XML では `<` をエスケープする必要があります。`i &lt; n` と書
 
 ### 名前
 
-*名前*とは、`<def>` と `<param>` が導入し `<var>` が参照するものです。名前を保持する属性はすべて同じ規則に従います。`<def>`・`<param>`・`<var>` の `name` と `instanceOf`、`<from>`・`<import>` の `as`、`<apply>` の `template`、`<get>` の `of`、`<send>` の `to`、`<arg>` の `name`、そして略記の `var` 属性です。
+*名前*とは、`<def>` と `<param>` が導入し `<var>` が参照するものです。名前を保持する属性はすべて同じ規則に従います。`<def>`・`<param>`・`<var>` の `name`、`<def>`・`<var>` の `typeOf`、`<from>`・`<import>` の `as`、`<apply>` の `template`、`<get>` の `of`、`<send>` の `to`、`<arg>` の `name`、そして略記の `var` 属性です。
 
 名前は文字で始まり、以降は文字・数字・アンダースコアを続けられます。文字は ASCII に限りません。`ゴール` は名前として使えます。ただし先頭にアンダースコアは**使えません**。処理系が予約しています。
 
@@ -194,8 +194,7 @@ XML では `<` をエスケープする必要があります。`i &lt; n` と書
 `<param>` は `<PGSNModule>` 内のみ有効で、`<from>` や `<def>` より前に書きます。
 
 ```xml
-<!-- Assumption は assumption_class の組み込みエイリアス -->
-<param name="A1" instanceOf="Assumption"/>
+<param name="A1"/>
 
 <!-- デフォルト値付き -->
 <param name="threshold">100</param>
@@ -320,6 +319,31 @@ import が jail に入ると、その jail が import 先モジュールの封�
 
 `<def name="x" as="T">C</def>` は純粋に構文上の展開です。前処理が `<def name="x"><T>C</T></def>` に書き換えてからコンパイルします。その位置で有効なタグ名であれば何でも使えます——`object` を使ったユーザー定義クラスのインスタンス化タグも含みます。唯一の制限は、`var`・`get`・`send` のように要素自身が必須属性（`name`）を持つタグで、脱糖形が必須属性を欠いて不正になるため使えません。
 
+### `typeOf` 属性
+
+値を型と照合します。`<def>` と `<var>` のどちらにも書けます。属性値は
+クラスが束縛された**変数名**です。
+
+```xml
+<def name="g" typeOf="Goal">
+    <Goal><description>system is safe</description><undeveloped/></Goal>
+</def>
+
+<var name="g" typeOf="Goal"/>
+```
+
+**型付けは構造的です。** ある値が型を満たすのは、その値のクラスが、型の宣言する属性と
+メソッドを少なくとも全部宣言しているときです。クラスの出自は関係ありません。`description` と
+`defeaters` を持つ自作のクラスは、`Evidence` を継承していなくても `Evidence` を満たしますし、
+`Goal` もそれらのラベルを（さらに多く）宣言しているので `Evidence` を満たします。
+クラスの**同一性**を比べる場所がどこにもないので、答えが簡約の進み具合に左右されません。
+
+検査に失敗しても例外にはなりません。裏にある guard が簡約されずに止まるだけなので、
+文書全体が止まり、読み出しの段階で場所が報告されます。
+
+`<param>` は `typeOf` を取りません。パラメーターは λ が束縛するので、guard を本体の中に
+仕込むことになるからです。使う場所で検査してください。
+
 ### 局所定義
 
 `<div>` の中に `<def>` を並べてスコープを限定します。
@@ -340,26 +364,6 @@ import が jail に入ると、その jail が import 先モジュールの封�
     <def name="doubled"><apply><var name="plus"/><arg var="x"/><arg var="x"/></apply></def>
     <var name="doubled"/>   <!-- 最終値 -->
 </template>
-```
-
-### `instanceOf` 属性
-
-実行時に型チェックを追加します。値が指定クラスのインスタンスでなければ評価が止まります。
-属性値は**変数名**（クラスが束縛されている変数）を指定します。
-複雑なクラス式を使いたい場合は、`instanceOf` 要素の子要素として式を書いてください。
-
-> **PGSN にクラス名という概念はありません。** クラスは変数に束縛された通常の値です。
-> `instanceOf="x"` は文字列のクラス名ではなく「変数 `x`」を意味します。
-
-```xml
-<!-- myClass はクラス定義が束縛された変数名 -->
-<def name="x" instanceOf="myClass">...</def>
-
-<!-- var 参照でも同様 -->
-<var name="x" instanceOf="myClass"/>
-
-<!-- 複雑なクラス式には子要素形式を使う -->
-<instanceOf><apply template="computeClass"><arg>...</arg></apply></instanceOf>
 ```
 
 ### 局所定義（div）
@@ -383,8 +387,8 @@ import が jail に入ると、その jail が import 先モジュールの封�
 ```xml
 <var name="x"/>
 
-<!-- 型を明示する場合 -->
-<var name="x" instanceOf="MyClass"/>
+<!-- 型検査つき -->
+<var name="x" typeOf="MyClass"/>
 ```
 
 ### 組み込み（builtin）
@@ -396,7 +400,7 @@ import が jail に入ると、その jail が import 先モジュールの封�
 - 整数: `plus`・`minus`・`times`・`div`・`mod`・`integer_sum`
 - レコード: `has_label`・`list_labels`・`add_attribute`・`remove_attribute`・`overwrite_record`・`empty_record`
 - 文字列: `format_string`
-- クラス／オブジェクト: `define_class`・`instantiate`・`instance`・`is_instance`・`is_subclass`・`base_class`
+- クラス／オブジェクト: `define_class`・`instantiate`・`type_of`・`is_subtype`・`base_class`
 - その他: `fix`・`repeat`・`undefined`
 - GSN コンストラクタ: `goal`・`strategy`・`evidence`・`context`・`assumption`・`defeater`・`undeveloped`・`immediate`・`evidence_as_goal`
 - GSN クラス（長い名前）: `goal_class`・`strategy_class`・`evidence_class`・`context_class`・`assumption_class`・`defeater_class`・`gsn_class`・`support_class`・`undeveloped_class`
@@ -506,10 +510,19 @@ import が jail に入ると、その jail が import 先モジュールの封�
 ```
 
 > **PGSN にクラス名という概念はありません。**
-> クラスは変数に束縛された通常の値です。`<inherit>`・`<instanceOf>`・`instanceOf` 属性は
+> クラスは変数に束縛された通常の値です。`<inherit>` と `<instanceOf>` は
 > いずれも**クラスに評価される式**を受け取ります（文字列のクラス名ではありません）。
 > `<inherit>SomeClass</inherit>` と書くとテキストが文字列 `"SomeClass"` として扱われ、
 > クラスとして扱われません。`<inherit var="someClass"/>` のように式を使ってください。
+
+> **型はクラスではありません。**
+> `is_subtype` が比べるのは、2つのクラスが宣言する属性名とメソッド名だけで、`inherit` は
+> 関与しません。だからクラスは、ラベルを覆っている型すべてを満たします（継承関係の有無は
+> 問いません）。逆に「この値はどのクラスに属するか」という問いには答えがなく、
+> 「何を持っているか」だけが答えられます。クラスを比べていた `is_instance` と `is_subclass` は
+> 削除しました。クラスの等価性が構造比較だったため、同一のクラスでも簡約の進み具合が違う
+> コピーどうしは一致しなかったからです。`<object>` の中の `<instanceOf>` はまた別物で、
+> 生成するクラスを指す要素です。
 
 ### オブジェクト生成（object）
 

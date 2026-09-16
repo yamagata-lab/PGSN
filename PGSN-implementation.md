@@ -162,19 +162,41 @@ lives, in `_applicable_args`. Builtins that build a term containing
 applications (`Map`, a method call on an object) can return that term for the
 machine to continue with, which is what `_apply_args` already does.
 
-Two rules need a decision before they can be implemented in a machine, because
-both are currently answered by comparing terms:
+Two rules were answered by comparing terms. One still needs a decision before
+a machine can implement it; the other was changed so that it no longer asks:
 
 - **Equality.** Structural equality of data is well defined. Equality of
   functions is not definable, and comparing closures structurally is
   meaningless. Comparing them by identity is not referentially transparent:
   `let f = λx.x in equal f f` and `equal (λx.x) (λx.x)` would differ.
-- **Class identity.** `is_subclass` compares classes structurally, so the same
-  class reached along two paths compares unequal when its defaults have been
-  reduced to different degrees. This is why `is_instance` answers `false` for
-  classes carrying unevaluated defaults. A class needs an identity that does
-  not depend on evaluation: a label given at compile time, derived from where
-  the class is defined, is stable under both substitution and specialisation.
+- **Class identity.** A machine does not need one. `is_subclass` walked the
+  inheritance chain comparing classes with structural equality, so the same
+  class reached along two paths compared unequal once its defaults had been
+  reduced to different degrees. `is_instance`, defined in terms of it,
+  therefore answered `false` for every class whose defaults hold an
+  unevaluated term — `goal_class` among them, through its `undeveloped`
+  default. From XML the check was reached through the `instanceOf` attribute,
+  which compiled to `guard(is_instance(…))`, so a document that used it on a
+  `<Goal>` did not reduce and said nothing about why.
+
+  Both were replaced by `is_subtype`, which compares the attribute and method
+  *names* the two classes declare and looks at nothing else. Names belong to
+  a class's shape rather than its contents, so the answer is the same however
+  far either side has been reduced, and a machine is free to represent a
+  class however it likes as long as it can report those names.
+
+  This made typing structural, which is a change of language and not only of
+  implementation. `inherit` is not consulted: a class satisfies every type
+  whose labels it covers, related to it or not, so a `Goal` satisfies
+  `Evidence` by declaring `description` and `defeaters` and more besides.
+  What can no longer be asked is which class a value belongs to. The
+  inheritance chain is still readable through `python_value`, and `gsn_tree`
+  classifies nodes by the names it finds there, but that is a readback
+  facility rather than a rule of the language.
+
+  One caveat for whoever implements `equal`: it accepts classes today, since
+  it declines only applications and abstractions, so the comparison that was
+  removed is one builtin away from returning.
 
 ## 2. Names and scope
 
@@ -315,6 +337,11 @@ for 81 s before exhausting the Python stack; it now stops at once.
 - A record label can be spelled six ways (`key`, `name`, `label`, `method`, the
   text of a `<dt>`, a string value). Narrowing `name` to identifiers and `label`
   to record labels is a breaking change, so it waits for 0.1.0.
+- Typing is structural, so a type is satisfied by any class that carries its
+  labels, and a `Goal` satisfies `Evidence`. Whether a nominal check is wanted
+  as well — "this node is a Goal, not merely goal-shaped" — is open. The
+  inheritance chain holds the answer, but only the readback can see it, and
+  class names are not unique across documents written apart from each other.
 - GSN elements have no identifiers, which the standard requires, and which is
   also what keeps a Challenges relationship from being addressable.
 - A defeater's `support` says why the defeater holds, not why it defeats its
