@@ -29,9 +29,10 @@ def class_marker(node: dict) -> str:
 def ancestry(node) -> list[str]:
     """The class names a node descends from, nearest first.
 
-    `is_instance` is not used here: it answers False for any class whose
-    defaults hold an unevaluated term, which covers `goal_class` and
-    `defeater_class` alike. That defect predates this branch.
+    The names, not `is_subtype`: subtyping is structural, and a Defeater
+    declares a subset of what a Goal declares, so every Goal satisfies the
+    Defeater type. Telling the two apart is a question about where a class
+    came from, which only the inheritance chain answers.
     """
     return pgsn.python_value(node.fully_eval(),
                              with_inherit_chain=True)["__parent_classes__"]

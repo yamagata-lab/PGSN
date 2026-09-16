@@ -138,9 +138,6 @@
     <element name="param">
       <attribute name="name"/>
       <optional>
-        <attribute name="instanceOf"/>
-      </optional>
-      <optional>
         <attribute name="positional">
           <choice>
             <value>true</value>
@@ -278,7 +275,7 @@
 <define name="var_pat">
   <element name="var">
       <optional>
-        <attribute name="instanceOf"/>
+        <attribute name="typeOf"/>
       </optional>
       <attribute name="name"/>
     </element>
@@ -381,7 +378,7 @@
         <attribute name="as"/>
       </optional>
       <optional>
-        <attribute name="instanceOf"/>
+        <attribute name="typeOf"/>
       </optional>
       <ref name="val_pat"/>
     </element>

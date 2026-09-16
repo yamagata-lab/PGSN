@@ -214,7 +214,6 @@ def list_term(terms: tuple[Term,...]) -> List:
 
 
 ### internal variables
-_obj = variable("_obj")
 _class = variable("_class")
 _attrs = variable("_attrs")
 
@@ -228,12 +227,16 @@ ObjectTerm = PGSNObject
 base_class = PGSNClass.named(name="BaseClass")
 define_class = DefineClass.named()
 
-# subclass
-is_subclass = IsSubclass.named()
+# subtyping: structural, by attribute and method names. `inherit` says where a
+# class came from; it says nothing about which types the class satisfies.
+is_subtype = IsSubtype.named()
 
 ## Objects
-instance = Instance.named()
-is_instance = lambda_abs_vars((_obj, _class), is_subclass(instance(_obj))(_class))
+# `type_of` projects an object onto its class. A value is checked against a
+# type by `is_subtype(type_of(v), t)`, so there is no separate predicate for
+# it. The `Instance` builtin behind the name is unchanged: it still returns
+# the `instance` field of a PGSNObject.
+type_of = Instance.named()
 instantiate = lambda_abs_vars((_class, _attrs), _class(_attrs))
 
 

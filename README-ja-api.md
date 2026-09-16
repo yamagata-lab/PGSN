@@ -95,7 +95,7 @@ pgsn.python_value(double(pgsn.integer(21)).fully_eval())   # 42
 
 **文字列** — `format_string`
 
-**クラスとオブジェクト** — `define_class`・`instantiate`・`instance`・`is_instance`・`is_subclass`・`base_class`
+**クラスとオブジェクト** — `define_class`・`instantiate`・`type_of`・`is_subtype`・`base_class`
 
 **その他** — `fix`・`undefined`
 
@@ -156,13 +156,32 @@ Goal: System is secure
 
 ### クラス
 
-コンストラクタの背後にあるクラス値は `gsn_class`・`goal_class`・`strategy_class`・`evidence_class`・`context_class`・`assumption_class`・`defeater_class`・`support_class`・`undeveloped_class` です。`define_class` と組み合わせて独自のノード型を派生させたり、`is_instance` で判定したりできます。
+コンストラクタの背後にあるクラス値は `gsn_class`・`goal_class`・`strategy_class`・`evidence_class`・`context_class`・`assumption_class`・`defeater_class`・`support_class`・`undeveloped_class` です。`define_class` と組み合わせて独自のノード型を派生させられます。
 
 ```python
 my_goal_class = pgsn.define_class(
     inherit=pgsn.goal_class,
     attributes=pgsn.list_term((pgsn.string("owner"),)),
 )
+```
+
+`type_of` はオブジェクトのクラスを返し、`is_subtype` は2つのクラスを比べます。
+値を型と照合するときはこう書きます。
+
+```python
+pgsn.is_subtype(pgsn.type_of(node))(pgsn.goal_class).fully_eval().value
+```
+
+型付けは構造的です。`is_subtype` が比べるのは2つのクラスが宣言する属性名とメソッド名だけで、
+`inherit` は関与しません。`description` と `defeaters` を持つ自作のクラスは `evidence_class` を
+満たしますし、goal もそれらを（さらに多く）宣言しているので満たします。「どのクラスに属するか」を
+尋ねる述語はありません。`is_instance` と `is_subclass` は削除しました。クラスの等価性が
+構造比較だったため、同一のクラスでも簡約の進み具合が違うコピーどうしは一致しなかったからです。
+クラスの出自を知りたいときは、オブジェクトから継承チェーンを読み出してください。
+
+```python
+pgsn.python_value(node.fully_eval(),
+                  with_inherit_chain=True)["__parent_classes__"]
 ```
 
 ### テンプレート

@@ -7,7 +7,7 @@
          ============================== -->
 
     <!-- this PGSN receives A1 from the caller -->
-    <param name="A1" instanceOf="Assumption"/>
+    <param name="A1"/>
 
     <!-- with a default value -->
     <param name="threshold">100</param>
@@ -85,6 +85,9 @@
             <attribute name="version">20.0</attribute>
         </object>
     </def>
+
+    <!-- type check: the value must declare at least the labels Ubuntu does -->
+    <def name="checked" typeOf="Ubuntu"><var name="ubuntu"/></def>
 
     <!-- attribute access -->
     <def name="ver">

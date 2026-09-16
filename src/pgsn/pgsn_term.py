@@ -817,14 +817,6 @@ class DefineClass(ConstMixin, Unary):
                                           methods=methods)
 
 
-def _is_subclass(cls1: PGSNClass, cls2: PGSNClass):
-    if cls1.inherit is None:
-        return False
-    if cls1 == cls2:
-        return True
-    return _is_subclass(cls1.inherit, cls2)
-
-
 def _inherit_chain(cls: PGSNClass):
     if cls.inherit is None:
         return [cls]
@@ -833,7 +825,16 @@ def _inherit_chain(cls: PGSNClass):
 
 
 @frozen
-class IsSubclass(ConstMixin, Builtin):
+class IsSubtype(ConstMixin, Builtin):
+    """Structural subtyping: one type is a subtype of another when it declares
+    at least the same attribute and method names.
+
+    Only the labels are compared. A default value is never looked at, so the
+    answer does not depend on how far either class has been reduced — which is
+    what the inheritance-walking predicate this replaces could not promise.
+    `inherit` is not consulted either: a class is a subtype of every class
+    whose labels it covers, related to it or not.
+    """
 
     @classmethod
     def build(cls, is_named: bool, **kwarg) -> Term:
@@ -851,10 +852,12 @@ class IsSubclass(ConstMixin, Builtin):
     # builtin consumes, so the tuple is variadic. `_applicable_args` is what
     # checks that args[0] and args[1] are classes.
     def _apply_args(self, args: tuple[Term, ...]) -> Term:
-        cls1 = args[0]
-        cls2 = args[1]
+        sub = args[0]
+        sup = args[1]
+        covered = (set(sup.attributes()) <= set(sub.attributes())
+                   and set(sup.methods()) <= set(sub.methods()))
 
-        return Boolean.nameless(value=_is_subclass(cls1, cls2))
+        return Boolean.nameless(value=covered)
 
 
 @frozen

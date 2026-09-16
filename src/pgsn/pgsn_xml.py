@@ -18,7 +18,7 @@ from pgsn.dsl import (
     list_all, integer_sum, integer,
     true, false, if_then_else, guard,
     equal, less_than, plus, minus, times, div, mod,
-    define_class, instantiate, instance, is_instance, is_subclass,
+    define_class, instantiate, type_of, is_subtype,
     base_class, undefined, empty,
     boolean_and, boolean_or, boolean_not,
     has_label, list_labels, add_attribute, remove_attribute, overwrite_record,
@@ -180,9 +180,9 @@ _MODULE_VAR = _RESERVED_PREFIX + "module"
 # everywhere. Record labels — <get name=>, <attribute name=>, <dt key=>,
 # <send name=> — are a separate namespace and are deliberately not reserved.
 _NAME_ATTRS: dict[str, tuple[str, ...]] = {
-    "def":    ("name", "instanceOf"),
-    "param":  ("name", "instanceOf"),
-    "var":    ("name", "instanceOf"),
+    "def":    ("name", "typeOf"),
+    "param":  ("name",),
+    "var":    ("name", "typeOf"),
     "from":   ("as",),
     "import": ("name", "as"),
     "apply":  ("template",),
@@ -529,6 +529,27 @@ def _replace_with(elem: ET.Element, replacement: ET.Element) -> None:
 
 def _preprocess(elem: ET.Element) -> None:
     """Recursively expand shorthand notations in place."""
+    # The `instanceOf` attribute became `typeOf` when the check stopped
+    # walking the inheritance chain and started comparing attribute and method
+    # names. Saying so is worth a few lines: an unknown attribute is otherwise
+    # ignored, so a document carrying the old spelling would lose its check
+    # without a word.
+    if "instanceOf" in elem.attrib:
+        raise PGSNError(
+            f"<{elem.tag} instanceOf=...>: the attribute is now spelled "
+            f"'typeOf', and asks whether the value carries at least the "
+            f"attributes and methods the type declares, rather than where its "
+            f"class came from. The <instanceOf> child of <object> names the "
+            f"class to instantiate and keeps its name.")
+
+    # A parameter is bound by a lambda, so a guard on it would have to be
+    # planted in the body. The attribute did nothing at all before; say so
+    # rather than ignoring it a second time.
+    if elem.tag == "param" and "typeOf" in elem.attrib:
+        raise PGSNError(
+            "<param typeOf=...>: a parameter cannot carry a type. Check the "
+            "value where it is used, with <var name=\"...\" typeOf=\"...\"/>.")
+
     # expr: replace with the XML it stands for, before anything else looks at
     # it. The expansion contains no shorthands, so it needs no further passes.
     if elem.tag == "expr":
@@ -638,8 +659,7 @@ _BUILTINS: dict[str, Term] = {
     "overwrite_record": overwrite_record, "format_string": format_string,
     "empty_record": empty_record, "undefined": undefined,
     "define_class": define_class, "instantiate": instantiate,
-    "instance": instance, "is_instance": is_instance,
-    "is_subclass": is_subclass, "base_class": base_class,
+    "type_of": type_of, "is_subtype": is_subtype, "base_class": base_class,
     "goal": goal, "strategy": strategy, "evidence": evidence,
     "context": context, "assumption": assumption,
     "defeater": defeater,
@@ -687,7 +707,7 @@ def _text_to_term(s: str) -> Term:
     return string(s)
 
 
-def _resolve(name: str, instance_of: str | None = None) -> Term:
+def _resolve(name: str, type_name: str | None = None) -> Term:
     """Every name becomes a variable; nothing is substituted inline.
 
     What a name denotes is decided by the binder structure around it, and by
@@ -696,9 +716,19 @@ def _resolve(name: str, instance_of: str | None = None) -> Term:
     silently getting the builtin.
     """
     term = variable(name)
-    if instance_of:
-        term = guard(is_instance(term, variable(instance_of)))(term)
+    if type_name:
+        term = _typed(term, type_name)
     return term
+
+
+def _typed(term: Term, type_name: str) -> Term:
+    """`typeOf`: let the value through only if it satisfies the named type.
+
+    The guard stalls on false, which is how a failed check shows itself: the
+    document does not reduce. The type is a variable like any other, so what
+    it denotes follows the same scoping as every other name.
+    """
+    return guard(is_subtype(type_of(term), variable(type_name)))(term)
 
 
 def _builtin_scope(body: Term) -> Term:
@@ -882,9 +912,9 @@ def _compile_def(elem: ET.Element, chroot: _Chroot,
     if elem.get("recursive", "false").lower() == "true":
         term = fix(lambda_abs(variable(name), term))
 
-    instance_of = elem.get("instanceOf")
-    if instance_of:
-        term = guard(is_instance(term, variable(instance_of)))(term)
+    type_name = elem.get("typeOf")
+    if type_name:
+        term = _typed(term, type_name)
 
     return name, term
 
@@ -1013,7 +1043,7 @@ def _expr(elem: ET.Element, chroot: _Chroot,
 
 
 def _e_var(elem: ET.Element, _ch: "_Chroot", _v: frozenset) -> Term:
-    return _resolve(elem.get("name"), elem.get("instanceOf"))
+    return _resolve(elem.get("name"), elem.get("typeOf"))
 
 
 def _e_num(elem: ET.Element, _ch: "_Chroot", _v: frozenset) -> Term:
