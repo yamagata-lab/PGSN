@@ -40,11 +40,11 @@ Python values are cast automatically where a term is expected, so `pgsn.string("
 
 ```python
 term.eval()                  # one reduction step
-term.fully_eval()            # reduce to a normal form, default steps=100000
+term.fully_eval()            # reduce to a weak normal form, default steps=100000
 term.fully_eval(steps=5000)  # with an explicit budget
 ```
 
-`fully_eval` returns the term unchanged if it is already in normal form. The `steps` budget bounds the number of reductions, not wall-clock time: a term that grows as it reduces can exhaust your patience well before it exhausts the budget. A term with unbound variables, or one applied to the wrong kind of argument, does not fail — it simply gets stuck, and the stuck term is what you get back.
+`fully_eval` returns the term unchanged if it is already a weak normal form. Evaluation does not enter the body of a function — a function is a value — while the elements of a list, the fields of a record and the attributes of an object are reduced throughout, which is what `python_value` needs. The `steps` budget bounds the number of reductions, not wall-clock time: a term that grows as it reduces can exhaust your patience well before it exhausts the budget. A term with unbound variables, or one applied to the wrong kind of argument, does not fail — it simply gets stuck, and the stuck term is what you get back. [PGSN-implementation.md](PGSN-implementation.md) explains the choice.
 
 ---
 
@@ -182,7 +182,7 @@ goals = pgsn.map_term(template)(requirements)
 
 ## Reading results
 
-Evaluate first; these functions expect a term in normal form.
+Evaluate first; these functions expect an evaluated term.
 
 ### `python_value(term, with_inherit_chain=False)`
 
@@ -222,7 +222,7 @@ term = pgsn.load_xml("main.xml")
 term = pgsn.load_xml_string(source)
 ```
 
-Both compile *and* fully evaluate, returning a normal form. The document syntax is described in [README-xml.md](README-xml.md).
+Both compile *and* evaluate, returning a weak normal form. The document syntax is described in [README-xml.md](README-xml.md).
 
 ### Jails
 

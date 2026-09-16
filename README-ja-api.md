@@ -40,11 +40,11 @@ pgsn.goal(description=..., support=...)       # キーワードのレコード
 
 ```python
 term.eval()                  # 1 ステップだけ簡約
-term.fully_eval()            # 正規形まで簡約、既定は steps=100000
+term.fully_eval()            # 弱正規形まで簡約、既定は steps=100000
 term.fully_eval(steps=5000)  # 上限を明示
 ```
 
-すでに正規形なら `fully_eval` はそのまま返します。`steps` は簡約回数の上限であって時間の上限ではありません。簡約するたびに項が膨らむ形だと、上限に達する前にこちらの忍耐が尽きます。自由変数が残った項や、型の合わない引数に適用された項はエラーにならず、単に「詰まった」状態のまま返ってきます。
+すでに弱正規形なら `fully_eval` はそのまま返します。関数の本体の中までは簡約しません（関数は値です）。リストの要素・レコードのフィールド・オブジェクトの属性は中まで簡約されるので、`python_value` が必要とする形にはなります。`steps` は簡約回数の上限であって時間の上限ではありません。簡約するたびに項が膨らむ形だと、上限に達する前にこちらの忍耐が尽きます。自由変数が残った項や、型の合わない引数に適用された項はエラーにならず、単に「詰まった」状態のまま返ってきます。理由は [PGSN-implementation.md](PGSN-implementation.md) にあります。
 
 ---
 
@@ -182,7 +182,7 @@ goals = pgsn.map_term(template)(requirements)
 
 ## 結果の読み出し
 
-先に評価してください。以下はいずれも正規形の項を前提にしています。
+先に評価してください。以下はいずれも評価済みの項を前提にしています。
 
 ### `python_value(term, with_inherit_chain=False)`
 
@@ -222,7 +222,7 @@ term = pgsn.load_xml("main.xml")
 term = pgsn.load_xml_string(source)
 ```
 
-どちらもコンパイルと完全評価まで行い、正規形を返します。ドキュメントの構文は [README-ja-xml.md](README-ja-xml.md) を参照してください。
+どちらもコンパイルと評価まで行い、弱正規形を返します。ドキュメントの構文は [README-ja-xml.md](README-ja-xml.md) を参照してください。
 
 ### jail
 
