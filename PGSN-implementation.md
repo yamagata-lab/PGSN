@@ -79,24 +79,58 @@ The arguments substituted at the root are mostly closed, so both costs now
 stop at the first node: that example went from 396 s to 0.9 s, with
 byte-identical output.
 
-### 1.3 What is still slow, and what still diverges
+### 1.3 The conditional is lazy in its branches
+
+`if_then_else` is not the builtin itself but a three-argument abstraction that
+wraps each branch before the builtin sees it:
+
+    λc. λt. λe. IfThenElse c (λ_. t) (λ_. e) undefined
+
+Beta reduction substitutes an argument without evaluating it, so the branches
+reach the builtin as they were written. The builtin selects one of the two
+abstractions, and the application to a dummy argument forces the one that won.
+
+The wrapping changes nothing when the condition is well behaved. A builtin is
+tried before any argument is reduced, so a condition that eventually becomes a
+boolean already short-circuits, and always did. What changes is the case where
+the condition can never become a boolean. The builtin then never fires, the
+evaluator falls through to reducing the arguments of a head it cannot apply,
+and both branches are reduced — a branch holding a recursive call unfolds until
+the step budget runs out. Under an abstraction there is nothing to reduce
+(§1.1), so instead the application stays as it stands and is reported stuck.
+
+This is what makes a missing record key visible where it occurs. A lookup that
+cannot proceed reaches a fold as the list being folded; the guard `equal list
+empty` cannot proceed either; and the fold now stops. The same holds for a
+recursion the author writes themselves, through `<if>` and a recursive binding,
+because `<if>` expands to an application of this same term (§4). Measured on
+such a recursion, guarded by a comparison against a stuck term: 86 s to exhaust
+the Python stack, reporting only that the stack was exhausted, against 0.2 s to
+a stuck term reported at `<root>.description`.
+
+`Guard` is left as it is. It takes the body it guards as an ordinary argument
+and is meant not to fire while its condition is false, so the body is reduced
+in exactly the cases the builtin is there to hold back; nothing in the standard
+library recurses through it.
+
+A call-by-value machine needs this same wrapping in order not to evaluate both
+branches (§1.5), which is why it is worth having before such a machine exists.
+
+### 1.4 What is still slow, and what still diverges
 
 Call by name does not share: a name referred to from N places has its value
 reduced N times. Factoring a repeated sub-term out into a `<def>` can
 therefore cost more than it saves. This is a property of the evaluator, not of
 the translation, and a machine with environments and closures removes it.
 
-Recursion in `dsl.py` is built from a fixed-point combinator and a
-conditional, so a recursion whose guard never becomes a boolean unfolds
-forever. At the top level this happens only after an error — a record without
-the key that was asked for leaves a lookup that cannot proceed, and if that
-stuck term reaches `foldr` as the list being folded, the fold unfolds instead
-of stopping. The `Fold` builtin, which waits for a list and otherwise does not
-fire, does not have this behaviour; making `foldr` the builtin would turn such
-errors into a stuck term reported at once. The step budget bounds the damage
-either way.
+A recursion that genuinely does not terminate still does not terminate, and the
+step budget is what bounds it. What no longer happens is a recursion running
+away over data that is merely stuck. The remaining cost of a stuck term is that
+it is found during readback rather than where it arose: `python_value` reports
+the path at which it met something that is not a value, which is where the term
+came to rest, not where the key was missing.
 
-### 1.4 Notes for a virtual machine
+### 1.5 Notes for a virtual machine
 
 A machine with environments and closures removes substitution, and with it the
 shifting. Krivine with updatable thunks (call by need) keeps the present
@@ -108,11 +142,11 @@ things:
   recursive binding to a closure whose environment refers to itself, as
   `let rec` does.
 - **Conditionals.** Under call by value, a conditional must not evaluate both
-  branches, or the base case of every recursion is lost. Either the machine
-  treats a saturated conditional as control flow, the way a compiler treats
-  `if`, or the front end passes the branches as thunks and the chosen one is
-  applied. The first keeps the language unchanged; the second keeps the machine
-  free of special forms.
+  branches, or the base case of every recursion is lost. This one is already
+  settled: `if_then_else` wraps its branches and applies the one that wins
+  (§1.3), so a machine that evaluates every argument evaluates neither branch,
+  and needs no special form for `if`. The price is a closure and an application
+  per conditional.
 - **Terms that cannot proceed.** PGSN returns them rather than failing. A
   machine may instead report an error at the point where a builtin cannot
   proceed, which is more informative, but it is a change of language, not of
@@ -216,9 +250,11 @@ projection reads the binding nearest to it.
 
 ## 4. Conditionals and shorthands
 
-`<if>` and `<cases>` are expanded before compilation into an application of the
-conditional builtin, reached through its reserved alias, so rebinding
-`if_then_else` does not change what `<if>` means.
+`<if>` and `<cases>` are expanded before compilation into an application of
+`if_then_else`, reached through its reserved alias, so rebinding
+`if_then_else` does not change what `<if>` means. That term thunks its own
+branches (§1.3), so a conditional written in XML is lazy in its branches
+without the expansion having to arrange anything.
 
 `<else>` is required in both. A conditional without it can be written — the
 term simply cannot proceed when no case matches — but a term that cannot
@@ -263,6 +299,12 @@ it at every abstraction.
 The count of reduction steps is not a measure of work: a step reduces one redex
 in an application, but advances every element of a list and every field of a
 record. SolarWinds completes in 487 steps at the root.
+
+Thunked branches (§1.3) change no output and cost no measurable time: the
+fifteen entry points under `examples/` produce byte-identical documents before
+and after, and the slowest of them, SolarWinds, takes 0.84 s against 0.85 s.
+What they change is the stuck case. A fold over a term that cannot proceed ran
+for 81 s before exhausting the Python stack; it now stops at once.
 
 ## 7. Open questions
 

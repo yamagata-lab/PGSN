@@ -63,7 +63,7 @@ def boolean(b: bool) -> Boolean:
 
 true = boolean(True)
 false = boolean(False)
-if_then_else = IfThenElse.named()
+_if_then_else_builtin = IfThenElse.named()
 guard = Guard.named()
 
 
@@ -72,6 +72,29 @@ def lambda_abs_vars(vs: tuple[Variable,...], t) -> Term:
     for v in reversed(vs):
         t1 = lambda_abs(v, t1)
     return t1
+
+
+# The conditional is lazy in its branches.  The builtin only selects one of its
+# arguments, but the evaluator reduces the arguments of a head it cannot apply
+# yet, so a condition that never becomes a boolean would drag both branches into
+# reduction -- and a recursive branch would then unfold until the step limit.
+# Wrapping each branch in an abstraction before the builtin sees it prevents
+# that: beta reduction substitutes an argument without evaluating it, and
+# evaluation stops at a lambda.  The branch that wins is forced by applying it to
+# a dummy argument.  Names starting with an underscore are reserved, so the
+# thunk parameter cannot capture a variable written by a user.
+_thunk = variable('_thunk')
+_cond = variable('_cond')
+_then = variable('_then')
+_else = variable('_else')
+
+if_then_else = lambda_abs_vars(
+    (_cond, _then, _else),
+    _if_then_else_builtin(_cond)
+    (lambda_abs(_thunk, _then))
+    (lambda_abs(_thunk, _else))
+    (undefined)
+)
 
 
 boolean_and = lambda_abs_vars(
