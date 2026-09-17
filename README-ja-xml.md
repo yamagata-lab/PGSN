@@ -404,7 +404,7 @@ import が jail に入ると、その jail が import 先モジュールの封�
 - その他: `fix`・`repeat`・`undefined`
 - GSN コンストラクタ: `goal`・`strategy`・`evidence`・`context`・`assumption`・`defeater`・`undeveloped`・`immediate`・`evidence_as_goal`
 - GSN クラス（長い名前）: `goal_class`・`strategy_class`・`evidence_class`・`context_class`・`assumption_class`・`defeater_class`・`gsn_class`・`support_class`・`undeveloped_class`
-- GSN クラス（短いエイリアス）: `Goal`・`Strategy`・`Evidence`・`Context`・`Assumption`・`GSN`・`Support`
+- GSN クラス（短いエイリアス）: `Goal`・`Strategy`・`Evidence`・`Context`・`Assumption`・`Defeater`・`GSN`・`Support`
 
 例（リストにテンプレートを写像する）:
 
@@ -727,7 +727,7 @@ Goal・Strategy・Evidence はすべて共通のヘッダ構造を持ちます�
 
 ```xml
 <Evidence>
-    <description>テスト結果レポート</description>
+    <description>テスト結果報告書</description>
     <Context>テスト環境の説明</Context>
 </Evidence>
 ```
@@ -744,7 +744,7 @@ GSN v3 で追加された dialectic extension では、*defeater* が議論の�
     <Defeater>テストスイートが仕様に追従していない
         <Defeater>改訂 7 で更新済みである</Defeater>
     </Defeater>
-    <Evidence>試験報告書</Evidence>
+    <Evidence>テスト報告書</Evidence>
 </Goal>
 ```
 
@@ -755,7 +755,7 @@ defeater はゴールだけでなく、戦略やエビデンスにも付きま�
 ```xml
 <Strategy>ハザードごとに議論する
     <Defeater>ハザード一覧が網羅的でない</Defeater>
-    <Goal>H1 は緩和されている<Evidence>試験報告書 H1</Evidence></Goal>
+    <Goal>H1 は緩和されている<Evidence>テスト報告書 H1</Evidence></Goal>
 </Strategy>
 ```
 
@@ -780,7 +780,7 @@ GSN ノードはクラスとして継承・拡張できます。
 <!-- インスタンス化（object 形） -->
 <object>
     <instanceOf var="GoalWithURL"/>
-    <attribute name="description">システムXはセキュア</attribute>
+    <attribute name="description">システムXはセキュアである</attribute>
     <attribute name="URL">https://example.com/evidence</attribute>
     <attribute name="support" var="undeveloped"/>
 </object>
@@ -801,7 +801,7 @@ GSN ノードはクラスとして継承・拡張できます。
     <from file="security.pgsn" import="secureGoal" as="G1"/>
 
     <def name="mainStrategy" as="Strategy">
-        テスト・レビューを行う
+        テストとレビューによる検証
         <subGoals>
             <ul>
                 <li var="G1"/>
@@ -810,7 +810,7 @@ GSN ノードはクラスとして継承・拡張できます。
     </def>
 
     <def name="main" as="Goal">
-        <description>システムはセキュア</description>
+        <description>システムはセキュアである</description>
         <Assumption>ゼロデイ攻撃はない</Assumption>
         <supportedBy var="mainStrategy"/>
     </def>

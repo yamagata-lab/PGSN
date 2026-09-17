@@ -3,31 +3,33 @@
 <PGSN>
 
     <!-- ==============================
-         params: variables received from outside
+         param: 外部から受け取る変数。
+         受け取れるのは <PGSNModule> だけなので、ここではコメントアウトして示す。
+         <PGSN> は値を1つ生成する文書で、<param> を受け取らない。
          ============================== -->
 
-    <!-- this PGSN receives A1 from the caller -->
+    <!-- モジュールは呼び出し元から A1 を、threshold はデフォルト値つきで受け取る
     <param name="A1"/>
-
-    <!-- with a default value -->
     <param name="threshold">100</param>
+    -->
 
 
     <!-- ==============================
-         import
+         import（from）
          ============================== -->
 
-    <!-- single import -->
+    <!-- 単一 import
     <from file="security.pgsn" import="secureGoal" as="G1"/>
+    -->
 
-    <!-- multiple imports using child elements
+    <!-- 子要素による複数 import
     <from file="evidence.pgsn">
         <import name="auditEvidence"/>
         <import name="testReport" as="TR"/>
     </from>
     -->
 
-    <!-- import with parameters passed to the module
+    <!-- パラメーターを渡しながら import
     <from file="other.pgsn">
         <import name="someGoal" as="G2"/>
         <arg name="A1" var="A1"/>
@@ -37,16 +39,16 @@
 
 
     <!-- ==============================
-         def: bind a name to a value
+         def: 名前を値に束縛する
          ============================== -->
 
-    <!-- simple binding -->
+    <!-- 単純な束縛 -->
     <def name="x">expr</def>
 
-    <!-- variable reference -->
+    <!-- 変数参照 -->
     <def name="varExample"><var name="x"/></def>
 
-    <!-- anonymous function (template): expr1 is the default value, expr2 is the body -->
+    <!-- 無名関数（テンプレート）: expr1 がデフォルト値、expr2 が本体 -->
     <def name="f">
         <template>
             <param name="arg1">expr1</param>
@@ -55,7 +57,7 @@
         </template>
     </def>
 
-    <!-- template application (apply): apply f to arg1 and arg2 -->
+    <!-- テンプレート適用（apply）: f を arg1 と arg2 に適用する -->
     <def name="result">
         <apply>
             <var name="f"/>
@@ -64,10 +66,10 @@
         </apply>
     </def>
 
-    <!-- class definition: inherits from klass, with attributes and a method -->
+    <!-- クラス定義: klass を継承し、属性とメソッドを持つ -->
     <def name="ClassB">
         <class>
-            <inherit>klass</inherit>
+            <inherit var="klass"/>
             <attribute name="attr1">C</attribute>
             <attribute name="attr2"/>
             <method name="m">
@@ -78,31 +80,31 @@
         </class>
     </def>
 
-    <!-- object instantiation: an instance of Ubuntu -->
+    <!-- オブジェクト生成: Ubuntu のインスタンス -->
     <def name="ubuntu">
         <object>
-            <instanceOf>Ubuntu</instanceOf>
+            <instanceOf var="Ubuntu"/>
             <attribute name="version">20.0</attribute>
         </object>
     </def>
 
-    <!-- type check: the value must declare at least the labels Ubuntu does -->
+    <!-- 型検査: 値は Ubuntu が宣言するラベルを少なくとも全部宣言していなければならない -->
     <def name="checked" typeOf="Ubuntu"><var name="ubuntu"/></def>
 
-    <!-- attribute access -->
+    <!-- 属性アクセス -->
     <def name="ver">
-        <get name="version"><var name="ubuntu"/></get>
+        <get label="version"><var name="ubuntu"/></get>
     </def>
 
-    <!-- method invocation: call method m on ubuntu -->
+    <!-- メソッド呼び出し: ubuntu のメソッド m を呼ぶ -->
     <def name="sent">
-        <send name="m"><var name="ubuntu"/>
+        <send method="m"><var name="ubuntu"/>
             <arg name="arg1">expr1</arg>
             <arg name="arg2">expr2</arg>
         </send>
     </def>
 
-    <!-- local definitions -->
+    <!-- 局所定義 -->
     <def name="localExample">
         <div>
             <def name="x">expr1</def>
@@ -111,7 +113,7 @@
         </div>
     </def>
 
-    <!-- data type: set (unordered) -->
+    <!-- データ型: 集合（順序なし） -->
     <def name="aSet">
         <ul>
             <li>item1</li>
@@ -119,7 +121,7 @@
         </ul>
     </def>
 
-    <!-- data type: list (ordered) -->
+    <!-- データ型: リスト（順序あり） -->
     <def name="aList">
         <ol>
             <li>item1</li>
@@ -127,7 +129,7 @@
         </ol>
     </def>
 
-    <!-- data type: dictionary -->
+    <!-- データ型: 辞書 -->
     <def name="aDict">
         <dl>
             <dt>key1</dt><dd>value1</dd>
@@ -135,23 +137,23 @@
         </dl>
     </def>
 
-    <!-- extending a GSN node via class inheritance -->
+    <!-- クラスの継承による GSN ノードの拡張 -->
     <def name="GoalWithURL">
         <class>
-            <inherit>Goal</inherit>
+            <inherit var="Goal"/>
             <attribute name="URL"/>
         </class>
     </def>
 
-    <!-- GSN: a Goal supported by Evidence -->
+    <!-- GSN: Evidence に支えられた Goal -->
     <def name="evidenceGoal" as="Goal">
-        <description>X is secure</description>
-        <Evidence>operational track record</Evidence>
+        <description>システムXはセキュアである</description>
+        <Evidence>運用実績</Evidence>
     </def>
 
-    <!-- GSN: a Strategy referencing sub-goals via a variable -->
+    <!-- GSN: 変数経由でサブゴールを参照する Strategy -->
     <def name="mainStrategy" as="Strategy">
-        verified through testing and review
+        テストとレビューによる検証
         <subGoals>
             <ul>
                 <li var="evidenceGoal"/>
@@ -160,28 +162,30 @@
         </subGoals>
     </def>
 
-    <!-- shorthand notation (expanded by preprocessor):
+    <!-- 略記（前処理で展開される）:
          <tag var="x"/>
-         expands to
+         は
          <tag><var name="x"/></tag>
+         に展開される
 
-         similarly:
+         同様に
          <def name="x" as="tag">...</def>
-         expands to
+         は
          <def name="x"><tag>...</tag></def>
+         に展開される
     -->
 
 
     <!-- ==============================
-         final value: the top-level Goal
+         最終的な値: トップレベルの Goal
          ============================== -->
 
     <Goal>
-        <description>X is secure</description>
-        <Context>certified under standard XXXX</Context>
-        <Context><get name="version"><var name="ubuntu"/></get></Context>
-        <Assumption>no zero-day attacks</Assumption>
-        <Strategy var="mainStrategy"/>
+        <description>システムXはセキュアである</description>
+        <Context>規格XXXXによる認証</Context>
+        <Context><get label="version"><var name="ubuntu"/></get></Context>
+        <Assumption>ゼロデイ攻撃はない</Assumption>
+        <supportedBy var="mainStrategy"/>
     </Goal>
 
 </PGSN>

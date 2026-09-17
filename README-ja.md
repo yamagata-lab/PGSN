@@ -1,10 +1,8 @@
-from pgsn import prettifyfrom pgsn import prettify
-
 # PGSN: Programmable Goal Structuring Notation
 
 アシュアランスケース生成のための関数型プログラミング環境
 
-[![Python](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/)  
+[![Python](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
@@ -13,7 +11,9 @@ from pgsn import prettifyfrom pgsn import prettify
 
 **PGSN** は、**Goal Structuring Notation (GSN)** に基づいて構造化されたアシュアランスケースを構築・変換するための、関数型プログラミング言語および実行環境です。従来のGSNが静的な図表を中心とするのに対し、PGSNは関数型およびオブジェクト指向の構文を用いて、GSN要素を動的かつ構造的に生成できます。
 
-PGSNは現在、**Pythonに埋め込まれたDSL（ドメイン特化言語）**として実装されていますが、今後は独立した実装も計画されています。
+**PGSN** には2つの実装があります。Python に埋め込まれた DSL と、`pgsn` コマンドで評価する XML 構文です。
+どちらか一方だけでアシュアランスケースを書き切れます。Python API の仕様は
+[README-ja-api.md](README-ja-api.md)、XML 構文の仕様は [README-ja-xml.md](README-ja-xml.md) にあります。
 
 ---
 
@@ -52,7 +52,7 @@ conda env create -f environment.yml -n PGSN
 ## コマンドラインインタープリター
 
 ```shell
-PGSN % pgsn doc examples/cli.py   
+PGSN % pgsn doc examples/cli.py
 Generating 'None' from 'examples/cli.py'
 Evaluating term 'main'...
 Goal: System is secure
@@ -63,7 +63,9 @@ Goal: System is secure
         └── Evidence: Fuzzing test succeeded
 
 Done.
-````
+```
+
+他のコマンドとオプションは `pgsn --help` を参照してください。
 
 ### XML import のための jail
 
@@ -104,10 +106,8 @@ print(pgsn.gsn_tree(term).show(stdout=False))
 ## 基本例
 
 ```python
-from pprint import pprint
-
 from pgsn.gsn import *
-from pgsn.dsl import python_value
+from pgsn.dsl import *
 
 g = goal(
     description="System is secure",
@@ -129,7 +129,7 @@ gsn_tree(g.fully_eval()).show()
 ```shell
 % python examples/gsn.py
 Goal: System is secure
-└── Strategy: Break into sub-goals    pyproject-build    python             python3            python3.1          python3.12-config  
+└── Strategy: Break into sub-goals
     ├── Goal: Input validated
     │   └── Evidence: Static analysis passed
     └── Goal: Output sanitized
@@ -148,7 +148,7 @@ Goal: System is secure
 from pgsn.dsl import *
 from pgsn.gsn import *
 
-# Define a reusable goal+evidence template
+# 再利用できる goal + evidence のテンプレートを定義
 mk_goal_with_evidence = lambda_abs_keywords(
     {"desc": variable("desc")},
     goal(
@@ -157,12 +157,12 @@ mk_goal_with_evidence = lambda_abs_keywords(
     )
 )
 
-# Apply the template to multiple goals
+# テンプレートを複数のゴールに適用
 g1 = mk_goal_with_evidence(desc="No hardcoded passwords")
 g2 = mk_goal_with_evidence(desc="Input sanitized")
 g3 = mk_goal_with_evidence(desc="Logging enabled")
 
-# Compose a top-level goal with a strategy
+# Strategy でトップレベルのゴールを組み立てる
 top = goal(
     description="System is secure",
     support=strategy(
@@ -212,7 +212,7 @@ GSNの各要素はクラスです。継承により拡張が可能です。
 from pgsn.dsl import *
 from pgsn.gsn import *
 
-# Define a custom subclass of Goal
+# Goal の派生クラスを定義
 CustomGoal = define_class(inherit=goal_class, name="GoalWithProject", attributes=["project"])
 
 g = instantiate(CustomGoal, description="Secure connection established",
@@ -253,10 +253,13 @@ gsn_tree(g.fully_eval()).show()
 
 ## アーキテクチャ
 
-| レイヤー     | コンポーネント            | 概要                                     |
-|--------------|--------------------|------------------------------------------|
-| コア         | `pgsn_term.py`     | ラムダ計算に基づくインタプリタ              |
-| DSL層        | `dsl.py`, `gsn.py` | GSN構成要素を定義するためのAPI群           |
+| レイヤー           | コンポーネント          | 概要                                       |
+|--------------------|------------------------|--------------------------------------------|
+| コア               | `pgsn_term.py`         | ラムダ計算に基づくインタプリタ             |
+| Python DSL         | `dsl.py`・`gsn.py`     | プログラムから GSN ノードを組み立てる      |
+| XML フロントエンド | `pgsn_xml.py`          | XML 構文をコアへコンパイル                 |
+| サンドボックス     | `jail.py`・`config.py` | import が届く範囲を封じ込める              |
+| CLI                | `cli.py`               | `pgsn doc`・`pgsn render`・`pgsn compile`  |
 
 ---
 
@@ -266,4 +269,3 @@ MITライセンス – 詳細は [LICENSE](LICENSE) をご覧ください。
 
 © 国立研究開発法人産業技術総合研究所 (AIST) 2023–2024  
 山形頼之 2025-
-```
