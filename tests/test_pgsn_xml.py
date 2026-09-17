@@ -533,6 +533,32 @@ def test_context_rejects_two_expressions(tmp_path):
         </PGSN>""", tmp_path)
 
 
+def test_context_and_assumption_on_a_strategy(tmp_path):
+    # A strategy carries contexts and assumptions of its own: GSN allows
+    # InContextOf from a strategy, and the constructor once bound them and
+    # dropped them without a word. Written on a strategy they have to reach
+    # the term, the same way they do on a goal.
+    result = run("""
+    <PGSN>
+        <Strategy>
+            <description>argue over each identified hazard</description>
+            <Context>hazard log rev 3</Context>
+            <Assumption>all hazards have been identified</Assumption>
+            <Goal>
+                <description>H1 is mitigated</description>
+                <undeveloped/>
+            </Goal>
+        </Strategy>
+    </PGSN>""", tmp_path)
+    assert gsn_type(result) == "Strategy"
+    ctx = result["contexts"][0]
+    assert gsn_type(ctx) == "Context"
+    assert ctx["description"] == "hazard log rev 3"
+    assm = result["assumptions"][0]
+    assert gsn_type(assm) == "Assumption"
+    assert assm["description"] == "all hazards have been identified"
+
+
 # ------------------------------------------------------------------ #
 # GSN: supportedBy variable reference
 # ------------------------------------------------------------------ #
