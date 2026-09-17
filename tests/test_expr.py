@@ -5,7 +5,7 @@ import xml.etree.ElementTree as ET
 import pytest
 
 import pgsn
-from pgsn.pgsn_xml import PGSNError, _preprocess
+from pgsn.pgsn_xml import PGSNError, _desugar
 
 
 def run(source: str, defs: str = ""):
@@ -21,7 +21,7 @@ def expr(source: str, defs: str = ""):
 def expanded(source: str) -> str:
     """The XML an <expr> stands for, after preprocessing."""
     root = ET.fromstring(f"<PGSN><expr>{source}</expr></PGSN>")
-    _preprocess(root)
+    _desugar(root)
     return ET.tostring(root[0], encoding="unicode")
 
 
