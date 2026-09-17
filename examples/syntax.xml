@@ -112,7 +112,7 @@
 
     <!-- attribute access -->
     <def name="ver">
-        <get label="version"><var name="ubuntu"/></get>
+        <get key="version"><var name="ubuntu"/></get>
     </def>
 
     <!-- method invocation: call method m on ubuntu -->
@@ -201,7 +201,7 @@
     <Goal>
         <description>X is secure</description>
         <Context>certified under standard XXXX</Context>
-        <Context><get label="version"><var name="ubuntu"/></get></Context>
+        <Context><get key="version"><var name="ubuntu"/></get></Context>
         <Assumption>no zero-day attacks</Assumption>
         <supportedBy var="mainStrategy"/>
     </Goal>

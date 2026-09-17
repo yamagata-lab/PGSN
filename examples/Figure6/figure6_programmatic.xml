@@ -52,8 +52,8 @@
   <def name="makeHazardGoal" as="template">
     <param name="h" positional="true"/>
     <Goal>
-      <description><get label="claim" of="h"/></description>
-      <Evidence><get label="evidence" of="h"/></Evidence>
+      <description><get key="claim" of="h"/></description>
+      <Evidence><get key="evidence" of="h"/></Evidence>
     </Goal>
   </def>
 

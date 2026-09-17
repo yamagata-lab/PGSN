@@ -122,7 +122,7 @@ XML では `<` をエスケープする必要があります。`i &lt; n` と書
 
 この規則は Python の識別子と同じで、これは意図的なものです。[式](#式expr)は Python のパーサーで解析されるため、式に書けない名前を許すと、その名前は式から参照できなくなってしまいます。
 
-レコードのラベルは別の名前空間で、制限はありません。`<get>` の `label`、`<send>` の `method`、`<attribute>` の `name`、`<dt>` の `key` は任意の文字列です。`<class>` の `name` も同じで、これはクラスが何と呼ばれるかであって、何かが参照する名前ではありません。
+レコードのラベルは別の名前空間で、制限はありません。`<get>` と `<dt>` の `key`、`<send>` の `method`、`<attribute>` の `name` は任意の文字列です。`<class>` の `name` も同じで、これはクラスが何と呼ばれるかであって、何かが参照する名前ではありません。
 
 ### 条件分岐（if・cases）
 
@@ -237,7 +237,7 @@ XML では `<` をエスケープする必要があります。`i &lt; n` と書
 
 ```xml
 <def name="lib"><from file="security.pgsn"/></def>
-<get label="secureGoal" of="lib"/>
+<get key="secureGoal" of="lib"/>
 ```
 
 import の時点で名前を選び出すのは上の形式の役目なので、2つの綴りは混ざりません。値として使う `<from>` は `import` を取らず、束縛として使う `<from>` は `import` を必要とします。
@@ -317,7 +317,7 @@ import が jail に入ると、その jail が import 先モジュールの封�
 <def name="myGoal" as="Goal">...</def>
 ```
 
-`<def name="x" as="T">C</def>` と `<def name="x"><T>C</T></def>` は同じ文書の書き分けです。この属性は `<def>` 専用ではありません。コンテンツを持つ要素であればどこでも、`as` はそのコンテンツを包む要素の名前になります。例外は `<from>` と `<import>` で、そこでの `as` は取り込む名前の別名を指定します。その位置で有効なタグ名であれば何でも指定できます（`object` でも `ul` でも `Goal` でも）。唯一の制限は、要素自身が属性を必要とするタグを指定できないことです——`var` は `name`、`get` は `label`、`send` は `method`、名前付きの `class` は `name` が要ります。`as` が動かすのはコンテンツだけで、属性は元の場所に残るからです。
+`<def name="x" as="T">C</def>` と `<def name="x"><T>C</T></def>` は同じ文書の書き分けです。この属性は `<def>` 専用ではありません。コンテンツを持つ要素であればどこでも、`as` はそのコンテンツを包む要素の名前になります。例外は `<from>` と `<import>` で、そこでの `as` は取り込む名前の別名を指定します。その位置で有効なタグ名であれば何でも指定できます（`object` でも `ul` でも `Goal` でも）。唯一の制限は、要素自身が属性を必要とするタグを指定できないことです——`var` は `name`、`get` は `key`、`send` は `method`、名前付きの `class` は `name` が要ります。`as` が動かすのはコンテンツだけで、属性は元の場所に残るからです。
 
 ### `typeOf` 属性
 
@@ -533,18 +533,18 @@ import が jail に入ると、その jail が import 先モジュールの封�
 
 ### キーアクセス（get）
 
-`get` はレコードとオブジェクトの両方に使えます。`label` 属性でキー名を指定し、`of` 属性で変数レシーバーを略記できます。ラベルを読むこととは、レシーバーにそのラベルを適用することなので、下の3つはまったく同じものです。
+`get` はレコードとオブジェクトの両方に使えます。`key` 属性でラベル名を指定し、`of` 属性で変数レシーバーを略記できます。ラベルを読むこととは、レシーバーにそのラベルを適用することなので、下の3つはまったく同じものです。
 
 ```xml
-<!-- 略記: label= でキー名、of= でレシーバー変数を指定 -->
-<get label="description" of="my_goal"/>
+<!-- 略記: key= でラベル名、of= でレシーバー変数を指定 -->
+<get key="description" of="my_goal"/>
 
 <!-- レシーバーが複雑な式の場合は子要素に書く -->
-<get label="description"><apply template="getGoal"><arg>G1</arg></apply></get>
+<get key="description"><apply template="getGoal"><arg>G1</arg></apply></get>
 
 <!-- Record のキーアクセス（以下3つは等価） -->
-<get label="x" of="my_record"/>
-<get label="x"><var name="my_record"/></get>
+<get key="x" of="my_record"/>
+<get key="x"><var name="my_record"/></get>
 <apply><var name="my_record"/><arg>x</arg></apply>
 ```
 
@@ -653,7 +653,7 @@ GSN ノードはどれも説明（description）から始まり、どれも `Def
 <!-- Context: 議論が成立する文脈。値として任意の式を置ける -->
 <Context>テキストによる説明</Context>
 <Context var="someObject"/>          <!-- 変数参照 -->
-<Context><get label="version" of="release"/></Context>  <!-- 式 -->
+<Context><get key="version" of="release"/></Context>  <!-- 式 -->
 
 <!-- Assumption: 議論が置く仮定。Context と同様、値として任意の式を置ける -->
 <Assumption>ゼロデイ攻撃はない</Assumption>

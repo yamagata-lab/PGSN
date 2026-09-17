@@ -119,7 +119,7 @@ def test_a_module_can_be_bound_and_selected_from(project):
     result = pgsn.python_value(pgsn.load_xml(project(
         '<def name="lib"><from file="lib.xml">'
         '<arg name="prefix">p</arg></from></def>'
-        '<get label="b" of="lib"/>')))
+        '<get key="b" of="lib"/>')))
     assert result == "p b"
 
 
@@ -129,15 +129,15 @@ def test_a_bound_module_is_an_ordinary_value(project):
         '<def name="lib"><from file="lib.xml">'
         '<arg name="prefix">p</arg></from></def>'
         '<def name="pick" as="template"><param name="m" positional="true"/>'
-        '<get label="c" of="m"/></def>'
-        '<ul><li><get label="a" of="lib"/></li>'
+        '<get key="c" of="m"/></def>'
+        '<ul><li><get key="a" of="lib"/></li>'
         '<li><apply><var name="pick"/><arg var="lib"/></apply></li></ul>')))
     assert result == ["p a", "p c"]
 
 
 def test_selecting_from_a_module_needs_no_binding_at_all(project):
     result = pgsn.python_value(pgsn.load_xml(project(
-        '<get label="a"><from file="lib.xml">'
+        '<get key="a"><from file="lib.xml">'
         '<arg name="prefix">p</arg></from></get>')))
     assert result == "p a"
 

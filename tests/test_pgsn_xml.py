@@ -207,7 +207,7 @@ def test_class_object_get(tmp_path):
                 <attribute name="label">test_label</attribute>
             </object>
         </def>
-        <get label="label" of="obj"/>
+        <get key="label" of="obj"/>
     </PGSN>""", tmp_path)
     assert result == "test_label"
 
@@ -233,7 +233,7 @@ def test_class_inheritance(tmp_path):
                 <attribute name="y">py</attribute>
             </object>
         </def>
-        <get label="y" of="obj"/>
+        <get key="y" of="obj"/>
     </PGSN>""", tmp_path)
     assert result == "py"
 
@@ -280,7 +280,7 @@ def test_type_of_is_structural(tmp_path):
                 <attribute name="owner">QA</attribute>
             </object>
         </def>
-        <get label="owner" of="n"/>
+        <get key="owner" of="n"/>
     </PGSN>""", tmp_path)
     assert result == "QA"
 
@@ -322,6 +322,20 @@ def test_the_old_instance_of_spelling_is_rejected(source, tmp_path):
     disappear with it.
     """
     with pytest.raises(PGSNError, match="typeOf"):
+        run(f"<PGSN>{source}</PGSN>", tmp_path)
+
+
+@pytest.mark.parametrize("source", [
+    '<def name="r" as="dl"><dt key="a"/><dd>v</dd></def><get label="a" of="r"/>',
+    '<def name="r" as="dl"><dt key="a"/><dd>v</dd></def>'
+    '<get label="a"><var name="r"/></get>',
+])
+def test_the_old_get_label_spelling_is_rejected(source, tmp_path):
+    """A record label is spelled `key` wherever one is written. The old
+    spelling would otherwise be ignored as an unknown attribute, and the
+    element would fail for want of a `key` without saying it was renamed.
+    """
+    with pytest.raises(PGSNError, match="key"):
         run(f"<PGSN>{source}</PGSN>", tmp_path)
 
 
@@ -1030,7 +1044,7 @@ def test_send_method_to(tmp_path):
         <def name="Greeter" as="class">
             <attribute name="greeting"/>
             <method name="greet">
-                <get label="greeting" of="self"/>
+                <get key="greeting" of="self"/>
             </method>
         </def>
         <def name="g" as="object">
@@ -1049,7 +1063,7 @@ def test_send_method_without_to(tmp_path):
         <def name="Greeter" as="class">
             <attribute name="greeting"/>
             <method name="greet">
-                <get label="greeting" of="self"/>
+                <get key="greeting" of="self"/>
             </method>
         </def>
         <def name="g" as="object">
@@ -1071,7 +1085,7 @@ def test_send_method_to_equiv_without_to(tmp_path):
         <def name="Wrapper" as="class">
             <attribute name="val"/>
             <method name="unwrap">
-                <get label="val" of="self"/>
+                <get key="val" of="self"/>
             </method>
         </def>
         <def name="w" as="object">

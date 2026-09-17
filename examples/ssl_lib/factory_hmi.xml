@@ -15,8 +15,8 @@
   <from file="ssl_lib.xml" import="componentGoal" as="sslGoal"/>
 
   <!-- Communication security, reused verbatim from ssl_lib (IEC 62443 SR 4.1) -->
-  <def name="G_cmdInterception"><get label="eavesdropping" of="sslGoal"/></def>
-  <def name="G_ctrllerSpoof"><get label="certificate_spoofing" of="sslGoal"/></def>
+  <def name="G_cmdInterception"><get key="eavesdropping" of="sslGoal"/></def>
+  <def name="G_ctrllerSpoof"><get key="certificate_spoofing" of="sslGoal"/></def>
 
   <!-- Factory-specific goals, not covered by any imported component -->
   <def name="G_authControl" as="Goal">

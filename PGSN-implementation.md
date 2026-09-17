@@ -312,7 +312,7 @@ What separates the two passes is how much each is allowed to know about the
 element in front of it. Desugaring knows nothing: every rule reads an
 attribute and rewrites whatever element carries it. The compilers know one
 element each, which is why deep syntax can still carry the attributes that
-belong to a single element — `template` on `<apply>`, `label` and `of` on
+belong to a single element — `template` on `<apply>`, `key` and `of` on
 `<get>`, `method` and `to` on `<send>`. Those are not shorthand, and nothing
 before their own element's compiler touches them.
 
@@ -322,6 +322,7 @@ elements the specific ones had already restructured, and the result was an
 asymmetry with no rule behind it. `<apply template="f" var="x"/>` was
 rejected, because rewriting `template` had already inserted a child and the
 `var` rule refused to expand beside one, while `<get label="k" var="r"/>` —
+`label` being the spelling of what is now `key` —
 the same combination, on an element whose rewriting happened to rename an
 attribute rather than add a child — quietly worked. Ordering the passes
 removes the question rather than answering it: a shorthand now expands to
@@ -395,6 +396,35 @@ example through the validator for that reason, and to keep the schema from
 drifting again: it had drifted badly, four of the twenty-six documents
 validating when the test was written.
 
+### 4.5 A record label is spelled `key`
+
+A record label is a string in a namespace of its own, and it used to be written
+differently in almost every element that takes one: `key` on `<dt>`, `label` on
+`<get>`, `name` on `<attribute>`, `method` on `<send>`, the text of a `<dt>`, or
+a string value passed to the record itself. Six spellings for one concept leave
+no rule to remember, so the wrong guess is the normal case — and the wrong guess
+used to fail without naming the attribute it was about.
+
+`key` is now the spelling wherever a record label is written as such: `<dt key=>`
+builds an entry and `<get key=>` reads it back, so a label is read with the word
+it was written with. `name` keeps the other job, which is to name a thing:
+bindings (`<def>`, `<param>`, `<var>`, `<arg>`), the class's own name, and the
+members a class declares (`<attribute name=>`, `<method name=>`). A declaration
+names a member the way a lambda names a parameter; the selection that reads it
+back indexes a record, and indexes carry `key`. `method` stays on `<send>`
+because `<send>` is not selection: it is selection followed by application, and
+`<send method="m" to="obj"><arg>…</arg></send>` is the same term as
+`<apply><get key="m" of="obj"/><arg>…</arg></apply>`.
+
+Selecting a field remains an application of the record to a string, so a
+computed label needs nothing new — it is written as that application. The
+attribute holds a literal, which is why it is an attribute and not a value
+position.
+
+The old spelling is rejected by name rather than ignored: an unknown
+attribute would be dropped in silence and the element would then fail for want
+of a `key`, without saying that anything had been renamed.
+
 ## 5. GSN classes
 
 GSN v3 has no Defeater element. In the standard a defeater is an ordinary goal
@@ -451,12 +481,6 @@ they produce, since they are material rather than specification.
 
 ## 7. Open questions
 
-- A record label can be spelled six ways (`key`, `name`, `label`, `method`, the
-  text of a `<dt>`, a string value). Narrowing `name` to identifiers and `label`
-  to record labels is a breaking change, so it waits for 0.1.0. `name` on
-  `<class>` is a third use again — neither an identifier nor a record label,
-  but what the class is called — and would need a spelling of its own under
-  that rule.
 - Typing is structural, so a type is satisfied by any class that carries its
   labels, and a `Goal` satisfies `Evidence`. Whether a nominal check is wanted
   as well — "this node is a Goal, not merely goal-shaped" — is open. A class

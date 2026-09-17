@@ -112,7 +112,7 @@
 
     <!-- 属性アクセス -->
     <def name="ver">
-        <get label="version"><var name="ubuntu"/></get>
+        <get key="version"><var name="ubuntu"/></get>
     </def>
 
     <!-- メソッド呼び出し: ubuntu のメソッド m を呼ぶ -->
@@ -201,7 +201,7 @@
     <Goal>
         <description>システムXはセキュアである</description>
         <Context>規格XXXXによる認証</Context>
-        <Context><get label="version"><var name="ubuntu"/></get></Context>
+        <Context><get key="version"><var name="ubuntu"/></get></Context>
         <Assumption>ゼロデイ攻撃はない</Assumption>
         <supportedBy var="mainStrategy"/>
     </Goal>

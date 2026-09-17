@@ -11,10 +11,10 @@
   <from file="db_driver.xml" import="componentGoal" as="dbGoal"/>
 
   <!-- Hazard-level goals, taken straight out of the component records -->
-  <def name="G_eavesdrop"><get label="eavesdropping" of="sslGoal"/></def>
-  <def name="G_certSpoof"><get label="certificate_spoofing" of="sslGoal"/></def>
-  <def name="G_sqlInject"><get label="sql_injection" of="dbGoal"/></def>
-  <def name="G_unauthAccess"><get label="unauthorized_access" of="dbGoal"/></def>
+  <def name="G_eavesdrop"><get key="eavesdropping" of="sslGoal"/></def>
+  <def name="G_certSpoof"><get key="certificate_spoofing" of="sslGoal"/></def>
+  <def name="G_sqlInject"><get key="sql_injection" of="dbGoal"/></def>
+  <def name="G_unauthAccess"><get key="unauthorized_access" of="dbGoal"/></def>
 
   <!-- SOUP compliance (IEC 62304 §8), pulled from the same records -->
   <def name="soupGoal" as="Goal">
@@ -22,10 +22,10 @@
     <Strategy>
       Argument over each SOUP component
       <Goal>ssl_lib SOUP evaluation complete
-        <supportedBy><get label="soup_evaluation" of="sslGoal"/></supportedBy>
+        <supportedBy><get key="soup_evaluation" of="sslGoal"/></supportedBy>
       </Goal>
       <Goal>db_driver SOUP evaluation complete
-        <supportedBy><get label="soup_evaluation" of="dbGoal"/></supportedBy>
+        <supportedBy><get key="soup_evaluation" of="dbGoal"/></supportedBy>
       </Goal>
     </Strategy>
   </def>
