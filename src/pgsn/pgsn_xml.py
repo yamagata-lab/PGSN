@@ -131,23 +131,31 @@ class _Chroot:
 
 
 # ------------------------------------------------------------------ #
-# Shorthand preprocessor
+# How a document becomes a term
 #
-# Expands shorthands in place on the ElementTree, before compilation,
-# so the compiler proper never sees them:
-#   1. def-as:          <def as="T">..</def>         ->  <def><T>..</T></def>
-#   2. var-attribute:   <tag var="x"/>               ->  <tag><var name="x"/></tag>
-#   2b. expr-attribute: <tag expr="1 + 2"/>          ->  <tag><expr>1 + 2</expr></tag>
-#   3. GSN text:        <Goal>txt<Strategy/>          ->  <Goal><description>txt</description><Strategy/>
-#   4. apply template:  <apply template="f">...</apply>
-#                                                    ->  <apply><var name="f"/>...</apply>
-#   5. get label/of:    <get label="x" of="obj"/>    ->  <get name="x"><var name="obj"/></get>
-#   6. send method/to:  <send method="m" to="obj">   ->  <send name="m"><var name="obj"/>...
-#                       (label/method are user-facing; name= is internal)
+# Compilation is four passes, and what separates them is how much each one is
+# allowed to know about the element in front of it:
+#
+#   1. surface syntax   the document as written                (_check_source)
+#   2. desugaring       var=, expr=, as=, <if>, <cases>             (_desugar)
+#   3. deep syntax      the same document with no shorthand left in it.
+#                       Element-specific attributes -- <apply template=>,
+#                       <get label= of=>, <send method= to=> -- are not
+#                       shorthand and survive this far
+#   4. terms            the compilers below read deep syntax     (_expr, _e_*)
+#
+# The rules in pass 2 are element-agnostic: each reads an attribute and
+# rewrites the element carrying it, whatever element that is. `<tag var="x"/>`
+# means `<tag><var name="x"/></tag>` for every tag, with no exception to
+# remember and none to get wrong. An element-specific attribute is left alone
+# until pass 4, where that element's own compiler maps it onto a term.
+#
+# The order is what keeps the two kinds from interfering. When they were
+# interleaved -- expand `expr=`, rewrite `<apply template=>`, expand `var=` --
+# the generic rules met elements the specific ones had already restructured,
+# and `<apply template="f" var="x"/>` was rejected by a rule that the longhand
+# it stands for never met.
 # ------------------------------------------------------------------ #
-
-_GSN_HEADER_TAGS = {"Goal", "Strategy", "Evidence", "Context", "Assumption",
-                    "Defeater"}
 
 # Tags that attach a defeater to the node holding them.
 _DEFEATER_TAGS = {"Defeater"}
@@ -177,8 +185,9 @@ _MODULE_VAR = _RESERVED_PREFIX + "module"
 
 # Attributes holding the name of a *variable*, by element. `var` is shorthand
 # for a <var> child and is accepted on any element, so it is checked
-# everywhere. Record labels — <get name=>, <attribute name=>, <dt key=>,
-# <send name=> — are a separate namespace and are deliberately not reserved.
+# everywhere. Record labels — <get label=>, <attribute name=>, <dt key=>,
+# <send method=> — are a separate namespace and are deliberately not
+# reserved.
 _NAME_ATTRS: dict[str, tuple[str, ...]] = {
     "def":    ("name", "typeOf"),
     "param":  ("name",),
@@ -204,16 +213,53 @@ def _name_error(name: str, where: str = "") -> PGSNError:
     return PGSNError(f"{name!r} is not a valid name{where}: {reason}.")
 
 
+def _check_source(elem: ET.Element) -> None:
+    """Check the document as written, before any of it is rewritten.
+
+    Both checks below are only possible here. Whether a name is reserved is a
+    question about how the document spells it, and desugaring introduces
+    reserved names on purpose; a retired attribute is recognisable only where
+    its author put it, and an attribute no pass reads is dropped without a
+    word.
+    """
+    _check_names(elem)
+    _check_retired(elem)
+    for child in elem:
+        _check_source(child)
+
+
 def _check_names(elem: ET.Element) -> None:
-    """Reject invalid or reserved names anywhere in a source document."""
+    """Reject invalid or reserved names on one element."""
     for attr in ("var",) + _NAME_ATTRS.get(elem.tag, ()):
         value = elem.get(attr)
         if value is None:
             continue
         if value.startswith(_RESERVED_PREFIX) or not value.isidentifier():
             raise _name_error(value, f' in <{elem.tag} {attr}="{value}">')
-    for child in elem:
-        _check_names(child)
+
+
+def _check_retired(elem: ET.Element) -> None:
+    """Reject spellings that no longer mean what they once did."""
+    # The `instanceOf` attribute became `typeOf` when the check stopped
+    # walking the inheritance chain and started comparing attribute and method
+    # names. Saying so is worth a few lines: an unknown attribute is otherwise
+    # ignored, so a document carrying the old spelling would lose its check
+    # without a word.
+    if "instanceOf" in elem.attrib:
+        raise PGSNError(
+            f"<{elem.tag} instanceOf=...>: the attribute is now spelled "
+            f"'typeOf', and asks whether the value carries at least the "
+            f"attributes and methods the type declares, rather than where its "
+            f"class came from. The <instanceOf> child of <object> names the "
+            f"class to instantiate and keeps its name.")
+
+    # A parameter is bound by a lambda, so a guard on it would have to be
+    # planted in the body. The attribute did nothing at all before; say so
+    # rather than ignoring it a second time.
+    if elem.tag == "param" and "typeOf" in elem.attrib:
+        raise PGSNError(
+            "<param typeOf=...>: a parameter cannot carry a type. Check the "
+            "value where it is used, with <var name=\"...\" typeOf=\"...\"/>.")
 
 
 # ------------------------------------------------------------------ #
@@ -527,116 +573,78 @@ def _replace_with(elem: ET.Element, replacement: ET.Element) -> None:
     elem[:] = list(replacement)
 
 
-def _preprocess(elem: ET.Element) -> None:
-    """Recursively expand shorthand notations in place."""
-    # The `instanceOf` attribute became `typeOf` when the check stopped
-    # walking the inheritance chain and started comparing attribute and method
-    # names. Saying so is worth a few lines: an unknown attribute is otherwise
-    # ignored, so a document carrying the old spelling would lose its check
-    # without a word.
-    if "instanceOf" in elem.attrib:
-        raise PGSNError(
-            f"<{elem.tag} instanceOf=...>: the attribute is now spelled "
-            f"'typeOf', and asks whether the value carries at least the "
-            f"attributes and methods the type declares, rather than where its "
-            f"class came from. The <instanceOf> child of <object> names the "
-            f"class to instantiate and keeps its name.")
+def _desugar(elem: ET.Element) -> None:
+    """Expand the element-agnostic shorthands, in place, everywhere.
 
-    # A parameter is bound by a lambda, so a guard on it would have to be
-    # planted in the body. The attribute did nothing at all before; say so
-    # rather than ignoring it a second time.
-    if elem.tag == "param" and "typeOf" in elem.attrib:
-        raise PGSNError(
-            "<param typeOf=...>: a parameter cannot carry a type. Check the "
-            "value where it is used, with <var name=\"...\" typeOf=\"...\"/>.")
-
-    # expr: replace with the XML it stands for, before anything else looks at
-    # it. The expansion contains no shorthands, so it needs no further passes.
+    Every rule here rewrites the element that carries it without asking what
+    element it is. Nothing element-specific belongs in this pass: see the note
+    at the head of the file.
+    """
+    # <expr> becomes the XML it stands for. That expansion holds no shorthand
+    # of its own, so the recursion stops here.
     if elem.tag == "expr":
         _expand_expr(elem)
         return
 
-    # Conditionals are rewritten into an application of the builtin, and the
-    # result is preprocessed like any other element.
+    # A conditional becomes an application of the builtin, which is then
+    # desugared like any other element: its branches may hold more shorthand.
     if elem.tag == "if":
         _expand_if(elem)
     elif elem.tag == "cases":
         _expand_cases(elem)
 
-    # expr-attribute: <tag expr="1 + 2"/> -> <tag><expr>1 + 2</expr></tag>
-    # The <expr> this leaves behind is expanded when the recursion below
-    # reaches it, so the two spellings go through the same code.
-    if "expr" in elem.attrib:
-        if len(elem) > 0 or (elem.text and elem.text.strip()):
-            raise PGSNError(
-                f"<{elem.tag}> has both an 'expr' attribute and content of "
-                f"its own; the attribute is shorthand for the content.")
-        source = elem.attrib.pop("expr")
-        expr_elem = ET.SubElement(elem, "expr")
-        expr_elem.text = source
+    # The attribute shorthands. Each says in an attribute what the element's
+    # content would otherwise say. `expr=` leaves an <expr> behind for the
+    # recursion below, so both spellings of an expression share one expansion.
+    _expand_expr_attribute(elem)
+    _expand_as_attribute(elem)
+    _expand_var_attribute(elem)
 
-    # def-as: wrap the def body in an element named by the `as` attribute
-    if elem.tag == "def" and "as" in elem.attrib:
-        tag = elem.attrib.pop("as")
-        wrapper = ET.Element(tag)
-        # Move def's text and children into the wrapper
-        wrapper.text = elem.text
-        elem.text = None
-        for child in list(elem):
-            elem.remove(child)
-            wrapper.append(child)
-        elem.append(wrapper)
-
-    # apply template="f": insert <var name="f"/> as the first child
-    if elem.tag == "apply" and "template" in elem.attrib:
-        name = elem.attrib.pop("template")
-        var_elem = ET.Element("var")
-        var_elem.set("name", name)
-        elem.insert(0, var_elem)
-
-    # get label="x" of="obj": rename label->name, insert <var name="obj"/> as child
-    if elem.tag == "get" and "label" in elem.attrib:
-        label = elem.attrib.pop("label")
-        elem.set("name", label)
-        if "of" in elem.attrib:
-            receiver = elem.attrib.pop("of")
-            var_elem = ET.Element("var")
-            var_elem.set("name", receiver)
-            elem.insert(0, var_elem)
-
-    # send method="m" to="obj": rename method->name, insert <var name="obj"/> first
-    if elem.tag == "send" and "method" in elem.attrib:
-        method = elem.attrib.pop("method")
-        elem.set("name", method)
-        if "to" in elem.attrib:
-            receiver = elem.attrib.pop("to")
-            var_elem = ET.Element("var")
-            var_elem.set("name", receiver)
-            elem.insert(0, var_elem)
-
-    # var-attribute: <tag var="x"/> -> <tag><var name="x"/></tag>
-    # (skip apply and send which handle var-like attrs above)
-    if "var" in elem.attrib:
-        if len(elem) > 0:
-            raise PGSNError(
-                f"<{elem.tag}> has both a 'var' attribute and child elements")
-        name = elem.attrib.pop("var")
-        var_elem = ET.SubElement(elem, "var")
-        var_elem.set("name", name)
-
-    # GSN leading text -> <description>: only for GSN header elements that
-    # have other children (so the text is the header's description, not the
-    # element's whole value). A text-only GSN element keeps its text as-is.
-    if (elem.tag in _GSN_HEADER_TAGS and elem.find("description") is None
-            and elem.text and elem.text.strip() and len(elem) > 0):
-        desc = ET.Element("description")
-        desc.text = elem.text.strip()
-        elem.text = None
-        elem.insert(0, desc)
-
-    # Recurse into children (after potential restructuring above)
     for child in elem:
-        _preprocess(child)
+        _desugar(child)
+
+
+def _reject_own_content(elem: ET.Element, attr: str) -> None:
+    """A shorthand attribute stands for content, so it cannot sit beside it."""
+    if len(elem) or (elem.text and elem.text.strip()):
+        article = "an" if attr.startswith(("a", "e", "i", "o", "u")) else "a"
+        raise PGSNError(
+            f"<{elem.tag}> has both {article} {attr!r} attribute and content "
+            f"of its own; the attribute is shorthand for the content.")
+
+
+def _expand_expr_attribute(elem: ET.Element) -> None:
+    """<tag expr="1 + 2"/> -> <tag><expr>1 + 2</expr></tag>"""
+    if "expr" not in elem.attrib:
+        return
+    _reject_own_content(elem, "expr")
+    ET.SubElement(elem, "expr").text = elem.attrib.pop("expr")
+
+
+def _expand_var_attribute(elem: ET.Element) -> None:
+    """<tag var="x"/> -> <tag><var name="x"/></tag>"""
+    if "var" not in elem.attrib:
+        return
+    _reject_own_content(elem, "var")
+    ET.SubElement(elem, "var").set("name", elem.attrib.pop("var"))
+
+
+# `as` renames an imported name on <from> and <import>. Everywhere else it
+# names an element to wrap the content in, which is what lets a <def> hold a
+# list or a record without a nesting level whose only job is to be there.
+_AS_RENAMES = {"from", "import"}
+
+
+def _expand_as_attribute(elem: ET.Element) -> None:
+    """<tag as="dl">..</tag> -> <tag><dl>..</dl></tag>"""
+    if elem.tag in _AS_RENAMES or "as" not in elem.attrib:
+        return
+    wrapper = ET.Element(elem.attrib.pop("as"))
+    wrapper.text, elem.text = elem.text, None
+    for child in list(elem):
+        elem.remove(child)
+        wrapper.append(child)
+    elem.append(wrapper)
 
 
 # Builtins substituted inline during compilation (not at evaluation time).
@@ -769,16 +777,23 @@ def _thread_lets(bindings: list[tuple[str, Term]],
 
 
 def _split_args(arg_elems: list[ET.Element], chroot: _Chroot,
-                visiting: frozenset[Path]) -> tuple[list, dict]:
+                visiting: frozenset[Path], owner: str) -> tuple[list, dict]:
     """
     Collect <arg> children into positional and keyword groups.
     Positional args (no name) must precede keyword args, as in Python.
     Application itself is delegated to Term.__call__.
+
+    Anything that is not an <arg> is an error rather than something to skip.
+    Desugaring expands `var` and `expr` into a child of their own, so skipping
+    would turn `<apply template="f" var="x"/>` into an application of `f` to
+    nothing at all.
     """
     positional, keyword = [], {}
     for a in arg_elems:
         if a.tag != "arg":
-            continue
+            raise PGSNError(
+                f"<{owner}> takes its arguments as <arg> children, "
+                f"found <{a.tag}>")
         name = a.get("name")
         if name is None:
             if keyword:
@@ -839,8 +854,8 @@ def _compile_root(root: ET.Element, chroot: _Chroot,
     """
     if root.tag != "PGSN":
         raise PGSNError(f"Expected <PGSN>, got <{root.tag}>")
-    _check_names(root)
-    _preprocess(root)
+    _check_source(root)
+    _desugar(root)
     children = list(root)
     # The final value may be a bare text node (no child elements)
     if not children:
@@ -934,8 +949,8 @@ def _module_record(elem: ET.Element, chroot: _Chroot,
     root = ET.parse(full).getroot()
     if root.tag != "PGSNModule":
         raise PGSNError(f"Expected <PGSNModule> in {file_path!r}")
-    _check_names(root)
-    _preprocess(root)
+    _check_source(root)
+    _desugar(root)
 
     module_term = _compile_module(root, inner, visiting | {full})
 
@@ -950,7 +965,7 @@ def _e_from(elem: ET.Element, chroot: _Chroot,
     """`<from>` in a value position is the module's record.
 
         <def name="lib"><from file="lib.xml"/></def>
-        <get name="secureGoal" of="lib"/>
+        <get label="secureGoal" of="lib"/>
 
     A module is therefore an ordinary value: it can be bound, passed to a
     template, or held in a list, like anything else. Selecting names out of it
@@ -1155,13 +1170,23 @@ def _e_template(elem: ET.Element, chroot: _Chroot,
 
 def _e_apply(elem: ET.Element, chroot: _Chroot,
              visiting: frozenset[Path]) -> Term:
+    """An application. The function is `template=`, or else the first child.
+
+    An empty argument list is not an error. Application is binary, so applying
+    a function to nothing is the function: `<apply template="f"/>` is `f`.
+    """
     children = list(elem)
-    if not children:
+    template = elem.get("template")
+    if template is not None:
+        func = _resolve(template)
+    elif children:
+        func = _expr(children[0], chroot, visiting)
+        children = children[1:]
+    else:
         raise PGSNError("<apply> needs a function")
-    func = _expr(children[0], chroot, visiting)
-    positional, keyword = _split_args(children[1:], chroot, visiting)
+    positional, keyword = _split_args(children, chroot, visiting, "apply")
     if not positional and not keyword:
-        raise PGSNError("<apply> needs at least one <arg>")
+        return func
     # Delegate to Term.__call__: it casts args and builds the keyword Record
     return func(*positional, **keyword)
 
@@ -1205,21 +1230,54 @@ def _e_object(elem: ET.Element, chroot: _Chroot,
 
 def _e_get(elem: ET.Element, chroot: _Chroot,
            visiting: frozenset[Path]) -> Term:
-    return _content(elem, chroot, visiting)(string(elem.get("name")))
+    """Read a label off a record. The receiver is `of=`, or else the content.
+
+    A record label is not a name in the sense the reserved-name check means:
+    it is a string the record was built with, so it is spelled `label` and
+    left out of the check.
+    """
+    label = elem.get("label")
+    if label is None:
+        raise PGSNError(
+            "<get> needs a 'label' naming the field to read, as in "
+            '<get label="description" of="node"/>')
+    receiver = elem.get("of")
+    if receiver is None:
+        return _content(elem, chroot, visiting)(string(label))
+    if len(elem) or (elem.text and elem.text.strip()):
+        raise PGSNError(
+            "<get> has both an 'of' attribute and a receiver of its own; "
+            "the attribute is shorthand for the receiver.")
+    return _resolve(receiver)(string(label))
 
 
 def _e_send(elem: ET.Element, chroot: _Chroot,
             visiting: frozenset[Path]) -> Term:
+    """Call a method. The receiver is `to=`, or else the first child.
+
+    receiver("methodName") triggers PGSNObject._apply_arg, which applies self
+    (the receiver) to the method value before returning it. A method called
+    without arguments is that value.
+    """
+    method = elem.get("method")
+    if method is None:
+        raise PGSNError(
+            "<send> needs a 'method' naming the method to call, as in "
+            '<send method="greet" to="obj"/>')
     children = list(elem)
-    if not children:
+    receiver_name = elem.get("to")
+    if receiver_name is not None:
+        receiver = _resolve(receiver_name)
+    elif children:
+        receiver = _expr(children[0], chroot, visiting)
+        children = children[1:]
+    else:
         raise PGSNError("<send> needs a receiver")
-    # receiver("methodName") triggers PGSNObject._apply_arg which automatically
-    # applies self (the receiver) to the method value before returning it.
-    method = _expr(children[0], chroot, visiting)(string(elem.get("name")))
-    positional, keyword = _split_args(children[1:], chroot, visiting)
+    bound = receiver(string(method))
+    positional, keyword = _split_args(children, chroot, visiting, "send")
     if not positional and not keyword:
-        return method
-    return method(*positional, **keyword)
+        return bound
+    return bound(*positional, **keyword)
 
 
 def _e_div(elem: ET.Element, chroot: _Chroot,
@@ -1347,6 +1405,10 @@ def _e_annotation(elem: ET.Element, chroot: _Chroot, visiting: frozenset[Path],
                 f"it holds a single statement, so give it only one")
         desc = _content(desc_elem, chroot, visiting)
     elif other:
+        if elem.text and elem.text.strip():
+            raise PGSNError(
+                f"<{elem.tag}> carries both text and <{other[0].tag}>; "
+                f"it holds a single statement, so give it only one")
         if len(other) > 1:
             raise PGSNError(
                 f"<{elem.tag}> holds a single statement, but was given "

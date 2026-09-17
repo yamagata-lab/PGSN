@@ -137,7 +137,7 @@ def test_a_bound_module_is_an_ordinary_value(project):
 
 def test_selecting_from_a_module_needs_no_binding_at_all(project):
     result = pgsn.python_value(pgsn.load_xml(project(
-        '<get name="a"><from file="lib.xml">'
+        '<get label="a"><from file="lib.xml">'
         '<arg name="prefix">p</arg></from></get>')))
     assert result == "p a"
 

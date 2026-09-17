@@ -288,6 +288,39 @@ one element. A shorthand that works in a single place is a rule to remember; a
 shorthand that works everywhere a value is expected rides on a rule that
 already exists.
 
+### 4.1 Desugaring is a pass of its own
+
+That promise is kept by the order of the passes, not only by the rules. A
+document becomes a term in four steps: the surface syntax as written, a
+desugaring pass, the deep syntax that pass leaves behind, and the terms the
+deep syntax compiles to. Desugaring knows no element — every rule reads an
+attribute and rewrites whatever element carries it. The attributes that do
+belong to one element — `template` on `<apply>`, `label` and `of` on `<get>`,
+`method` and `to` on `<send>` — are not shorthand at all: they survive
+desugaring untouched and are read by that element's own compiler.
+
+The two kinds used to be interleaved: expand `expr=`, rewrite the
+element-specific attributes, expand `var=`. The generic rules then met
+elements the specific ones had already restructured, and the result was an
+asymmetry with no rule behind it. `<apply template="f" var="x"/>` was
+rejected, because rewriting `template` had already inserted a child and the
+`var` rule refused to expand beside one, while `<get label="k" var="r"/>` —
+the same combination, on an element whose rewriting happened to rename an
+attribute rather than add a child — quietly worked. Ordering the passes
+removes the question rather than answering it: a shorthand now expands to
+exactly the longhand it stands for, on every element, and the two spellings
+are judged by the same compiler afterwards. Where that expansion is not
+meaningful, the error comes from the element's compiler and says the same
+thing for both spellings.
+
+Two consequences are worth recording. An `<apply>` with no arguments is the
+function itself rather than an error: application is binary, so an empty
+argument list applies nothing, and `<apply template="f"/>` is another way of
+writing `<var name="f"/>`. And anything that is not an `<arg>` in an argument
+list is now an error where it used to be skipped — skipping is precisely what
+would turn `<apply template="f" var="x"/>` into an application of `f` to
+nothing at all.
+
 ## 5. GSN classes
 
 GSN v3 has no Defeater element. In the standard a defeater is an ordinary goal

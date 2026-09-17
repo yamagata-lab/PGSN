@@ -317,7 +317,7 @@ import が jail に入ると、その jail が import 先モジュールの封�
 <def name="myGoal" as="Goal">...</def>
 ```
 
-`<def name="x" as="T">C</def>` は純粋に構文上の展開です。前処理が `<def name="x"><T>C</T></def>` に書き換えてからコンパイルします。その位置で有効なタグ名であれば何でも使えます——`object` を使ったユーザー定義クラスのインスタンス化タグも含みます。唯一の制限は、`var`・`get`・`send` のように要素自身が必須属性（`name`）を持つタグで、脱糖形が必須属性を欠いて不正になるため使えません。
+`<def name="x" as="T">C</def>` は純粋に構文上の展開です。前処理が `<def name="x"><T>C</T></def>` に書き換えてからコンパイルします。この属性は `<def>` 専用ではありません。コンテンツを持つ要素であればどこでも、`as` はそのコンテンツを包む要素の名前になります。例外は `<from>` と `<import>` で、そこでの `as` は取り込む名前の別名を指定します。その位置で有効なタグ名であれば何でも使えます——`object` を使ったユーザー定義クラスのインスタンス化タグも含みます。唯一の制限は、要素自身が必須属性を持つタグ（`var` は `name`、`get` は `label`、`send` は `method`）で、脱糖形が必須属性を欠いて不正になるため使えません。
 
 ### `typeOf` 属性
 
@@ -486,6 +486,8 @@ import が jail に入ると、その jail が import 先モジュールの封�
 </apply>
 ```
 
+適用は2項なので、`<arg>` がひとつも無い `<apply>` は何も適用せず、関数そのものになります。`<apply template="f"/>` と `<var name="f"/>` は同じ式です。
+
 ---
 
 ## クラスとオブジェクト
@@ -542,7 +544,7 @@ import が jail に入ると、その jail が import 先モジュールの封�
 <get label="description" of="my_goal"/>
 
 <!-- レシーバーが複雑な式の場合は子要素に書く -->
-<get label="description"><apply template="getGoal"/></get>
+<get label="description"><apply template="getGoal"><arg>G1</arg></apply></get>
 
 <!-- Record のキーアクセス（以下3つは等価） -->
 <get label="x" of="my_record"/>
@@ -602,7 +604,7 @@ import が jail に入ると、その jail が import 先モジュールの封�
 ### テキスト内のフォーマット文字列
 
 テキストを置ける場所では、`{name}` という記法でスコープ内の変数を埋め込めます。
-前処理により `format_string` の適用へ展開されます。波括弧自体を書きたい場合は `{{` `}}` でエスケープします。
+`format_string` の適用になります。波括弧自体を書きたい場合は `{{` `}}` でエスケープします。
 
 ```xml
 <template>
@@ -613,7 +615,7 @@ import が jail に入ると、その jail が import 先モジュールの封�
 
 ### GSN の地テキストとして description を記述する
 
-GSN ヘッダー要素（`Goal`・`Strategy`・`Evidence`・`Context`・`Assumption`）では、先頭の地テキストが自動的に `description` として扱われます。子要素（`<Strategy>` など）と共存する場合、前処理により `<description>` 要素へ持ち上げられます。`{name}` 展開もここで使えます。
+GSN ヘッダー要素（`Goal`・`Strategy`・`Evidence`・`Context`・`Assumption`）では、先頭の地テキストが自動的に `description` として扱われます。子要素（`<Strategy>` など）と共存する場合も同じで、`<description>` 要素に書いても同じことを表します。`{name}` 展開もここで使えます。
 
 ```xml
 <!-- この2つは等価です -->
@@ -685,7 +687,7 @@ Goal・Strategy・Evidence はすべて共通のヘッダ構造を持ちます�
 ```
 
 > **補足: サブゴールの並記は糖衣構文です**
-> Goal の直下に `<Goal>` を複数並べる書き方は、前処理により `immediate`（サブゴールを束ねる特殊な Strategy）でラップされます。
+> Goal の直下に `<Goal>` を複数並べる書き方は、`immediate`（サブゴールを束ねる特殊な Strategy）でラップされます。
 > PGSN のコアでは Goal の支持（support）は Strategy か Evidence のいずれかでなければなりません。
 > 実行時に計算したゴールのリストを支持にしたい場合は、`immediate` を明示的に適用して Strategy 化します。
 >

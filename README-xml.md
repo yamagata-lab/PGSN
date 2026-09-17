@@ -319,7 +319,7 @@ This is also expanded by the preprocessor before compilation.
 <def name="myGoal" as="Goal">...</def>
 ```
 
-`<def name="x" as="T">C</def>` is purely syntactic: the preprocessor rewrites it to `<def name="x"><T>C</T></def>` before compilation. Any tag name that is valid in that position can be used — including user-defined class instantiation tags like `object`. The only restriction is that tags requiring a mandatory attribute of their own (such as `var`, `get`, and `send`, which require `name=`) cannot be used, because the desugared form would be missing that attribute.
+`<def name="x" as="T">C</def>` is purely syntactic: the preprocessor rewrites it to `<def name="x"><T>C</T></def>` before compilation. The attribute is not tied to `<def>`: wherever an element holds content, `as` names an element to wrap that content in. `<from>` and `<import>` are the exception, because `as` renames an imported name there. Any tag name that is valid in that position can be used — including user-defined class instantiation tags like `object`. The only restriction is that tags requiring a mandatory attribute of their own (`var` requires `name`, `get` requires `label`, `send` requires `method`) cannot be used, because the desugared form would be missing that attribute.
 
 ### `typeOf` Attribute
 
@@ -490,6 +490,8 @@ When the function is a named variable, the `template` attribute provides a short
 </apply>
 ```
 
+Application is binary, so an `<apply>` with no `<arg>` applies nothing and is the function itself: `<apply template="f"/>` and `<var name="f"/>` are the same expression.
+
 ---
 
 ## Classes and Objects
@@ -549,7 +551,7 @@ When the function is a named variable, the `template` attribute provides a short
 <get label="description" of="my_goal"/>
 
 <!-- when the receiver is a complex expression, use a child element -->
-<get label="description"><apply template="getGoal"/></get>
+<get label="description"><apply template="getGoal"><arg>G1</arg></apply></get>
 
 <!-- Record key access — all three forms are equivalent -->
 <get label="x" of="my_record"/>
@@ -609,7 +611,7 @@ Keys can be arbitrary expressions or string literals via the `key` attribute.
 ### Format Strings in Text
 
 Wherever text is allowed, you can embed in-scope variables with the `{name}` notation.
-This is expanded by the preprocessor into a `format_string` application. To write a literal brace, escape it as `{{` or `}}`.
+This becomes a `format_string` application. To write a literal brace, escape it as `{{` or `}}`.
 
 ```xml
 <template>
@@ -620,7 +622,7 @@ This is expanded by the preprocessor into a `format_string` application. To writ
 
 ### GSN Leading Text as Description
 
-For GSN header elements (`Goal`, `Strategy`, `Evidence`, `Context`, `Assumption`), leading plain text is automatically treated as the `description`. When the element also has child elements (such as a nested `<Strategy>`), the text is lifted into a `<description>` element by the preprocessor. `{name}` expansion applies here too.
+For GSN header elements (`Goal`, `Strategy`, `Evidence`, `Context`, `Assumption`), leading plain text is automatically treated as the `description`. It is the description whether or not the element also has child elements (such as a nested `<Strategy>`), and writing a `<description>` element says the same thing. `{name}` expansion applies here too.
 
 ```xml
 <!-- these two forms are equivalent -->
@@ -694,7 +696,7 @@ Goal, Strategy, and Evidence all share the same header structure.
 ```
 
 > **Note: writing sub-goals directly is sugar**
-> Listing several `<Goal>` elements directly under a Goal is expanded by the preprocessor into a wrap by `immediate` (a special Strategy that bundles sub-goals).
+> Listing several `<Goal>` elements directly under a Goal is a wrap by `immediate` (a special Strategy that bundles sub-goals).
 > In the PGSN core, a Goal's support must be either a Strategy or Evidence.
 > To support a Goal with a list of goals computed at runtime, apply `immediate` explicitly to turn it into a Strategy.
 >
