@@ -110,7 +110,7 @@ Each constructor takes keyword arguments and returns a term.
 | Constructor | Arguments |
 |-------------|-----------|
 | `goal` | `description`, `support`, `contexts` (default empty), `assumptions` (default empty), `defeaters` (default empty) |
-| `strategy` | `description`, `sub_goals`, `defeaters` (default empty) |
+| `strategy` | `description`, `sub_goals`, `contexts` (default empty), `assumptions` (default empty), `defeaters` (default empty) |
 | `evidence` | `description`, `defeaters` (default empty) |
 | `context` | `description` |
 | `assumption` | `description` |
@@ -118,7 +118,9 @@ Each constructor takes keyword arguments and returns a term.
 
 `support` has no default: an unsupported goal is written explicitly with `support=pgsn.undeveloped`.
 
-`defeaters` is the dialectic extension of GSN v3: a defeater records a doubt about the node holding it rather than support for it. Every node type accepts one, and a defeater is itself a node, so challenges nest. The standard has no Defeater element — there a defeater is a Goal or Solution joined to its target by a Challenges relationship — but a term language has no edges to carry that relationship, so PGSN makes the challenging role a class. One class covers both rebutting and undercutting defeaters: fill in `support` for a defeater that argues its case, leave it out for one that merely states an objection.
+`contexts` and `assumptions` belong to a goal and to a strategy, which are the two the standard attaches them to. Evidence takes neither.
+
+`defeaters` is the dialectic extension of GSN v3: a defeater records a doubt about the node holding it rather than support for it. Every node type accepts one, and a defeater is itself a node, so challenges nest. The standard has no Defeater element — there a defeater is a Goal or Solution joined to its target by a Challenges relationship — but a language of values has no edges to carry that relationship, so PGSN makes the challenging role a class. One class covers both rebutting and undercutting defeaters: fill in `support` for a defeater that argues its case, leave it out for one that merely states an objection.
 
 Two helpers cover common shapes:
 
@@ -160,13 +162,20 @@ The class values behind the constructors are `gsn_class`, `goal_class`, `strateg
 
 ```python
 my_goal_class = pgsn.define_class(
+    name="OwnedGoal",
     inherit=pgsn.goal_class,
     attributes=pgsn.list_term((pgsn.string("owner"),)),
 )
 ```
 
+`name` is what the class is called, and an object is reported under it — the
+`__ClassName__` key below. It is a label and nothing compares it, but a class
+whose instances you mean to read back needs one, since there would otherwise
+be nothing to report them as. It is not inherited.
+
 `type_of` returns the class of an object and `is_subtype` compares two classes,
-so a value is checked against a type like this:
+so a value is checked against a type like this, `node` being a term you have
+built:
 
 ```python
 pgsn.is_subtype(pgsn.type_of(node))(pgsn.goal_class).fully_eval().value
@@ -177,8 +186,8 @@ two classes declare, and `inherit` plays no part. A class of your own
 satisfies `evidence_class` by carrying `description` and `defeaters`, and a
 goal satisfies it too, since it declares those and more. There is no predicate
 that asks which class a value belongs to — `is_instance` and `is_subclass`
-were removed, because class equality was structural and two copies of one
-class compared unequal once evaluation had reduced them to different degrees.
+were removed, because two copies of one class could not be relied on to
+compare equal, so the answer depended on where the copies came from.
 To ask where a class came from, read the inheritance chain off the object:
 
 ```python
@@ -207,9 +216,9 @@ Evaluate first; these functions expect an evaluated term.
 
 ### `python_value(term, with_inherit_chain=False)`
 
-Converts a term to plain Python data — `dict`, `list`, `str`, `int`, `bool`. Object nodes carry a `__ClassName__` marker key, so an evaluated goal comes back with the keys `description`, `support`, `contexts`, `assumptions` and `__Goal__`. Pass `with_inherit_chain=True` to also get `__parent_classes__`.
+Converts a term to plain Python data — `dict`, `list`, `str`, `int`, `bool`. Object nodes carry a `__ClassName__` marker key, so an evaluated goal comes back with the keys `description`, `support`, `contexts`, `assumptions`, `defeaters` and `__Goal__`. Pass `with_inherit_chain=True` to also get `__parent_classes__`.
 
-Raises `ValueError` if the term is not fully evaluated; the message names the path to the offending node, which is the fastest way to find a stuck sub-term.
+Raises `ValueError` if the term is not fully evaluated; the message names the path to the offending node, which is the fastest way to find a stuck sub-term. It raises as well for an object whose class has no name, there being no marker key to give it.
 
 ### `gsn_tree(term)`
 

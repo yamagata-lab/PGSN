@@ -103,7 +103,7 @@ This is what makes a missing record key visible where it occurs. A lookup that
 cannot proceed reaches a fold as the list being folded; the guard `equal list
 empty` cannot proceed either; and the fold now stops. The same holds for a
 recursion the author writes themselves, through `<if>` and a recursive binding,
-because `<if>` expands to an application of this same term (§4). Measured on
+because `<if>` expands to an application of this same term (§4.1). Measured on
 such a recursion, guarded by a comparison against a stuck term: 86 s to exhaust
 the Python stack, reporting only that the stack was exhausted, against 0.2 s to
 a stuck term reported at `<root>.description`.
@@ -194,6 +194,14 @@ a machine can implement it; the other was changed so that it no longer asks:
   classifies nodes by the names it finds there, but that is a readback
   facility rather than a rule of the language.
 
+  That readback is what a class's name is for. A class carries the name its
+  author gave it — `<class name="...">`, or `define_class(name=...)` — and an
+  object is reported under it. The name is not inherited, nothing in the
+  language compares one class's name with another's, and `is_subtype` does not
+  look at it, so it is a label and not an identity. An object whose class has
+  no name cannot be converted at all, since there is nothing to report it as:
+  a limit of the readback rather than a claim about the value.
+
   One caveat for whoever implements `equal`: it accepts classes today, since
   it declines only applications and abstractions, so the comparison that was
   removed is one builtin away from returning.
@@ -225,6 +233,8 @@ surrounding document has bound `plus` to. Each builtin is therefore bound under
 two names: its own, which a document may rebind like any other, and a reserved
 alias, which it may not, because names beginning with an underscore are
 rejected in source documents. Desugaring goes through the reserved alias.
+The check that rejects such names therefore has to run on the document as
+written, before desugaring has introduced any of its own (§4.2).
 
 Which alias belongs to which builtin is an implementation detail and is
 deliberately absent from the documentation, this file included. What the
@@ -270,7 +280,9 @@ compiled term however many names are taken from it. Rebinding that reserved
 name for the next `<from>` in the same block is harmless, because each
 projection reads the binding nearest to it.
 
-## 4. Conditionals and shorthands
+## 4. Surface syntax
+
+### 4.1 Conditionals
 
 `<if>` and `<cases>` are expanded before compilation into an application of
 `if_then_else`, reached through its reserved alias, so rebinding
@@ -283,23 +295,28 @@ term simply cannot proceed when no case matches — but a term that cannot
 proceed surfaces far from the mistake, and no author means "none of these, and
 nothing else either".
 
+### 4.2 Shorthands
+
 `expr=` and `var=` are accepted wherever a value is expected, rather than on
 one element. A shorthand that works in a single place is a rule to remember; a
 shorthand that works everywhere a value is expected rides on a rule that
 already exists.
 
-### 4.1 Desugaring is a pass of its own
-
 That promise is kept by the order of the passes, not only by the rules. A
-document becomes a term in four steps: the surface syntax as written, a
-desugaring pass, the deep syntax that pass leaves behind, and the terms the
-deep syntax compiles to. Desugaring knows no element — every rule reads an
-attribute and rewrites whatever element carries it. The attributes that do
-belong to one element — `template` on `<apply>`, `label` and `of` on `<get>`,
-`method` and `to` on `<send>` — are not shorthand at all: they survive
-desugaring untouched and are read by that element's own compiler.
+document becomes a term in four stages, alternating between a form the
+document takes and a pass over it: the surface syntax as written; desugaring;
+the deep syntax that pass leaves behind; and the compilers that read deep
+syntax and build terms.
 
-The two kinds used to be interleaved: expand `expr=`, rewrite the
+What separates the two passes is how much each is allowed to know about the
+element in front of it. Desugaring knows nothing: every rule reads an
+attribute and rewrites whatever element carries it. The compilers know one
+element each, which is why deep syntax can still carry the attributes that
+belong to a single element — `template` on `<apply>`, `label` and `of` on
+`<get>`, `method` and `to` on `<send>`. Those are not shorthand, and nothing
+before their own element's compiler touches them.
+
+The two kinds of rule used to be interleaved: expand `expr=`, rewrite the
 element-specific attributes, expand `var=`. The generic rules then met
 elements the specific ones had already restructured, and the result was an
 asymmetry with no rule behind it. `<apply template="f" var="x"/>` was
@@ -321,6 +338,63 @@ list is now an error where it used to be skipped — skipping is precisely what
 would turn `<apply template="f" var="x"/>` into an application of `f` to
 nothing at all.
 
+### 4.3 Content is a sequence of items
+
+Bare text is a string, and that holds wherever a value is expected. Making it
+hold everywhere took a content model rather than a rule: the content of an
+element is a sequence of items in document order — each child element, and
+each run of text between them.
+
+The sequence is what matters, because a value written after a binding is not
+the text of the element. XML puts it in the *tail* of the binding, so
+
+```xml
+<div><def name="x"><num>1</num></def>hello</div>
+```
+
+has no text on `<div>` at all: `hello` hangs off `<def>`. Every reader that
+asked for `elem.text` therefore missed exactly the values that follow a
+binding — which is where a block's value always is. Reading content in one
+place, as a sequence, removes the class of mistake rather than its instances:
+a block is its bindings and then its last item, an application is its first
+item and then its arguments, and each item is a child element or a run of
+text, indifferently.
+
+The positions this settled were the value of `<PGSN>` and of `<div>` after a
+binding, a `<div>` holding nothing but text, the body of a `<template>` or a
+`<method>` after its parameters, and the function of an `<apply>` and the
+receiver of a `<send>`. Applying a string is stuck rather than useful, but
+the document now means what it says, and the stuck term is reported with the
+position it came to rest at.
+
+### 4.4 The schema describes the surface syntax
+
+`PGSN.rng` is asked about the document an author wrote, shorthands and all, so
+it has to describe the surface form rather than what desugaring leaves behind.
+Two decisions follow.
+
+A shorthand attribute stands in place of the content it abbreviates, so it is
+written as a *choice* against that content rather than as an addition to it.
+The schema used to declare `template` on `<apply>`, `of` on `<get>` and `to`
+on `<send>` as optional attributes beside a required value — which is the
+mistake §4.2 describes, made a second time in another notation.
+
+`as` names an element to wrap the content in, so what follows it is that
+element's content model. Each element's content is therefore a named pattern
+that the element and `as` both refer to. What RELAX NG cannot say is which
+element `as` named, because a schema cannot branch on an attribute's value. So
+the `as` branch is the choice of every content model, and each is still
+checked internally: a document may write a `<dl>`'s content under `as="ul"`
+and the schema will not object, though the compiler will.
+
+Validating is worth the trouble because it catches what evaluating cannot. The
+compiler ignores a child element it does not recognise, so a `<Defeater>`
+spelled `<Rebuttal>` yields a document with one defeater fewer and no
+complaint, while the schema rejects it. `tests/test_schema.py` runs every
+example through the validator for that reason, and to keep the schema from
+drifting again: it had drifted badly, four of the twenty-six documents
+validating when the test was written.
+
 ## 5. GSN classes
 
 GSN v3 has no Defeater element. In the standard a defeater is an ordinary goal
@@ -333,6 +407,15 @@ one in the code and in the READMEs.
 One class is enough. A defeater that argues its case fills in `support`; one
 that only raises an objection leaves it undeveloped. Separate rebuttal and
 undercutter classes were tried and removed.
+
+A Context or an Assumption attaches to a Goal or a Strategy in the standard,
+and to nothing else. Only `goal_class` declared them, so the ones written on a
+strategy were read and then dropped, silently: `examples/Figure6` is the
+standard's Figure 6, where an assumption hangs off the strategy, and it was
+losing that assumption and a context besides. `strategy_class` declares them
+now. `evidence_class` does not, because the standard attaches nothing to a
+Solution, and `PGSN.rng` rejects one written there — the compiler has nowhere
+to put it and would say nothing.
 
 ## 6. Measurements
 
@@ -355,26 +438,42 @@ The count of reduction steps is not a measure of work: a step reduces one redex
 in an application, but advances every element of a list and every field of a
 record. SolarWinds completes in 487 steps at the root.
 
-Thunked branches (§1.3) change no output and cost no measurable time: the
-fifteen entry points under `examples/` produce byte-identical documents before
-and after, and the slowest of them, SolarWinds, takes 0.84 s against 0.85 s.
-What they change is the stuck case. A fold over a term that cannot proceed ran
-for 81 s before exhausting the Python stack; it now stops at once.
+Thunked branches (§1.3) change no output and cost no measurable time: every
+entry point under `examples/` produced a byte-identical document before and
+after, and the slowest of them, SolarWinds, took 0.84 s against 0.85 s. What
+they change is the stuck case. A fold over a term that cannot proceed ran for
+81 s before exhausting the Python stack; it now stops at once.
+
+Where the examples stand now: the nineteen entry points under `examples/`
+evaluate in 0.96 s altogether, 0.70 s of which is SolarWinds. The test suite
+evaluates every one of them (`tests/test_examples.py`) without fixing what
+they produce, since they are material rather than specification.
 
 ## 7. Open questions
 
-- `PGSN.rng` has fallen behind the language: it does not model the shorthands
-  expanded before compilation, and `<classdef>` is not in its vocabulary. Only
-  4 of the 35 documents under `examples/` and `xml/` validate against it. A
-  test that validates every example would keep it from drifting again.
 - A record label can be spelled six ways (`key`, `name`, `label`, `method`, the
   text of a `<dt>`, a string value). Narrowing `name` to identifiers and `label`
-  to record labels is a breaking change, so it waits for 0.1.0.
+  to record labels is a breaking change, so it waits for 0.1.0. `name` on
+  `<class>` is a third use again — neither an identifier nor a record label,
+  but what the class is called — and would need a spelling of its own under
+  that rule.
 - Typing is structural, so a type is satisfied by any class that carries its
   labels, and a `Goal` satisfies `Evidence`. Whether a nominal check is wanted
-  as well — "this node is a Goal, not merely goal-shaped" — is open. The
-  inheritance chain holds the answer, but only the readback can see it, and
-  class names are not unique across documents written apart from each other.
+  as well — "this node is a Goal, not merely goal-shaped" — is open. A class
+  carries the name its author gave it (§1.5), but that name is a label for
+  readback: nothing in the language compares one with another, and names given
+  in documents written apart from each other are not unique. The inheritance
+  chain holds the real answer, and only the readback can see it.
+- A GSN element's compiler picks out the children it knows by tag, so a child
+  it does not know is neither read nor refused: a `<Goal>` whose `<Defeater>`
+  is spelled `<Rebuttal>` compiles to a goal with one defeater fewer and says
+  nothing. `PGSN.rng` rejects it (§4.4), but validating is a separate step that
+  nobody is obliged to take. Validating before compiling would close the gap
+  where it opens, and would stop the tag sets the compilers filter on from
+  being the only thing that decides what a document may contain. It is also
+  what keeps `"builtin"` in `_VALUE_TAGS`: the element was removed and the
+  entry is stale, but it is the only reason `<builtin>` inside a GSN element is
+  an error rather than nothing at all.
 - GSN elements have no identifiers, which the standard requires, and which is
   also what keeps a Challenges relationship from being addressable.
 - A defeater's `support` says why the defeater holds, not why it defeats its

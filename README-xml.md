@@ -33,7 +33,7 @@ Accepts parameters from the caller. `<param>` must appear first.
 </PGSNModule>
 ```
 
-`import` and `def` elements may be freely interleaved within both forms.
+`<from>` and `<def>` elements may be freely interleaved in both forms.
 
 ---
 
@@ -71,7 +71,7 @@ Bare text is a string, so the other literal forms are written out.
 | `<num>3</num>` | an `Integer`. PGSN has no floating point numbers |
 | `<str> a {b} </str>` | a `String`, taken exactly as written: whitespace is kept and `{...}` is not interpolated |
 
-`<num>` matters because bare text stays a string even when it looks like a number, which is what lets a goal say `2024 audit passed` without the year turning into an integer. The arithmetic builtins only accept integers, so `<arg>3</arg>` gives them a string and leaves the term unreduced; write `<arg><num>3</num></arg>`.
+`<num>` matters because bare text stays a string even when it looks like a number, which is what lets a goal say `2024 audit passed` without the year turning into an integer. The arithmetic builtins only accept integers, so `<arg>3</arg>` hands them a string and the sum is never computed; write `<arg><num>3</num></arg>`.
 
 The builtins are ordinary bindings in the outermost scope, so `<var name="plus"/>` reaches the builtin unless something nearer binds that name.
 
@@ -84,7 +84,7 @@ Writing arithmetic with `<apply>` is heavy, so `<expr>` accepts the usual infix 
 <def name="label"><expr>f"component {i} of {total}"</expr></def>
 ```
 
-`<expr>` is a shorthand and nothing more. It is expanded before compilation begins into an application of the corresponding builtin, so nothing is reachable through an expression that is not reachable without one.
+`<expr>` is a shorthand and nothing more: every expression stands for an application of the corresponding builtin, so nothing is reachable through an expression that is not reachable without one.
 
 **What may appear in an expression**
 
@@ -112,7 +112,7 @@ Everything else is rejected with an error naming what was found. There are no fu
 
 `//` is integer division: `7 // 2` is `3`. `/` is rejected rather than treated as a synonym, so that it stays available for true division if PGSN ever gains a floating point type.
 
-Ordering compares integers only. `"a" < "b"` does not reduce; equality, however, works on any value, so `"a" == "a"` is `True`.
+Ordering compares integers only, so `"a" < "b"` has no value. Equality works on any value, so `"a" == "a"` is `True`.
 
 **Operators cannot be redefined.** `1 + 2` is addition even inside a scope that binds the name `plus`.
 
@@ -124,7 +124,7 @@ A name must begin with a letter and may continue with letters, digits and unders
 
 The rule is the same one Python uses for identifiers, and deliberately so: an [expression](#expressions-expr) is parsed by Python's parser, so a name that could not appear in an expression would be unreachable from one.
 
-Record labels are a different namespace and are unrestricted: `name` on `<get>` and `<send>`, `name` on `<attribute>`, and `key` on `<dt>` are arbitrary strings.
+Record labels are a different namespace and are unrestricted: `label` on `<get>`, `method` on `<send>`, `name` on `<attribute>` and `key` on `<dt>` are arbitrary strings. So is `name` on `<class>`, which is what the class is called rather than a name anything refers to.
 
 ### Conditionals (if, cases)
 
@@ -150,15 +150,15 @@ For a chain of conditions, `<cases>` takes the first `<case>` whose `<cond>` hol
 </cases>
 ```
 
-`<else>` is required here too. Without one, a `<cases>` that matched nothing would produce a term that simply gets stuck, and the mistake would surface far from where it was made.
+`<else>` is required here too. Without one, a `<cases>` that matched nothing would have no value to give, and the mistake would surface far from where it was made.
 
 Each of `<cond>`, `<then>` and `<else>` is a wrapper holding a value, so any of the ways of writing a value work inside one, including the `var` and `expr` shorthands.
 
-Both forms are shorthands, expanded before compilation into an application of the `if_then_else` builtin, and both reach it in a way no binding can intercept — `<if>` means a conditional even in a scope that binds the name `if_then_else`.
+Both forms stand for an application of the `if_then_else` builtin, and both reach it in a way no binding can intercept — `<if>` means a conditional even in a scope that binds the name `if_then_else`.
 
 ### Shorthand for Expressions
 
-Where an element's content is a single expression, the `expr` attribute says the same thing as an `<expr>` child. Like `var`, it is expanded by the preprocessor, so the two spellings are the same thing written two ways.
+Where an element's content is a single expression, the `expr` attribute says the same thing as an `<expr>` child. Like `var`, it is a shorthand: the two spellings are the same thing written two ways.
 
 ```xml
 <!-- full form -->
@@ -177,8 +177,9 @@ An element may not carry both the attribute and content of its own. Two details 
 
 ### Shorthand for Variable References
 
-When an element's content is a single variable reference, the `var` attribute can be used as shorthand.
-This is expanded by a preprocessor before evaluation.
+When an element's content is a single variable reference, the `var` attribute
+can be used as shorthand. The two spellings are the same thing written two
+ways.
 
 ```xml
 <!-- full form -->
@@ -308,8 +309,8 @@ The builtin names are bound the same way, in the outermost scope, so a document 
 
 ### `as` Attribute (Shorthand)
 
-The `as` attribute on `def` lets you omit the wrapping element type (tag name).
-This is also expanded by the preprocessor before compilation.
+`as` names the element to wrap the content in, so the wrapper need not be
+written out.
 
 ```xml
 <!-- full form -->
@@ -319,7 +320,7 @@ This is also expanded by the preprocessor before compilation.
 <def name="myGoal" as="Goal">...</def>
 ```
 
-`<def name="x" as="T">C</def>` is purely syntactic: the preprocessor rewrites it to `<def name="x"><T>C</T></def>` before compilation. The attribute is not tied to `<def>`: wherever an element holds content, `as` names an element to wrap that content in. `<from>` and `<import>` are the exception, because `as` renames an imported name there. Any tag name that is valid in that position can be used — including user-defined class instantiation tags like `object`. The only restriction is that tags requiring a mandatory attribute of their own (`var` requires `name`, `get` requires `label`, `send` requires `method`) cannot be used, because the desugared form would be missing that attribute.
+`<def name="x" as="T">C</def>` and `<def name="x"><T>C</T></def>` are the same document written two ways. The attribute is not tied to `<def>`: wherever an element holds content, `as` names an element to wrap that content in. `<from>` and `<import>` are the exception, because `as` renames an imported name there. Any tag that is valid in that position can be named, `object` and `ul` and `Goal` alike. The one restriction is that a tag requiring an attribute of its own cannot be named — `var` requires `name`, `get` requires `label`, `send` requires `method`, and a named `class` requires `name` — because `as` moves the content and leaves the attributes where they were.
 
 ### `typeOf` Attribute
 
@@ -339,11 +340,11 @@ least the attributes and methods the type declares. Where the class came from
 does not enter into it: a class of your own that carries `description` and
 `defeaters` satisfies `Evidence` without inheriting from it, and a `Goal`
 satisfies `Evidence` too, since it declares those labels and more. Nothing
-compares class *identities*, which is what makes the answer independent of
-how far evaluation has gone.
+compares class *identities*, which is what makes the answer the same whichever
+copy of a class is asked about.
 
-A check that fails does not raise. The guard behind it simply does not
-reduce, so the document stalls and the readback reports the path.
+A check that fails does not raise. The value simply does not pass, so the
+document has no value to give, and the error names the path it stopped at.
 
 `<param>` does not take `typeOf`: a parameter is bound by a lambda, and a
 guard on it would have to be planted in the body. Check the value where it is
@@ -371,18 +372,6 @@ Use `<def>` elements inside a `<div>` to scope definitions locally.
 </template>
 ```
 
-### Local Definitions (div)
-
-Use `div` to scope definitions locally.
-
-```xml
-<div>
-    <def name="x">expr1</def>
-    <def name="y">expr2</def>
-    expr   <!-- the value of the div -->
-</div>
-```
-
 ---
 
 ## Variables (var)
@@ -398,7 +387,7 @@ References a previously defined name.
 
 ### Built-ins
 
-The following names are predefined; reference them with `<var name="..."/>` and apply them via `apply`. They are exactly the term-valued names exported by the `pgsn` Python package, so anything usable from Python is usable here under the same name.
+The following names are predefined; reference them with `<var name="..."/>` and apply them via `apply`. They are exactly the values the `pgsn` Python package exports, so anything usable from Python is usable here under the same name.
 
 - List operations: `cons`, `head`, `tail`, `index`, `concat`, `map_term`, `fold`, `foldr`, `list_all`, `empty`
 - Booleans: `true`, `false`, `if_then_else`, `boolean_and`, `boolean_or`, `boolean_not`, `equal`, `less_than`, `guard`
@@ -499,7 +488,7 @@ Application is binary, so an `<apply>` with no `<arg>` applies nothing and is th
 ### Class Definition (class)
 
 ```xml
-<class>
+<class name="ClassName">                  <!-- what the class is called (optional) -->
     <!-- inherit accepts any expression that evaluates to a class.
          var= is the common shorthand for a variable reference. -->
     <inherit var="ParentClass"/>          <!-- inheritance (optional) -->
@@ -515,23 +504,31 @@ Application is binary, so an `<apply>` with no `<arg>` applies nothing and is th
 </class>
 ```
 
-> **Note: PGSN has no class names.**
-> Classes are ordinary values; there is no registry of named classes.
+> **Note: a class's name is a label, not a way of referring to it.**
+> Classes are ordinary values and there is no registry to look a name up in:
 > `<inherit>` and `<instanceOf>` both accept **expressions that evaluate to a
 > class**, not string literals.
 > Writing `<inherit>SomeClass</inherit>` is a text node and becomes
 > `"SomeClass"` as a string value, which is not a class — use `<inherit var="someClass"/>`
 > (or any other expression) instead.
+> What `name=` gives the class is what it is *called*: it travels with the
+> value and is what an instance of the class is reported as, where the name a
+> `<def>` introduces is a name in a scope. Nothing compares the two, and
+> nothing compares one class's name with another's. A class may have none, but
+> then an instance of it cannot be converted to a value, since there is nothing
+> to report it as. The `as="class"` shorthand cannot carry attributes, so a
+> named class is written in the long form:
+> `<def name="C"><class name="C">…</class></def>`.
 
 > **Note: a type is not a class.**
 > `is_subtype` compares the attribute and method *names* two classes declare,
 > and `inherit` plays no part in it. So a class satisfies every type whose
 > labels it covers, related to it or not, and asking which class a value
 > belongs to has no answer — only asking what it carries does. The predicates
-> that did compare classes, `is_instance` and `is_subclass`, are gone: class
-> equality was structural, so two copies of one class compared unequal once
-> evaluation had reduced them to different degrees. `<instanceOf>` inside
-> `<object>` names the class to instantiate and is a different thing again.
+> that did compare classes, `is_instance` and `is_subclass`, are gone: two
+> copies of one class could not be relied on to compare equal, so the answer
+> depended on where the copies came from. `<instanceOf>` inside `<object>`
+> names the class to instantiate and is a different thing again.
 
 ### Object Instantiation (object)
 
@@ -544,7 +541,7 @@ Application is binary, so an `<apply>` with no `<arg>` applies nothing and is th
 
 ### Key Access (get)
 
-`get` works on both `Record` and `PGSNObject`. The `label` attribute names the key; `of` is a shorthand for a variable receiver. Internally it applies the receiver to the string key as a positional argument, so it is completely equivalent to an `apply` with a plain-text `arg`.
+`get` works on both a record and an object. The `label` attribute names the key and `of` is a shorthand for a variable receiver. Reading a label is applying the receiver to it, which is why the three forms below are one and the same.
 
 ```xml
 <!-- shorthand: label= names the key, of= names the receiver variable -->
@@ -595,16 +592,18 @@ When the receiver is a complex expression rather than a plain variable, omit `to
 </ol>
 ```
 
-`ul` and `ol` are structurally identical in XML, but use `ol` when order matters (e.g. a list passed to `map_term`).
+`ul` and `ol` build the same value; the difference is documentary. Use `ol` where the order carries meaning, such as a list passed to `map_term`.
 
 ### Dictionary (dl)
 
-Keys can be arbitrary expressions or string literals via the `key` attribute.
+A key is a string literal, written as the text of a `<dt>` or as its `key`
+attribute. It is a label rather than a value, so it is not an expression: a
+record whose labels are computed is built with `add_attribute` instead.
 
 ```xml
 <dl>
-    <dt>key_expr</dt><dd>value_expr</dd>   <!-- expression key -->
-    <dt key="name"/><dd>value_expr</dd>    <!-- string key -->
+    <dt>name</dt><dd>value_expr</dd>       <!-- key as text -->
+    <dt key="name"/><dd>value_expr</dd>    <!-- the same key -->
 </dl>
 ```
 
@@ -651,9 +650,11 @@ A header carrying more than one value child is an error; say which one is the de
 
 GSN nodes are first-class values in PGSN and can be extended through class inheritance.
 
-### Common Header (gsn_header)
+### Common Header
 
-Goal, Strategy, and Evidence all share the same header structure.
+Every GSN node opens with a description, and any node may be challenged by a
+`Defeater`. A `Goal` and a `Strategy` may also be annotated with `Context` and
+`Assumption` elements.
 
 ```xml
 <!-- description: either a description element or plain text -->
@@ -663,7 +664,7 @@ Goal, Strategy, and Evidence all share the same header structure.
      Accepts any expression as a value. -->
 <Context>textual description</Context>
 <Context var="someObject"/>                            <!-- variable reference -->
-<Context><get label="version">expr</get></Context>      <!-- expression -->
+<Context><get label="version" of="release"/></Context>  <!-- expression -->
 
 <!-- Assumption: an assumption the argument relies on.
      Like Context, accepts any expression as a value. -->
@@ -677,6 +678,12 @@ Goal, Strategy, and Evidence all share the same header structure.
 
 - `Context` describes the setting or subject matter in which the argument is made.
 - `Assumption` states an assumption the argument relies on.
+
+**Where they may appear.** A `Context` or an `Assumption` attaches to a `Goal`
+or to a `Strategy`, which are the two the standard allows — a strategy carries
+the assumption its reasoning depends on. `Evidence` takes neither, and neither
+does a `Defeater`. Writing one there is rejected by `PGSN.rng`; nothing in the
+document itself will say so.
 
 ### Goal
 
@@ -736,10 +743,12 @@ A set (`ul`) or list (`ol`) can be passed to `subGoals` to specify sub-goals dyn
 
 ### Evidence
 
+Evidence carries a description, and defeaters if its adequacy is challenged.
+
 ```xml
 <Evidence>
     <description>test result report</description>
-    <Context>description of the test environment</Context>
+    <Defeater>the report predates the last release</Defeater>
 </Evidence>
 ```
 
@@ -772,7 +781,7 @@ Defeaters attach to strategies and to evidence as well as to goals:
 
 The corresponding builtin is `defeater`, with the class value `defeater_class`. In a rendered graph a defeater is drawn as a hexagon with a broken outline, and the challenge is drawn with a dashed arrow, so that it does not read as SupportedBy.
 
-The standard has no Defeater element of its own: a defeater there is an ordinary Goal or Solution joined to its target by a Challenges relationship, and the literature's rebutting/undercutting distinction is read off the argument rather than off the notation. PGSN makes the challenging role a class instead, because a term language has no edges to carry a relationship. One class covers both kinds.
+The standard has no Defeater element of its own: a defeater there is an ordinary Goal or Solution joined to its target by a Challenges relationship, and the literature's rebutting/undercutting distinction is read off the argument rather than off the notation. PGSN makes the challenging role a class instead, because a language of values has no edges to carry a relationship. One class covers both kinds.
 
 ---
 
@@ -781,11 +790,16 @@ The standard has no Defeater element of its own: a defeater there is an ordinary
 GSN nodes can be extended through class inheritance.
 Instantiate the extended class with `<object>` (listing its attributes explicitly).
 
+The long form is used rather than `as="class"`, because a class that will be
+instantiated needs a name of its own and `as` cannot carry one.
+
 ```xml
 <!-- a class inheriting Goal, adding a URL attribute -->
-<def name="GoalWithURL" as="class">
-    <inherit var="Goal"/>
-    <attribute name="URL"/>
+<def name="GoalWithURL">
+    <class name="GoalWithURL">
+        <inherit var="Goal"/>
+        <attribute name="URL"/>
+    </class>
 </def>
 
 <!-- instantiation (object form) -->

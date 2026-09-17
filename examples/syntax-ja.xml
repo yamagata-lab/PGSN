@@ -1,5 +1,5 @@
 <?xml version="1.0" ?>
-<?xml-model href="../PGSN.rng" type="application/xml"?>
+<?xml-model href="../PGSN.rng" type="application/xml" schematypens="http://relaxng.org/ns/structure/1.0"?>
 <PGSN>
 
     <!-- ==============================
@@ -66,15 +66,34 @@
         </apply>
     </def>
 
+    <!-- 下のクラスが継承するクラス -->
+    <def name="klass">
+        <class name="klass">
+            <attribute name="attr0"/>
+        </class>
+    </def>
+
     <!-- クラス定義: klass を継承し、属性とメソッドを持つ -->
     <def name="ClassB">
-        <class>
+        <class name="ClassB">
             <inherit var="klass"/>
             <attribute name="attr1">C</attribute>
             <attribute name="attr2"/>
             <method name="m">
                 <param name="param1">expr</param>
                 <param name="param2"/>
+                expr
+            </method>
+        </class>
+    </def>
+
+    <!-- 下のオブジェクトが属するクラス -->
+    <def name="Ubuntu">
+        <class name="Ubuntu">
+            <attribute name="version"/>
+            <method name="m">
+                <param name="arg1"/>
+                <param name="arg2"/>
                 expr
             </method>
         </class>
@@ -113,7 +132,7 @@
         </div>
     </def>
 
-    <!-- データ型: 集合（順序なし） -->
+    <!-- データ型: <ul> で書いたリスト。要素名は文書上の区別 -->
     <def name="aSet">
         <ul>
             <li>item1</li>
@@ -121,7 +140,7 @@
         </ul>
     </def>
 
-    <!-- データ型: リスト（順序あり） -->
+    <!-- 同じ値を <ol> で書いたもの。順序が意味を持つ場合に使う -->
     <def name="aList">
         <ol>
             <li>item1</li>
@@ -139,7 +158,7 @@
 
     <!-- クラスの継承による GSN ノードの拡張 -->
     <def name="GoalWithURL">
-        <class>
+        <class name="GoalWithURL">
             <inherit var="Goal"/>
             <attribute name="URL"/>
         </class>
@@ -149,6 +168,13 @@
     <def name="evidenceGoal" as="Goal">
         <description>システムXはセキュアである</description>
         <Evidence>運用実績</Evidence>
+    </def>
+
+    <!-- G1 を取り込む import は上でコメントアウトしてあるので、
+         ここでゴールとして定義しておく -->
+    <def name="G1" as="Goal">
+        通信は暗号化されている
+        <Evidence>TLS 設定のレビュー</Evidence>
     </def>
 
     <!-- GSN: 変数経由でサブゴールを参照する Strategy -->
@@ -162,17 +188,9 @@
         </subGoals>
     </def>
 
-    <!-- 略記（前処理で展開される）:
-         <tag var="x"/>
-         は
-         <tag><var name="x"/></tag>
-         に展開される
-
-         同様に
-         <def name="x" as="tag">...</def>
-         は
-         <def name="x"><tag>...</tag></def>
-         に展開される
+    <!-- 略記。下の各組は同じ文書の書き分け:
+         <tag var="x"/>                 と  <tag><var name="x"/></tag>
+         <def name="x" as="tag">...</def>   <def name="x"><tag>...</tag></def>
     -->
 
 

@@ -1,7 +1,6 @@
 """PGSN XML compiler: purely syntactic mapping from XML to pgsn.dsl Terms.
 
 XML parsing builds a single Term; all evaluation is deferred to fully_eval().
-No shorthand expansion (var-attribute, def-as) in this implementation.
 Semantic errors surface as non-terminating reduction.
 """
 
@@ -776,7 +775,7 @@ def _thread_lets(bindings: list[tuple[str, Term]],
     return body
 
 
-def _split_args(arg_elems: list[ET.Element], chroot: _Chroot,
+def _split_args(items: list[ET.Element | str], chroot: _Chroot,
                 visiting: frozenset[Path], owner: str) -> tuple[list, dict]:
     """
     Collect <arg> children into positional and keyword groups.
@@ -789,7 +788,11 @@ def _split_args(arg_elems: list[ET.Element], chroot: _Chroot,
     nothing at all.
     """
     positional, keyword = [], {}
-    for a in arg_elems:
+    for a in items:
+        if isinstance(a, str):
+            raise PGSNError(
+                f"<{owner}> takes its arguments as <arg> children, "
+                f"found the text {a!r}")
         if a.tag != "arg":
             raise PGSNError(
                 f"<{owner}> takes its arguments as <arg> children, "
@@ -856,17 +859,8 @@ def _compile_root(root: ET.Element, chroot: _Chroot,
         raise PGSNError(f"Expected <PGSN>, got <{root.tag}>")
     _check_source(root)
     _desugar(root)
-    children = list(root)
-    # The final value may be a bare text node (no child elements)
-    if not children:
-        text = (root.text or "").strip()
-        if text:
-            return _builtin_scope(_text_to_term(text))
-        raise PGSNError("<PGSN> has no value")
     visiting = frozenset({entry}) if entry is not None else frozenset()
-    final = _expr(children[-1], chroot, visiting)
-    bindings = _bindings(children[:-1], chroot, visiting)
-    return _builtin_scope(_thread_lets(bindings, final))
+    return _builtin_scope(_block(_items(root), chroot, visiting, "PGSN"))
 
 
 def _compile_module(root: ET.Element, chroot: _Chroot,
@@ -875,23 +869,18 @@ def _compile_module(root: ET.Element, chroot: _Chroot,
     Compile <PGSNModule> to a keyword-lambda Term.
     When applied to a Record of args, yields a Record of exported names.
     """
-    children = list(root)
-    idx, params, defaults_dict = 0, [], {}
+    param_elems, items = _split_params(root)
+    params = [p.get("name") for p in param_elems]
+    defaults_dict = {p.get("name"): _content(p, chroot, visiting)
+                     for p in param_elems if _items(p)}
 
-    while idx < len(children) and children[idx].tag == "param":
-        p = children[idx]
-        name = p.get("name")
-        params.append(name)
-        if list(p) or (p.text and p.text.strip()):
-            defaults_dict[name] = _content(p, chroot, visiting)
-        idx += 1
-
-    body_children = children[idx:]
-    export_names = [c.get("name") for c in body_children if c.tag == "def"]
+    export_names = [i.get("name") for i in items
+                    if isinstance(i, ET.Element) and i.tag == "def"]
 
     # Module body: let-chain ending in a record of all exported names
     exports = record({n: variable(n) for n in export_names})
-    body = _thread_lets(_bindings(body_children, chroot, visiting), exports)
+    body = _thread_lets(
+        _bindings(items, chroot, visiting, "PGSNModule"), exports)
 
     arguments = {p: variable(p) for p in params}
     defaults_rec = record(defaults_dict) if defaults_dict else empty_record
@@ -906,16 +895,24 @@ def _compile_module(root: ET.Element, chroot: _Chroot,
 # Binding sequences  (def / from)
 # ------------------------------------------------------------------ #
 
-def _bindings(elems: list[ET.Element], chroot: _Chroot,
-              visiting: frozenset[Path]) -> list[tuple[str, Term]]:
+def _bindings(items: list[ET.Element | str], chroot: _Chroot,
+              visiting: frozenset[Path], owner: str) -> list[tuple[str, Term]]:
+    """The bindings a block opens with, in order."""
     result = []
-    for elem in elems:
-        if elem.tag == "def":
-            result.append(_compile_def(elem, chroot, visiting))
-        elif elem.tag == "from":
-            result.extend(_compile_from(elem, chroot, visiting))
+    for item in items:
+        if isinstance(item, str):
+            raise PGSNError(
+                f"<{owner}> has text where a binding was expected: {item!r}. "
+                f"A block is bindings and then one value, so only its last "
+                f"item is its value.")
+        if item.tag == "def":
+            result.append(_compile_def(item, chroot, visiting))
+        elif item.tag == "from":
+            result.extend(_compile_from(item, chroot, visiting))
         else:
-            raise PGSNError(f"Unexpected element: <{elem.tag}>")
+            raise PGSNError(
+                f"<{owner}> takes <def> and <from> before its value, "
+                f"found <{item.tag}>")
     return result
 
 
@@ -1012,21 +1009,76 @@ def _compile_from(elem: ET.Element, chroot: _Chroot,
 
 
 # ------------------------------------------------------------------ #
-# Expression compilers
+# Content
+#
+# The content of an element is a sequence of items in document order: each
+# child element, and each run of text between them. Bare text is a string, so
+# a run of text is a value like any other and stands wherever a child could:
+# `<div>hello</div>` and `<div><str>hello</str></div>` are one document
+# written two ways.
+#
+# Reading content in one place is what keeps that promise. It used to be read
+# where it was needed, and each reader saw a different part of it: a value
+# written after a binding is the tail of the binding rather than the text of
+# the element, so every reader that looked at `elem.text` missed it, and a
+# reader that looked at child elements alone missed bare text entirely.
 # ------------------------------------------------------------------ #
+
+def _items(parent: ET.Element) -> list[ET.Element | str]:
+    """The content of an element, in document order."""
+    items: list[ET.Element | str] = []
+    text = (parent.text or "").strip()
+    if text:
+        items.append(text)
+    for child in parent:
+        items.append(child)
+        tail = (child.tail or "").strip()
+        if tail:
+            items.append(tail)
+    return items
+
+
+def _item(item: ET.Element | str, chroot: _Chroot,
+          visiting: frozenset[Path]) -> Term:
+    """The term an item stands for."""
+    if isinstance(item, str):
+        return _text_to_term(item)
+    return _expr(item, chroot, visiting)
+
 
 def _content(parent: ET.Element, chroot: _Chroot,
              visiting: frozenset[Path]) -> Term:
-    """Single value from element content: one child expression or bare text."""
-    val_children = [c for c in parent if c.tag != "param"]
-    if len(val_children) == 1:
-        return _expr(val_children[0], chroot, visiting)
-    if len(val_children) > 1:
-        raise PGSNError(f"Multiple value children in <{parent.tag}>")
-    text = (parent.text or "").strip()
-    if text:
-        return _text_to_term(text)
+    """The single value an element's content stands for."""
+    items = _items(parent)
+    if len(items) == 1:
+        return _item(items[0], chroot, visiting)
+    if items:
+        raise PGSNError(f"Multiple values in <{parent.tag}>")
     raise PGSNError(f"No value in <{parent.tag}>")
+
+
+def _split_params(parent: ET.Element) -> tuple[list[ET.Element],
+                                               list[ET.Element | str]]:
+    """The <param> elements a definition opens with, and the rest of it."""
+    items = _items(parent)
+    params: list[ET.Element] = []
+    while items and isinstance(items[0], ET.Element) and items[0].tag == "param":
+        params.append(items.pop(0))
+    return params, items
+
+
+def _block(items: list[ET.Element | str], chroot: _Chroot,
+           visiting: frozenset[Path], owner: str) -> Term:
+    """Any number of bindings, then the value they are in scope for.
+
+    `<PGSN>`, `<div>` and a template body are all this shape, and the value
+    is simply the last item -- a child element or a run of text.
+    """
+    if not items:
+        raise PGSNError(f"<{owner}> has no value")
+    return _thread_lets(_bindings(items[:-1], chroot, visiting, owner),
+                        _item(items[-1], chroot, visiting))
+
 
 
 def _expr(elem: ET.Element, chroot: _Chroot,
@@ -1086,33 +1138,11 @@ def _e_str(elem: ET.Element, _ch: "_Chroot", _v: frozenset) -> Term:
 
 def _e_template(elem: ET.Element, chroot: _Chroot,
                 visiting: frozenset[Path]) -> Term:
-    params = [(c.get("name"), c) for c in elem if c.tag == "param"]
-    body_elems = [c for c in elem if c.tag != "param"]
+    param_elems, items = _split_params(elem)
+    params = [(p.get("name"), p) for p in param_elems]
 
-    # Split body into leading defs and the final value expression,
-    # mirroring the structure of <div> and <PGSN>.
-    if body_elems and body_elems[-1].tag != "def":
-        final_elem = body_elems[-1]
-        leading = body_elems[:-1]
-    elif elem.text and elem.text.strip():
-        final_elem = None
-        leading = []
-    else:
-        raise PGSNError("<template> has no body")
-
-    # Validate: everything before the final value must be a <def>
-    for c in leading:
-        if c.tag != "def":
-            raise PGSNError(
-                f"<{c.tag}> must come after all <def>s in <template>")
-
-    if final_elem is not None:
-        final = _expr(final_elem, chroot, visiting)
-    else:
-        final = _text_to_term(elem.text.strip())
-
-    bindings = _bindings(leading, chroot, visiting)
-    body = _thread_lets(bindings, final)
+    # The body is a block like <div> and <PGSN>: bindings, then one value.
+    body = _block(items, chroot, visiting, elem.tag)
 
     if not params:
         return body
@@ -1129,8 +1159,7 @@ def _e_template(elem: ET.Element, chroot: _Chroot,
                 raise PGSNError(
                     f"Positional param '{name}' must come before keyword params")
             # Positional params must not carry a default value
-            pchildren = [c for c in pelem if c.tag != "param"]
-            if pchildren or (pelem.text and pelem.text.strip()):
+            if _items(pelem):
                 raise PGSNError(
                     f"Positional param '{name}' must not have a default value")
             positional_params.append(name)
@@ -1141,11 +1170,8 @@ def _e_template(elem: ET.Element, chroot: _Chroot,
     # Build default values dict for keyword params
     defaults_dict = {}
     for name, pelem in keyword_params:
-        pchildren = [c for c in pelem if c.tag != "param"]
-        if pchildren:
-            defaults_dict[name] = _expr(pchildren[0], chroot, visiting)
-        elif pelem.text and pelem.text.strip():
-            defaults_dict[name] = _text_to_term(pelem.text.strip())
+        if _items(pelem):
+            defaults_dict[name] = _content(pelem, chroot, visiting)
 
     # Build the term: keyword layer first (innermost), then positional layer
     # wrapping it. This matches Term.__call__ which strips positional args
@@ -1175,16 +1201,16 @@ def _e_apply(elem: ET.Element, chroot: _Chroot,
     An empty argument list is not an error. Application is binary, so applying
     a function to nothing is the function: `<apply template="f"/>` is `f`.
     """
-    children = list(elem)
+    items = _items(elem)
     template = elem.get("template")
     if template is not None:
         func = _resolve(template)
-    elif children:
-        func = _expr(children[0], chroot, visiting)
-        children = children[1:]
+    elif items:
+        func = _item(items[0], chroot, visiting)
+        items = items[1:]
     else:
         raise PGSNError("<apply> needs a function")
-    positional, keyword = _split_args(children, chroot, visiting, "apply")
+    positional, keyword = _split_args(items, chroot, visiting, "apply")
     if not positional and not keyword:
         return func
     # Delegate to Term.__call__: it casts args and builds the keyword Record
@@ -1193,10 +1219,21 @@ def _e_apply(elem: ET.Element, chroot: _Chroot,
 
 def _e_class(elem: ET.Element, chroot: _Chroot,
              visiting: frozenset[Path]) -> Term:
+    """A class definition.
+
+    `name` is what the class is called, not what it is bound to: a binding is
+    a name in a scope, while this name travels with the value and is what an
+    instance of the class is reported as. It is a label rather than an
+    identifier, so it is not subject to the reserved-name check, and it is not
+    inherited -- a subclass that wants a name of its own says so.
+    """
     inh = elem.find("inherit")
     kwargs: dict = {
         "inherit": _content(inh, chroot, visiting) if inh is not None else base_class
     }
+    class_name = elem.get("name")
+    if class_name is not None:
+        kwargs["name"] = string(class_name)
     attrs = [c.get("name") for c in elem if c.tag == "attribute"]
     defs = {c.get("name"): _content(c, chroot, visiting)
             for c in elem if c.tag == "attribute"
@@ -1264,17 +1301,17 @@ def _e_send(elem: ET.Element, chroot: _Chroot,
         raise PGSNError(
             "<send> needs a 'method' naming the method to call, as in "
             '<send method="greet" to="obj"/>')
-    children = list(elem)
+    items = _items(elem)
     receiver_name = elem.get("to")
     if receiver_name is not None:
         receiver = _resolve(receiver_name)
-    elif children:
-        receiver = _expr(children[0], chroot, visiting)
-        children = children[1:]
+    elif items:
+        receiver = _item(items[0], chroot, visiting)
+        items = items[1:]
     else:
         raise PGSNError("<send> needs a receiver")
     bound = receiver(string(method))
-    positional, keyword = _split_args(children, chroot, visiting, "send")
+    positional, keyword = _split_args(items, chroot, visiting, "send")
     if not positional and not keyword:
         return bound
     return bound(*positional, **keyword)
@@ -1282,13 +1319,7 @@ def _e_send(elem: ET.Element, chroot: _Chroot,
 
 def _e_div(elem: ET.Element, chroot: _Chroot,
            visiting: frozenset[Path]) -> Term:
-    children = list(elem)
-    if not children:
-        raise PGSNError("<div> has no value")
-    # The final child is the div's value expression (use _expr, not _content)
-    final = _expr(children[-1], chroot, visiting)
-    bs = _bindings([c for c in children[:-1] if c.tag == "def"], chroot, visiting)
-    return _thread_lets(bs, final)
+    return _block(_items(elem), chroot, visiting, "div")
 
 
 def _e_list(elem: ET.Element, chroot: _Chroot,
@@ -1447,7 +1478,8 @@ def _e_goal(elem: ET.Element, chroot: _Chroot,
 
 def _e_strategy(elem: ET.Element, chroot: _Chroot,
                 visiting: frozenset[Path]) -> Term:
-    desc, _, _, defeaters = _gsn_header(elem, chroot, visiting)
+    desc, contexts, assumptions, defeaters = _gsn_header(
+        elem, chroot, visiting)
     sub_goal_elems = [c for c in elem if c.tag == "Goal"]
     sub_goals_elem = elem.find("subGoals")
     if sub_goal_elems:
@@ -1459,6 +1491,8 @@ def _e_strategy(elem: ET.Element, chroot: _Chroot,
     else:
         raise PGSNError("<Strategy> requires sub-goals or <subGoals>")
     return strategy(description=desc, sub_goals=sub_goals,
+                    contexts=list_term(tuple(contexts)),
+                    assumptions=list_term(tuple(assumptions)),
                     defeaters=list_term(tuple(defeaters)))
 
 

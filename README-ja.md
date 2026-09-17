@@ -2,7 +2,7 @@
 
 アシュアランスケース生成のための関数型プログラミング環境
 
-[![Python](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
@@ -22,7 +22,7 @@
 - **関数型プログラミングによるGSN記述**：アシュアランスケースを関数として記述
 - **構成的・再利用可能**：GSN構造を柔軟に組み立て可能
 - **オブジェクト指向サポート**：クラス／継承によるノード定義の拡張
-- **セキュアな評価**：PGSNの評価はリソース制限付きのインタプリタで行われ、第三者コードの安全な実行を保証
+- **閉じた評価**：文書が外に手を伸ばす方法がありません（言語にファイル・ネットワーク・システムへのアクセスがない）。名前を書けるファイルも、与えられたディレクトリの下だけです。評価はステップ数で上限が決まります
 
 ---
 
@@ -125,15 +125,19 @@ g = goal(
 gsn_tree(g.fully_eval()).show()
 ```
 
-プロジェクトのソースコードディレクトリトップで
+同じケースが `examples/gsn.py` にあり、コマンドラインから描画できるよう `main` に束縛してあります。
 ```shell
-% python examples/gsn.py
+% pgsn doc examples/gsn.py
+Generating 'None' from 'examples/gsn.py'
+Evaluating term 'main'...
 Goal: System is secure
 └── Strategy: Break into sub-goals
     ├── Goal: Input validated
     │   └── Evidence: Static analysis passed
     └── Goal: Output sanitized
         └── Evidence: Fuzzing test succeeded
+
+Done.
 ```
 
 ---

@@ -110,7 +110,7 @@ pgsn.python_value(double(pgsn.integer(21)).fully_eval())   # 42
 | コンストラクタ | 引数 |
 |--------------|------|
 | `goal` | `description`・`support`・`contexts`（既定は空）・`assumptions`（既定は空）・`defeaters`（既定は空） |
-| `strategy` | `description`・`sub_goals`・`defeaters`（既定は空） |
+| `strategy` | `description`・`sub_goals`・`contexts`（既定は空）・`assumptions`（既定は空）・`defeaters`（既定は空） |
 | `evidence` | `description`・`defeaters`（既定は空） |
 | `context` | `description` |
 | `assumption` | `description` |
@@ -118,7 +118,9 @@ pgsn.python_value(double(pgsn.integer(21)).fully_eval())   # 42
 
 `support` に既定値はありません。支持のないゴールは `support=pgsn.undeveloped` と明示的に書きます。
 
-`defeaters` は GSN v3 の dialectic extension です。defeater は、それを保持するノードへの支持ではなく疑いを記録します。どのノード型も defeater を持てますし、defeater 自身もノードなので反証は入れ子になります。規格そのものには Defeater 要素はなく、defeater は Challenges 関係で対象に繋がった Goal または Solution ですが、項の言語には関係を担う辺がないため、PGSN では攻撃するという役割をクラスとして表現しています。rebutting と undercutting は 1 クラスで足ります。対抗論拠を伴うなら `support` を埋め、異議を述べるだけなら省略します。
+`contexts` と `assumptions` はゴールと戦略が持ちます。規格がこの2つに付けるからです。Evidence はどちらも取りません。
+
+`defeaters` は GSN v3 の dialectic extension です。defeater は、それを保持するノードへの支持ではなく疑いを記録します。どのノード型も defeater を持てますし、defeater 自身もノードなので反証は入れ子になります。規格そのものには Defeater 要素はなく、defeater は Challenges 関係で対象に繋がった Goal または Solution ですが、値の言語には関係を担う辺がないため、PGSN では攻撃するという役割をクラスとして表現しています。rebutting と undercutting は 1 クラスで足ります。対抗論拠を伴うなら `support` を埋め、異議を述べるだけなら省略します。
 
 よく使う形のための補助が 2 つあります。
 
@@ -160,13 +162,18 @@ Goal: System is secure
 
 ```python
 my_goal_class = pgsn.define_class(
+    name="OwnedGoal",
     inherit=pgsn.goal_class,
     attributes=pgsn.list_term((pgsn.string("owner"),)),
 )
 ```
 
+`name` はそのクラスが何と呼ばれるかで、オブジェクトはその名前で報告されます（下の
+`__ClassName__` キー）。ラベルであって何かと比較されることはありませんが、インスタンスを
+読み出すつもりのクラスには必要です。無いと何として報告すればよいかが無くなります。継承もされません。
+
 `type_of` はオブジェクトのクラスを返し、`is_subtype` は2つのクラスを比べます。
-値を型と照合するときはこう書きます。
+値を型と照合するときはこう書きます（`node` は自分で組んだ項です）。
 
 ```python
 pgsn.is_subtype(pgsn.type_of(node))(pgsn.goal_class).fully_eval().value
@@ -175,8 +182,8 @@ pgsn.is_subtype(pgsn.type_of(node))(pgsn.goal_class).fully_eval().value
 型付けは構造的です。`is_subtype` が比べるのは2つのクラスが宣言する属性名とメソッド名だけで、
 `inherit` は関与しません。`description` と `defeaters` を持つ自作のクラスは `evidence_class` を
 満たしますし、goal もそれらを（さらに多く）宣言しているので満たします。「どのクラスに属するか」を
-尋ねる述語はありません。`is_instance` と `is_subclass` は削除しました。クラスの等価性が
-構造比較だったため、同一のクラスでも簡約の進み具合が違うコピーどうしは一致しなかったからです。
+尋ねる述語はありません。`is_instance` と `is_subclass` は削除しました。同一のクラスでも
+コピーどうしが等しいとは限らず、答えがコピーの出自に左右されたからです。
 クラスの出自を知りたいときは、オブジェクトから継承チェーンを読み出してください。
 
 ```python
@@ -205,9 +212,9 @@ goals = pgsn.map_term(template)(requirements)
 
 ### `python_value(term, with_inherit_chain=False)`
 
-項を素の Python のデータ（`dict`・`list`・`str`・`int`・`bool`）に変換します。オブジェクトノードには `__ClassName__` というマーカーキーが付くので、評価済みのゴールは `description`・`support`・`contexts`・`assumptions`・`__Goal__` というキーを持つ辞書になります。`with_inherit_chain=True` を渡すと `__parent_classes__` も付きます。
+項を素の Python のデータ（`dict`・`list`・`str`・`int`・`bool`）に変換します。オブジェクトノードには `__ClassName__` というマーカーキーが付くので、評価済みのゴールは `description`・`support`・`contexts`・`assumptions`・`defeaters`・`__Goal__` というキーを持つ辞書になります。`with_inherit_chain=True` を渡すと `__parent_classes__` も付きます。
 
-項が評価しきれていない場合は `ValueError` を送出します。メッセージに問題のノードまでのパスが入るので、詰まった部分項を特定する最短の手段になります。
+項が評価しきれていない場合は `ValueError` を送出します。メッセージに問題のノードまでのパスが入るので、詰まった部分項を特定する最短の手段になります。クラスに名前が無いオブジェクトでも送出します。付けるマーカーキーが無いからです。
 
 ### `gsn_tree(term)`
 

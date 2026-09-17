@@ -19,7 +19,7 @@ def expr(source: str, defs: str = ""):
 
 
 def expanded(source: str) -> str:
-    """The XML an <expr> stands for, after preprocessing."""
+    """The XML an <expr> stands for, after desugaring."""
     root = ET.fromstring(f"<PGSN><expr>{source}</expr></PGSN>")
     _desugar(root)
     return ET.tostring(root[0], encoding="unicode")

@@ -20,8 +20,17 @@ undeveloped_class = pgsn.dsl.define_class(inherit=support_class,
                                           defaults={"description": ""})
 undeveloped = undeveloped_class()
 evidence_class = pgsn.dsl.define_class(inherit=support_class, name='Evidence')
+# A Context or an Assumption attaches to a Goal or a Strategy, which is what
+# lets a strategy carry the assumption its reasoning depends on -- GSN
+# Community Standard Figure 6 does exactly that with "All hazards have been
+# identified". Evidence takes neither: the standard attaches nothing to a
+# Solution.
 strategy_class = pgsn.dsl.define_class(inherit=support_class, name='Strategy',
-                                          attributes=["sub_goals"])
+                                          attributes=["assumptions",
+                                                      "contexts",
+                                                      "sub_goals"],
+                                          defaults={"assumptions": [],
+                                                    "contexts": []})
 
 goal_class = pgsn.dsl.define_class(inherit=gsn_class,
                                       name='Goal',
@@ -59,9 +68,13 @@ evidence = pgsn.dsl.lambda_abs_keywords(
     body=evidence_class(description=_d, defeaters=_defeaters))
 strategy = pgsn.dsl.lambda_abs_keywords(
     arguments={'description': _d, 'sub_goals': _sub_goals,
+               'assumptions': _assumptions, 'contexts': _contexts,
                'defeaters': _defeaters},
-    defaults=pgsn.dsl.record({'defeaters': pgsn.dsl.empty}),
+    defaults=pgsn.dsl.record({'assumptions': pgsn.dsl.empty,
+                              'contexts': pgsn.dsl.empty,
+                              'defeaters': pgsn.dsl.empty}),
     body=strategy_class(description=_d, sub_goals=_sub_goals,
+                        assumptions=_assumptions, contexts=_contexts,
                         defeaters=_defeaters))
 goal = pgsn.dsl.lambda_abs_keywords(arguments={'description': _d,
                                       'assumptions': _assumptions,
