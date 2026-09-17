@@ -53,15 +53,15 @@ def test_as_wraps_content_on_any_element():
 def test_a_receiver_can_be_written_as_shorthand():
     """`var` on a <get> is the receiver, because the receiver is what a child
     of <get> is. Nothing about <get> had to say so."""
-    assert run('<get label="k" var="r"/>', RECORD) == "v"
-    assert run('<get label="k"><var name="r"/></get>', RECORD) == "v"
+    assert run('<get key="k" var="r"/>', RECORD) == "v"
+    assert run('<get key="k"><var name="r"/></get>', RECORD) == "v"
 
 
 def test_a_shorthand_cannot_sit_beside_the_content_it_stands_for():
     with pytest.raises(PGSNError, match="shorthand for the content"):
-        run('<get label="k" var="r"><var name="r"/></get>', RECORD)
+        run('<get key="k" var="r"><var name="r"/></get>', RECORD)
     with pytest.raises(PGSNError, match="shorthand for the receiver"):
-        run('<get label="k" of="r"><var name="r"/></get>', RECORD)
+        run('<get key="k" of="r"><var name="r"/></get>', RECORD)
 
 
 # ------------------------------------------------------------------ #
@@ -77,10 +77,10 @@ def test_applying_a_function_to_nothing_is_the_function():
                '<apply><apply template="f"/><arg>hello</arg></apply>') == "hello"
 
 
-def test_get_needs_a_label():
+def test_get_needs_a_key():
     """`of` on its own used to be dropped, and the error then complained that
     the <get> had no value -- about a receiver the document had supplied."""
-    with pytest.raises(PGSNError, match="needs a 'label'"):
+    with pytest.raises(PGSNError, match="needs a 'key'"):
         run('<get of="r"/>', RECORD)
 
 

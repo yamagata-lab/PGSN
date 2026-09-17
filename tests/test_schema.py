@@ -58,7 +58,7 @@ REJECTED = {
         "<PGSN><Goal>g<Rebuttal>r</Rebuttal><Evidence>e</Evidence></Goal></PGSN>",
     "a <def> with nothing to bind":
         "<PGSN><def>x</def>v</PGSN>",
-    "a <get> with no label":
+    "a <get> with no key":
         '<PGSN><get of="r"/></PGSN>',
     "a <send> with no method":
         '<PGSN><send to="r"/></PGSN>',

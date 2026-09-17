@@ -115,7 +115,7 @@ def test_a_gsn_constructor_name_may_be_rebound_too():
     '<var name="x" typeOf="_c"/>',
     '<def name="x" typeOf="_c">v</def>',
     '<apply template="_f"><arg>a</arg></apply>',
-    '<get label="a" of="_obj"/>',
+    '<get key="a" of="_obj"/>',
     '<send method="m" to="_obj"/>',
     '<apply><var name="head"/><arg name="_k">v</arg></apply>',
     '<ul><li var="_x"/></ul>',
@@ -148,7 +148,7 @@ def test_record_labels_are_not_reserved():
     """Labels are a different namespace, so the restriction does not reach
     them. Only names that denote variables are affected."""
     assert run('<dl><dt key="_k"/><dd>v</dd></dl>') == {"_k": "v"}
-    assert run('<get label="_k"><dl><dt key="_k"/><dd>v</dd></dl></get>') == "v"
+    assert run('<get key="_k"><dl><dt key="_k"/><dd>v</dd></dl></get>') == "v"
 
 
 # ------------------------------------------------------------------ #

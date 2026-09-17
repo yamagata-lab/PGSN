@@ -124,7 +124,7 @@ A name must begin with a letter and may continue with letters, digits and unders
 
 The rule is the same one Python uses for identifiers, and deliberately so: an [expression](#expressions-expr) is parsed by Python's parser, so a name that could not appear in an expression would be unreachable from one.
 
-Record labels are a different namespace and are unrestricted: `label` on `<get>`, `method` on `<send>`, `name` on `<attribute>` and `key` on `<dt>` are arbitrary strings. So is `name` on `<class>`, which is what the class is called rather than a name anything refers to.
+Record labels are a different namespace and are unrestricted: `key` on `<get>` and `<dt>`, `method` on `<send>` and `name` on `<attribute>` are arbitrary strings. So is `name` on `<class>`, which is what the class is called rather than a name anything refers to.
 
 ### Conditionals (if, cases)
 
@@ -240,7 +240,7 @@ A `<from>` written where a value is expected denotes the module's record, with n
 
 ```xml
 <def name="lib"><from file="security.pgsn"/></def>
-<get label="secureGoal" of="lib"/>
+<get key="secureGoal" of="lib"/>
 ```
 
 Selecting a name at the point of import is what the forms above are for, so the two spellings do not mix: a `<from>` used as a value takes no `import`, and a `<from>` used as a binding needs one.
@@ -320,7 +320,7 @@ written out.
 <def name="myGoal" as="Goal">...</def>
 ```
 
-`<def name="x" as="T">C</def>` and `<def name="x"><T>C</T></def>` are the same document written two ways. The attribute is not tied to `<def>`: wherever an element holds content, `as` names an element to wrap that content in. `<from>` and `<import>` are the exception, because `as` renames an imported name there. Any tag that is valid in that position can be named, `object` and `ul` and `Goal` alike. The one restriction is that a tag requiring an attribute of its own cannot be named — `var` requires `name`, `get` requires `label`, `send` requires `method`, and a named `class` requires `name` — because `as` moves the content and leaves the attributes where they were.
+`<def name="x" as="T">C</def>` and `<def name="x"><T>C</T></def>` are the same document written two ways. The attribute is not tied to `<def>`: wherever an element holds content, `as` names an element to wrap that content in. `<from>` and `<import>` are the exception, because `as` renames an imported name there. Any tag that is valid in that position can be named, `object` and `ul` and `Goal` alike. The one restriction is that a tag requiring an attribute of its own cannot be named — `var` requires `name`, `get` requires `key`, `send` requires `method`, and a named `class` requires `name` — because `as` moves the content and leaves the attributes where they were.
 
 ### `typeOf` Attribute
 
@@ -541,18 +541,18 @@ Application is binary, so an `<apply>` with no `<arg>` applies nothing and is th
 
 ### Key Access (get)
 
-`get` works on both a record and an object. The `label` attribute names the key and `of` is a shorthand for a variable receiver. Reading a label is applying the receiver to it, which is why the three forms below are one and the same.
+`get` works on both a record and an object. The `key` attribute names the record label and `of` is a shorthand for a variable receiver. Reading a label is applying the receiver to it, which is why the three forms below are one and the same.
 
 ```xml
-<!-- shorthand: label= names the key, of= names the receiver variable -->
-<get label="description" of="my_goal"/>
+<!-- shorthand: key= names the label, of= names the receiver variable -->
+<get key="description" of="my_goal"/>
 
 <!-- when the receiver is a complex expression, use a child element -->
-<get label="description"><apply template="getGoal"><arg>G1</arg></apply></get>
+<get key="description"><apply template="getGoal"><arg>G1</arg></apply></get>
 
 <!-- Record key access — all three forms are equivalent -->
-<get label="x" of="my_record"/>
-<get label="x"><var name="my_record"/></get>
+<get key="x" of="my_record"/>
+<get key="x"><var name="my_record"/></get>
 <apply><var name="my_record"/><arg>x</arg></apply>
 ```
 
@@ -664,7 +664,7 @@ Every GSN node opens with a description, and any node may be challenged by a
      Accepts any expression as a value. -->
 <Context>textual description</Context>
 <Context var="someObject"/>                            <!-- variable reference -->
-<Context><get label="version" of="release"/></Context>  <!-- expression -->
+<Context><get key="version" of="release"/></Context>  <!-- expression -->
 
 <!-- Assumption: an assumption the argument relies on.
      Like Context, accepts any expression as a value. -->

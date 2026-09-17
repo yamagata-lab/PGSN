@@ -340,7 +340,7 @@
   <define name="get_pat">
     <element name="get">
       <!-- the record label to read -->
-      <attribute name="label"/>
+      <attribute name="key"/>
       <choice>
         <!-- of="obj" names the receiver, in place of writing it -->
         <attribute name="of"/>

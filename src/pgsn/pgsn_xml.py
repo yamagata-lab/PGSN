@@ -139,7 +139,7 @@ class _Chroot:
 #   2. desugaring       var=, expr=, as=, <if>, <cases>             (_desugar)
 #   3. deep syntax      the same document with no shorthand left in it.
 #                       Element-specific attributes -- <apply template=>,
-#                       <get label= of=>, <send method= to=> -- are not
+#                       <get key= of=>, <send method= to=> -- are not
 #                       shorthand and survive this far
 #   4. terms            the compilers below read deep syntax     (_expr, _e_*)
 #
@@ -184,7 +184,7 @@ _MODULE_VAR = _RESERVED_PREFIX + "module"
 
 # Attributes holding the name of a *variable*, by element. `var` is shorthand
 # for a <var> child and is accepted on any element, so it is checked
-# everywhere. Record labels — <get label=>, <attribute name=>, <dt key=>,
+# everywhere. Record labels — <get key=>, <attribute name=>, <dt key=>,
 # <send method=> — are a separate namespace and are deliberately not
 # reserved.
 _NAME_ATTRS: dict[str, tuple[str, ...]] = {
@@ -251,6 +251,16 @@ def _check_retired(elem: ET.Element) -> None:
             f"attributes and methods the type declares, rather than where its "
             f"class came from. The <instanceOf> child of <object> names the "
             f"class to instantiate and keeps its name.")
+
+    # `label` on <get> became `key`, so that a record label is spelled the
+    # same way wherever one is written: <dt key=> builds an entry and
+    # <get key=> reads it back. Without this the document would fail for want
+    # of a `key`, which does not say that the attribute was renamed.
+    if elem.tag == "get" and "label" in elem.attrib:
+        raise PGSNError(
+            "<get label=...>: the attribute is now spelled 'key', which is "
+            "how a record label is written wherever one appears -- <dt key=> "
+            "builds the entry that <get key=> reads back.")
 
     # A parameter is bound by a lambda, so a guard on it would have to be
     # planted in the body. The attribute did nothing at all before; say so
@@ -962,7 +972,7 @@ def _e_from(elem: ET.Element, chroot: _Chroot,
     """`<from>` in a value position is the module's record.
 
         <def name="lib"><from file="lib.xml"/></def>
-        <get label="secureGoal" of="lib"/>
+        <get key="secureGoal" of="lib"/>
 
     A module is therefore an ordinary value: it can be bound, passed to a
     template, or held in a list, like anything else. Selecting names out of it
@@ -1270,22 +1280,23 @@ def _e_get(elem: ET.Element, chroot: _Chroot,
     """Read a label off a record. The receiver is `of=`, or else the content.
 
     A record label is not a name in the sense the reserved-name check means:
-    it is a string the record was built with, so it is spelled `label` and
-    left out of the check.
+    it is a string the record was built with, so it is spelled `key` -- as on
+    the `<dt>` that builds the entry this reads back -- and left out of the
+    check.
     """
-    label = elem.get("label")
-    if label is None:
+    key = elem.get("key")
+    if key is None:
         raise PGSNError(
-            "<get> needs a 'label' naming the field to read, as in "
-            '<get label="description" of="node"/>')
+            "<get> needs a 'key' naming the field to read, as in "
+            '<get key="description" of="node"/>')
     receiver = elem.get("of")
     if receiver is None:
-        return _content(elem, chroot, visiting)(string(label))
+        return _content(elem, chroot, visiting)(string(key))
     if len(elem) or (elem.text and elem.text.strip()):
         raise PGSNError(
             "<get> has both an 'of' attribute and a receiver of its own; "
             "the attribute is shorthand for the receiver.")
-    return _resolve(receiver)(string(label))
+    return _resolve(receiver)(string(key))
 
 
 def _e_send(elem: ET.Element, chroot: _Chroot,
