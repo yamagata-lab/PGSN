@@ -3,22 +3,24 @@
 <PGSN>
 
     <!-- ==============================
-         params: variables received from outside
+         param: variables received from outside.
+         Only a <PGSNModule> takes them, so they are shown commented out:
+         <PGSN> produces a value and does not accept <param>.
          ============================== -->
 
-    <!-- this PGSN receives A1 from the caller -->
+    <!-- a module receives A1 from its caller, and threshold with a default
     <param name="A1"/>
-
-    <!-- with a default value -->
     <param name="threshold">100</param>
+    -->
 
 
     <!-- ==============================
          import
          ============================== -->
 
-    <!-- single import -->
+    <!-- single import
     <from file="security.pgsn" import="secureGoal" as="G1"/>
+    -->
 
     <!-- multiple imports using child elements
     <from file="evidence.pgsn">
@@ -67,7 +69,7 @@
     <!-- class definition: inherits from klass, with attributes and a method -->
     <def name="ClassB">
         <class>
-            <inherit>klass</inherit>
+            <inherit var="klass"/>
             <attribute name="attr1">C</attribute>
             <attribute name="attr2"/>
             <method name="m">
@@ -81,7 +83,7 @@
     <!-- object instantiation: an instance of Ubuntu -->
     <def name="ubuntu">
         <object>
-            <instanceOf>Ubuntu</instanceOf>
+            <instanceOf var="Ubuntu"/>
             <attribute name="version">20.0</attribute>
         </object>
     </def>
@@ -91,12 +93,12 @@
 
     <!-- attribute access -->
     <def name="ver">
-        <get name="version"><var name="ubuntu"/></get>
+        <get label="version"><var name="ubuntu"/></get>
     </def>
 
     <!-- method invocation: call method m on ubuntu -->
     <def name="sent">
-        <send name="m"><var name="ubuntu"/>
+        <send method="m"><var name="ubuntu"/>
             <arg name="arg1">expr1</arg>
             <arg name="arg2">expr2</arg>
         </send>
@@ -138,7 +140,7 @@
     <!-- extending a GSN node via class inheritance -->
     <def name="GoalWithURL">
         <class>
-            <inherit>Goal</inherit>
+            <inherit var="Goal"/>
             <attribute name="URL"/>
         </class>
     </def>
@@ -179,9 +181,9 @@
     <Goal>
         <description>X is secure</description>
         <Context>certified under standard XXXX</Context>
-        <Context><get name="version"><var name="ubuntu"/></get></Context>
+        <Context><get label="version"><var name="ubuntu"/></get></Context>
         <Assumption>no zero-day attacks</Assumption>
-        <Strategy var="mainStrategy"/>
+        <supportedBy var="mainStrategy"/>
     </Goal>
 
 </PGSN>

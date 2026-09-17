@@ -409,7 +409,7 @@ The following names are predefined; reference them with `<var name="..."/>` and 
 - Misc: `fix`, `repeat`, `undefined`
 - GSN constructors: `goal`, `strategy`, `evidence`, `context`, `assumption`, `defeater`, `undeveloped`, `immediate`, `evidence_as_goal`
 - GSN classes (long form): `goal_class`, `strategy_class`, `evidence_class`, `context_class`, `assumption_class`, `defeater_class`, `gsn_class`, `support_class`, `undeveloped_class`
-- GSN classes (short aliases): `Goal`, `Strategy`, `Evidence`, `Context`, `Assumption`, `GSN`, `Support`
+- GSN classes (short aliases): `Goal`, `Strategy`, `Evidence`, `Context`, `Assumption`, `Defeater`, `GSN`, `Support`
 
 Example (mapping a template over a list):
 

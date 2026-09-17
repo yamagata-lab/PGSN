@@ -216,6 +216,14 @@ These advanced examples demonstrate how to:
 
 You can adapt these techniques to build domain-specific GSN templates, automate assurance case generation, or validate structural constraints programmatically.
 
+## Summary of Techniques
+
+| Purpose                      | Technique                                   |
+|------------------------------|---------------------------------------------|
+| Reusing a template           | Lambda abstraction with keyword parameters  |
+| Generating structure in bulk | List expansion with `map_term`              |
+| Attaching metadata           | Class definition and `instantiate`          |
+
 ## Summary of Common Constructs
 
 | Construct                    | Description                             |
@@ -240,7 +248,7 @@ You can adapt these techniques to build domain-specific GSN templates, automate 
 | DSL      | `dsl.py`, `gsn.py` | Human-friendly API to define GSN |
 
 
-##  License
+## License
 
 MIT License – see [LICENSE](LICENSE).
 

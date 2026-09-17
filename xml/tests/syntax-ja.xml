@@ -3,22 +3,24 @@
 <PGSN>
 
     <!-- ==============================
-         param: 外部から受け取る変数
+         param: 外部から受け取る変数。
+         受け取れるのは <PGSNModule> だけなので、ここではコメントアウトして示す。
+         <PGSN> は値を1つ生成する文書で、<param> を受け取らない。
          ============================== -->
 
-    <!-- この PGSN は呼び出し元から A1 を受け取る -->
+    <!-- モジュールは呼び出し元から A1 を、threshold はデフォルト値つきで受け取る
     <param name="A1"/>
-
-    <!-- デフォルト値付き -->
     <param name="threshold">100</param>
+    -->
 
 
     <!-- ==============================
          import（from）
          ============================== -->
 
-    <!-- 単一 import -->
+    <!-- 単一 import
     <from file="security.pgsn" import="secureGoal" as="G1"/>
+    -->
 
     <!-- 子要素による複数 import
     <from file="evidence.pgsn">
@@ -67,7 +69,7 @@
     <!-- クラス定義: klass を継承し、属性とメソッドを持つ -->
     <def name="ClassB">
         <class>
-            <inherit>klass</inherit>
+            <inherit var="klass"/>
             <attribute name="attr1">C</attribute>
             <attribute name="attr2"/>
             <method name="m">
@@ -81,7 +83,7 @@
     <!-- オブジェクト生成: Ubuntu のインスタンス -->
     <def name="ubuntu">
         <object>
-            <instanceOf>Ubuntu</instanceOf>
+            <instanceOf var="Ubuntu"/>
             <attribute name="version">20.0</attribute>
         </object>
     </def>
@@ -91,12 +93,12 @@
 
     <!-- 属性アクセス -->
     <def name="ver">
-        <get name="version"><var name="ubuntu"/></get>
+        <get label="version"><var name="ubuntu"/></get>
     </def>
 
     <!-- メソッド呼び出し: ubuntu のメソッド m を呼ぶ -->
     <def name="sent">
-        <send name="m"><var name="ubuntu"/>
+        <send method="m"><var name="ubuntu"/>
             <arg name="arg1">expr1</arg>
             <arg name="arg2">expr2</arg>
         </send>
@@ -138,7 +140,7 @@
     <!-- クラスの継承による GSN ノードの拡張 -->
     <def name="GoalWithURL">
         <class>
-            <inherit>Goal</inherit>
+            <inherit var="Goal"/>
             <attribute name="URL"/>
         </class>
     </def>
@@ -181,9 +183,9 @@
     <Goal>
         <description>システムXはセキュアである</description>
         <Context>規格XXXXによる認証</Context>
-        <Context><get name="version"><var name="ubuntu"/></get></Context>
+        <Context><get label="version"><var name="ubuntu"/></get></Context>
         <Assumption>ゼロデイ攻撃はない</Assumption>
-        <Strategy var="mainStrategy"/>
+        <supportedBy var="mainStrategy"/>
     </Goal>
 
 </PGSN>

@@ -1,5 +1,3 @@
-from pgsn import prettifyfrom pgsn import prettify
-
 # PGSN: Programmable Goal Structuring Notation
 
 アシュアランスケース生成のための関数型プログラミング環境
@@ -104,10 +102,8 @@ print(pgsn.gsn_tree(term).show(stdout=False))
 ## 基本例
 
 ```python
-from pprint import pprint
-
 from pgsn.gsn import *
-from pgsn.dsl import python_value
+from pgsn.dsl import *
 
 g = goal(
     description="System is secure",
@@ -148,7 +144,7 @@ Goal: System is secure
 from pgsn.dsl import *
 from pgsn.gsn import *
 
-# Define a reusable goal+evidence template
+# 再利用できる goal + evidence のテンプレートを定義
 mk_goal_with_evidence = lambda_abs_keywords(
     {"desc": variable("desc")},
     goal(
@@ -157,12 +153,12 @@ mk_goal_with_evidence = lambda_abs_keywords(
     )
 )
 
-# Apply the template to multiple goals
+# テンプレートを複数のゴールに適用
 g1 = mk_goal_with_evidence(desc="No hardcoded passwords")
 g2 = mk_goal_with_evidence(desc="Input sanitized")
 g3 = mk_goal_with_evidence(desc="Logging enabled")
 
-# Compose a top-level goal with a strategy
+# Strategy でトップレベルのゴールを組み立てる
 top = goal(
     description="System is secure",
     support=strategy(
@@ -212,7 +208,7 @@ GSNの各要素はクラスです。継承により拡張が可能です。
 from pgsn.dsl import *
 from pgsn.gsn import *
 
-# Define a custom subclass of Goal
+# Goal の派生クラスを定義
 CustomGoal = define_class(inherit=goal_class, name="GoalWithProject", attributes=["project"])
 
 g = instantiate(CustomGoal, description="Secure connection established",
