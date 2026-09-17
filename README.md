@@ -2,7 +2,7 @@
 
 Functional Programming for Assurance Case Generation
 
-[![Python](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
@@ -24,7 +24,7 @@ and [README-xml.md](README-xml.md) for the XML syntax.
 - **GSN Modeling Using Functional Programming**: Write assurance cases as functional programs
 - **Reusable**: Build assurance structures compositionally
 - **Object-Oriented**: Class/inheritance for reusable node types
-- **Security Aware**: PGSN terms are executed in a resource-limited interpreter, ensuring safe evaluation of third-party code.
+- **Confined**: a document has no way to reach outside itself — there is no file, network or system access in the language — and the only files it may name are those under a directory root granted to it. Evaluation is bounded by a step budget.
 
 ---
 
@@ -128,15 +128,20 @@ g = goal(
 gsn_tree(g.fully_eval()).show()
 ```
 
-From the project root,
+The same case is in `examples/gsn.py`, which binds it to `main` for the command
+line to render:
 ```shell
-% python examples/gsn.py
+% pgsn doc examples/gsn.py
+Generating 'None' from 'examples/gsn.py'
+Evaluating term 'main'...
 Goal: System is secure
 └── Strategy: Break into sub-goals
     ├── Goal: Input validated
     │   └── Evidence: Static analysis passed
     └── Goal: Output sanitized
         └── Evidence: Fuzzing test succeeded
+
+Done.
 ```
 
 ---
@@ -209,7 +214,7 @@ gsn_tree(secure_goal.fully_eval()).show()
 
 ### Example 3: Class-based Node Composition Using Object System
 
-Use `object_term.py` to define a custom goal class and instantiate it with additional metadata.
+Define a custom goal class and instantiate it with additional metadata.
 
 ```python
 from pgsn.dsl import *

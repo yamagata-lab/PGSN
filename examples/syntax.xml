@@ -1,5 +1,5 @@
 <?xml version="1.0" ?>
-<?xml-model href="../PGSN.rng" type="application/xml"?>
+<?xml-model href="../PGSN.rng" type="application/xml" schematypens="http://relaxng.org/ns/structure/1.0"?>
 <PGSN>
 
     <!-- ==============================
@@ -66,15 +66,34 @@
         </apply>
     </def>
 
+    <!-- the class the one below inherits from -->
+    <def name="klass">
+        <class name="klass">
+            <attribute name="attr0"/>
+        </class>
+    </def>
+
     <!-- class definition: inherits from klass, with attributes and a method -->
     <def name="ClassB">
-        <class>
+        <class name="ClassB">
             <inherit var="klass"/>
             <attribute name="attr1">C</attribute>
             <attribute name="attr2"/>
             <method name="m">
                 <param name="param1">expr</param>
                 <param name="param2"/>
+                expr
+            </method>
+        </class>
+    </def>
+
+    <!-- the class the object below instantiates -->
+    <def name="Ubuntu">
+        <class name="Ubuntu">
+            <attribute name="version"/>
+            <method name="m">
+                <param name="arg1"/>
+                <param name="arg2"/>
                 expr
             </method>
         </class>
@@ -113,7 +132,7 @@
         </div>
     </def>
 
-    <!-- data type: set (unordered) -->
+    <!-- data type: a list written as <ul>; the element name is documentary -->
     <def name="aSet">
         <ul>
             <li>item1</li>
@@ -121,7 +140,7 @@
         </ul>
     </def>
 
-    <!-- data type: list (ordered) -->
+    <!-- the same value written as <ol>, where the order carries meaning -->
     <def name="aList">
         <ol>
             <li>item1</li>
@@ -139,7 +158,7 @@
 
     <!-- extending a GSN node via class inheritance -->
     <def name="GoalWithURL">
-        <class>
+        <class name="GoalWithURL">
             <inherit var="Goal"/>
             <attribute name="URL"/>
         </class>
@@ -149,6 +168,13 @@
     <def name="evidenceGoal" as="Goal">
         <description>X is secure</description>
         <Evidence>operational track record</Evidence>
+    </def>
+
+    <!-- the import that would bring in G1 is commented out above, so the
+         goal is defined here instead -->
+    <def name="G1" as="Goal">
+        the connection is encrypted
+        <Evidence>TLS configuration review</Evidence>
     </def>
 
     <!-- GSN: a Strategy referencing sub-goals via a variable -->
@@ -162,15 +188,9 @@
         </subGoals>
     </def>
 
-    <!-- shorthand notation (expanded by preprocessor):
-         <tag var="x"/>
-         expands to
-         <tag><var name="x"/></tag>
-
-         similarly:
-         <def name="x" as="tag">...</def>
-         expands to
-         <def name="x"><tag>...</tag></def>
+    <!-- shorthands. Each pair below is one document written two ways:
+         <tag var="x"/>                 and  <tag><var name="x"/></tag>
+         <def name="x" as="tag">...</def>    <def name="x"><tag>...</tag></def>
     -->
 
 

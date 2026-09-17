@@ -1405,6 +1405,13 @@ def to_python(t: Term, with_inherit_chain=False, _path: str = "<root>") -> Any:
         case PGSNObject():
             attr = t.attributes()
             cls_name = t.instance.name
+            if cls_name is None:
+                raise ValueError(
+                    f"PGSN term cannot be converted to a Python value at path "
+                    f"'{_path}': an object is reported under the name of its "
+                    f"class, and this object's class has no name. Give the "
+                    f"class a name where it is defined."
+                )
             attrs = {}
             for k, t1 in attr.items():
                 child_path = f"{_path}.{k}"

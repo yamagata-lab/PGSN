@@ -1,9 +1,8 @@
 """Conditionals.
 
-`<if>` and `<cases>` are shorthands: the preprocessor rewrites them into an
-application of the `if_then_else` builtin before compilation begins, the same
-way `<expr>` is rewritten. Nothing is reachable through them that `<apply>`
-could not reach.
+`<if>` and `<cases>` are shorthands: desugaring rewrites them into an
+application of the `if_then_else` builtin, the same way it rewrites `<expr>`.
+Nothing is reachable through them that `<apply>` could not reach.
 """
 
 import xml.etree.ElementTree as ET

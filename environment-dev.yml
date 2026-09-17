@@ -9,3 +9,8 @@ dependencies:
   - typeguard
   - attrs
   - cattrs
+  # libxml2 supplies xmllint, which tests/test_schema.py validates the
+  # examples against PGSN.rng with. The test skips when it is absent, so a
+  # missing validator is silence rather than a failure -- which is the reason
+  # to declare it here.
+  - libxml2

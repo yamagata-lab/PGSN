@@ -1090,3 +1090,45 @@ def test_send_method_to_equiv_without_to(tmp_path):
         tmp_path)
 
     assert with_to == without_to
+
+# ------------------------------------------------------------------ #
+# A class carries its own name
+# ------------------------------------------------------------------ #
+
+def test_an_object_is_reported_under_its_class_name(tmp_path):
+    """The name travels with the class, so an instance of it says what it is.
+    It is not the binding: `<def>` names a value in a scope, `name=` names the
+    class itself."""
+    result = run("""
+    <PGSN>
+        <def name="Component">
+            <class name="Component">
+                <attribute name="part"/>
+            </class>
+        </def>
+        <def name="c">
+            <object>
+                <instanceOf var="Component"/>
+                <attribute name="part">sensor</attribute>
+            </object>
+        </def>
+        <var name="c"/>
+    </PGSN>""", tmp_path)
+    assert result["part"] == "sensor"
+    assert result["__Component__"] is True
+
+
+def test_an_object_of_an_anonymous_class_cannot_be_reported(tmp_path):
+    """There is nothing to report it as, so the conversion says so rather
+    than producing a value with a hole in it."""
+    with pytest.raises(ValueError, match="class has no name"):
+        run("""
+        <PGSN>
+            <def name="Component">
+                <class><attribute name="part"/></class>
+            </def>
+            <object>
+                <instanceOf var="Component"/>
+                <attribute name="part">sensor</attribute>
+            </object>
+        </PGSN>""", tmp_path)
