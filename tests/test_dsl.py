@@ -173,9 +173,6 @@ def test_record():
 class Id(pgsn_term.ConstMixin, pgsn_term.Unary):
     arity = 1
 
-    def _applicable(self, args):
-        return True
-
     def _apply_arg(self, arg):
         return arg
 
