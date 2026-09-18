@@ -1481,25 +1481,41 @@ def _e_evidence(elem: ET.Element, chroot: _Chroot,
 # Public API
 # ------------------------------------------------------------------ #
 
-def load_xml(path: str | Path, *, config: Config | None = None) -> Term:
+def load_xml(path: str | Path, *, config: Config | None = None,
+             steps: int | None = None) -> Term:
     """Compile and fully evaluate a PGSN XML document file.
 
     Imports inside the document may name files below the jails registered in
     `config`, written as ``/<jail>/sub/file.xml``, and files below the
     document's own confinement root.  Nothing else is reachable.
+
+    `steps` bounds the evaluation as it does in `Term.fully_eval`, and
+    omitting it leaves that method's own budget in place.  A document large
+    enough to exhaust it is not thereby wrong, so the budget belongs to the
+    caller: the `pgsn` command sets its own, and this is where a program
+    says the same thing.
     """
-    return compile_pgsn(path, config=config).fully_eval()
+    compiled = compile_pgsn(path, config=config)
+    if steps is None:
+        return compiled.fully_eval()
+    return compiled.fully_eval(steps=steps)
 
 
 def load_xml_string(xml: str, *, config: Config | None = None,
-                    jail: str | None = None) -> Term:
+                    jail: str | None = None,
+                    steps: int | None = None) -> Term:
     """Compile and fully evaluate a PGSN XML document held in a string.
 
     Jailed imports always work.  Pass `jail` to say which jail the document
     should be considered to live in; relative imports then resolve from that
     jail's root.  Without it, relative imports are rejected.
+
+    `steps` is as in `load_xml`.
     """
-    return compile_pgsn_string(xml, config=config, jail=jail).fully_eval()
+    compiled = compile_pgsn_string(xml, config=config, jail=jail)
+    if steps is None:
+        return compiled.fully_eval()
+    return compiled.fully_eval(steps=steps)
 
 
 def load(path: str | Path, *, config: Config | None = None) -> Term:

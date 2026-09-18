@@ -40,7 +40,7 @@ Python values are cast automatically where a term is expected, so `pgsn.string("
 
 ```python
 term.eval()                  # one reduction step
-term.fully_eval()            # reduce to a weak normal form, default steps=100000
+term.fully_eval()            # reduce to a weak normal form, default steps=1000000
 term.fully_eval(steps=5000)  # with an explicit budget
 ```
 
@@ -258,6 +258,12 @@ term = pgsn.load_xml_string(source)
 
 Both compile *and* evaluate, returning a weak normal form. The document syntax is described in [README-xml.md](README-xml.md).
 
+Both also take `steps`, which bounds the evaluation exactly as it does in `fully_eval`. Omitting it leaves the default budget in place, and there is one such budget: the same number the `pgsn` command starts from, so a document the command evaluates is one a program evaluates too. A document large enough to exhaust it is not thereby wrong, so a caller who knows better says so:
+
+```python
+term = pgsn.load_xml("big.xml", steps=5_000_000)
+```
+
 ### Jails
 
 A document can import other documents, and what it may reach is controlled by a *jail table*. A jail is a named directory root; the document names it as the first component of an absolute-looking path:
@@ -300,7 +306,7 @@ pgsn.load_xml("other.xml", config=other_cfg)   # overrides it
 
 The default is a convenience, not a security boundary. What confines a document is the `Jails` table in the configuration actually used for that call. Untrusted input to PGSN is XML, and XML cannot reach these functions.
 
-#### `load_xml_string(xml, *, config=None, jail=None)`
+#### `load_xml_string(xml, *, config=None, jail=None, steps=None)`
 
 A document held in a string has no directory of its own, so relative imports are rejected unless you say which jail it should be considered to live in:
 

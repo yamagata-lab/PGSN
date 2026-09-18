@@ -31,6 +31,14 @@ class LambdaInterpreterError(Exception):
     pass
 
 
+# The evaluation budget every entry point starts from. One number, because a
+# budget that varies with the way in was a way for a document to evaluate
+# through the command and not through the library: `eu_ai_act_full.xml` needs
+# more than a hundred thousand reductions and got them from `pgsn doc` alone.
+# It bounds reductions, not time, and a caller who knows better passes its own.
+DEFAULT_STEPS = 1_000_000
+
+
 Castable: TypeAlias = "Term | int | str | bool | list | dict"
 
 
@@ -131,7 +139,7 @@ class Term(ABC):
         return evaluated
 
     # FIXME: Use contexts in intermediate steps, not terms
-    def fully_eval(self, steps=100000) -> Term:
+    def fully_eval(self, steps=DEFAULT_STEPS) -> Term:
         t = self if not self.is_named else self.remove_name()
         for _ in range(steps):
             t_reduced = t.eval_or_none()
@@ -1382,7 +1390,7 @@ def _find_open_variables(t: Term) -> list[int]:
             return []
 
 
-def value_of(term: Term, steps=1000, with_inherit_chain=False) -> Any:
+def value_of(term: Term, steps=DEFAULT_STEPS, with_inherit_chain=False) -> Any:
     t = term.fully_eval(steps)
 
     # Detect open terms (unapplied lambdas / unsubstituted variables) before

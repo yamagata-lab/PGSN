@@ -40,7 +40,7 @@ pgsn.goal(description=..., support=...)       # キーワードのレコード
 
 ```python
 term.eval()                  # 1 ステップだけ簡約
-term.fully_eval()            # 弱正規形まで簡約、既定は steps=100000
+term.fully_eval()            # 弱正規形まで簡約、既定は steps=1000000
 term.fully_eval(steps=5000)  # 上限を明示
 ```
 
@@ -254,6 +254,12 @@ term = pgsn.load_xml_string(source)
 
 どちらもコンパイルと評価まで行い、弱正規形を返します。ドキュメントの構文は [README-ja-xml.md](README-ja-xml.md) を参照してください。
 
+どちらも `steps` を取ります。意味は `fully_eval` と同じで、省けば既定の上限が使われます。既定はひとつしかなく、`pgsn` コマンドが使うのと同じ数なので、コマンドで評価できるドキュメントはプログラムからも評価できます。上限を使い切るほど大きいドキュメントが間違っているわけではないので、事情を知っている呼び出し側はこう書きます。
+
+```python
+term = pgsn.load_xml("big.xml", steps=5_000_000)
+```
+
 ### jail
 
 ドキュメントは他のドキュメントを import できますが、どこまで届くかは *jail テーブル*で制御されます。jail は名前の付いたディレクトリルートで、ドキュメント側は絶対パス風のパスの先頭要素としてそれを指定します。
@@ -296,7 +302,7 @@ pgsn.load_xml("other.xml", config=other_cfg)   # 一時的に上書き
 
 既定設定は利便のためのもので、セキュリティ境界ではありません。ドキュメントを封じ込めるのは、その呼び出しで実際に使われた設定が持つ `Jails` テーブルです。PGSN にとって信用できない入力は XML であり、XML からこれらの関数には手が届きません。
 
-#### `load_xml_string(xml, *, config=None, jail=None)`
+#### `load_xml_string(xml, *, config=None, jail=None, steps=None)`
 
 文字列として持っているドキュメントには自分のディレクトリがないので、どの jail に属すると見なすかを指定しない限り相対 import は拒否されます。
 
