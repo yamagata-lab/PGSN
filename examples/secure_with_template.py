@@ -26,4 +26,4 @@ top = goal(
     )
 )
 
-gsn_tree(top.fully_eval()).show()
+gsn_tree(top.fully_eval()).show(sorting=False)

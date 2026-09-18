@@ -143,7 +143,7 @@ g = pgsn.goal(
         )),
     ),
 )
-print(pgsn.gsn_tree(g.fully_eval()).show(stdout=False))
+print(pgsn.gsn_tree(g.fully_eval()).show(stdout=False, sorting=False))
 ```
 
 ```
@@ -222,9 +222,11 @@ goals = pgsn.map_term(template)(requirements)
 
 ```python
 tree = pgsn.gsn_tree(evaluated)
-print(tree.show(stdout=False))   # テキスト表示
-tree.to_json()                   # JSON
+print(tree.show(stdout=False, sorting=False))   # テキスト表示
+tree.to_json(sort=False)                        # JSON
 ```
+
+treelib は指定しないと兄弟をタグ順に並べ替えるので、並べ替えないよう渡してください。リストの順序は文書が述べていることの一部で、`python_value` はその順序で報告します。`pgsn doc` も同じオプションを渡しています。
 
 ### `gsn_dot(term, layout_attrs=None)`
 

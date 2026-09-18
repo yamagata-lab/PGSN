@@ -12,7 +12,7 @@
         System is secure
         <Strategy>
             Apply security principles
-            <subGoals><ul><li var="g1"/><li var="g2"/><li var="g3"/></ul></subGoals>
+            <subGoals><ol><li var="g1"/><li var="g2"/><li var="g3"/></ol></subGoals>
         </Strategy>
     </Goal>
 </PGSN>

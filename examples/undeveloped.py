@@ -13,5 +13,5 @@ g = goal(
     )
 )
 
-gsn_tree(g.fully_eval()).show()
+gsn_tree(g.fully_eval()).show(sorting=False)
 dot = save_gsn(g.fully_eval(), "gsn_tree", view=True)

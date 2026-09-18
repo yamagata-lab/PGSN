@@ -20,13 +20,13 @@
             <Goal>
                 The robot behaves according to commands
                 <Strategy>Argument over each threat
-                    <subGoals><ul><li var="robot"/></ul></subGoals>
+                    <subGoals><ol><li var="robot"/></ol></subGoals>
                 </Strategy>
             </Goal>
             <Goal>
                 The server gives correct commands to the robot
                 <Strategy>Argument over each threat
-                    <subGoals><ul><li var="webServer"/></ul></subGoals>
+                    <subGoals><ol><li var="webServer"/></ol></subGoals>
                 </Strategy>
             </Goal>
         </Strategy>

@@ -25,7 +25,7 @@ if __name__ == '__main__':
     my_tree = gsn_tree(gsn)
 
     # 結果を表示
-    my_tree.show()
+    my_tree.show(sorting=False)
 
 
     dot = save_gsn(gsn, "gsn_tree", view=True)

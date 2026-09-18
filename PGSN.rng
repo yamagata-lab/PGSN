@@ -235,7 +235,6 @@
 
   <define name="data_type_pat">
     <choice>
-      <element name="ul"><ref name="list_content"/></element>
       <element name="ol"><ref name="list_content"/></element>
       <element name="dl"><ref name="dict_content"/></element>
     </choice>

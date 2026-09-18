@@ -46,8 +46,8 @@ def test_the_two_spellings_fail_alike():
 
 
 def test_as_wraps_content_on_any_element():
-    assert expanded('<arg as="ul"><li>a</li></arg>') == expanded(
-        '<arg><ul><li>a</li></ul></arg>')
+    assert expanded('<arg as="ol"><li>a</li></arg>') == expanded(
+        '<arg><ol><li>a</li></ol></arg>')
 
 
 def test_a_receiver_can_be_written_as_shorthand():

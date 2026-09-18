@@ -317,7 +317,7 @@ import が jail に入ると、その jail が import 先モジュールの封�
 <def name="myGoal" as="Goal">...</def>
 ```
 
-`<def name="x" as="T">C</def>` と `<def name="x"><T>C</T></def>` は同じ文書の書き分けです。この属性は `<def>` 専用ではありません。コンテンツを持つ要素であればどこでも、`as` はそのコンテンツを包む要素の名前になります。例外は `<from>` と `<import>` で、そこでの `as` は取り込む名前の別名を指定します。その位置で有効なタグ名であれば何でも指定できます（`object` でも `ul` でも `Goal` でも）。唯一の制限は、要素自身が属性を必要とするタグを指定できないことです——`var` は `name`、`get` は `key`、`send` は `method`、名前付きの `class` は `name` が要ります。`as` が動かすのはコンテンツだけで、属性は元の場所に残るからです。
+`<def name="x" as="T">C</def>` と `<def name="x"><T>C</T></def>` は同じ文書の書き分けです。この属性は `<def>` 専用ではありません。コンテンツを持つ要素であればどこでも、`as` はそのコンテンツを包む要素の名前になります。例外は `<from>` と `<import>` で、そこでの `as` は取り込む名前の別名を指定します。その位置で有効なタグ名であれば何でも指定できます（`object` でも `ol` でも `Goal` でも）。唯一の制限は、要素自身が属性を必要とするタグを指定できないことです——`var` は `name`、`get` は `key`、`send` は `method`、名前付きの `class` は `name` が要ります。`as` が動かすのはコンテンツだけで、属性は元の場所に残るからです。
 
 ### `typeOf` 属性
 
@@ -570,21 +570,17 @@ import が jail に入ると、その jail が import 先モジュールの封�
 
 ## データ型
 
-### 集合（ul）・リスト（ol）
+### リスト（ol）
 
 ```xml
-<ul>
-    <li>expr1</li>
-    <li var="x"/>    <!-- 略記 -->
-</ul>
-
 <ol>
     <li>expr1</li>
-    <li>expr2</li>
+    <li var="x"/>    <!-- 略記 -->
 </ol>
 ```
 
-`ul` と `ol` は XML 構文上は同型ですが、順序を保ちたい場合（例: `map_term` に渡すリスト）は `ol` を使います。
+リストの要素は `ol` だけです。項目の順序は文書が述べていることの一部で、どの出力も書いた順で報告します。
+集合はありません——`ul` は `ol` と同じ値を作りながら順序を持たないものを表す名前だったので、いまは要素として存在しません。
 
 ### 辞書（dl）
 
@@ -714,16 +710,16 @@ GSN ノードはどれも説明（description）から始まり、どれも `Def
 </Strategy>
 ```
 
-`subGoals` に集合（`ul`）やリスト（`ol`）を渡すことでサブゴールを動的に指定できます。
+`subGoals` にリスト（`ol`）を渡すことでサブゴールを動的に指定できます。
 
 ```xml
 <Strategy>
     argument
     <subGoals>
-        <ul>
+        <ol>
             <li var="goal1"/>
             <li var="goal2"/>
-        </ul>
+        </ol>
     </subGoals>
 </Strategy>
 ```
@@ -815,9 +811,9 @@ GSN ノードはクラスとして継承・拡張できます。
     <def name="mainStrategy" as="Strategy">
         テストとレビューによる検証
         <subGoals>
-            <ul>
+            <ol>
                 <li var="G1"/>
-            </ul>
+            </ol>
         </subGoals>
     </def>
 

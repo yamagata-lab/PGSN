@@ -22,7 +22,7 @@ a document reaches files inside one by writing ``/<jail>/sub/file.xml``::
 
     cfg = pgsn.Config(jails={"lib": "/opt/pgsn-lib"})
     term = pgsn.load_xml("main.xml", config=cfg)
-    print(pgsn.gsn_tree(term).show(stdout=False))
+    print(pgsn.gsn_tree(term).show(stdout=False, sorting=False))
 
 Nothing outside a registered jail — or outside the document's own directory —
 can be imported.

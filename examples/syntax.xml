@@ -132,15 +132,8 @@
         </div>
     </def>
 
-    <!-- data type: a list written as <ul>; the element name is documentary -->
-    <def name="aSet">
-        <ul>
-            <li>item1</li>
-            <li>item2</li>
-        </ul>
-    </def>
-
-    <!-- the same value written as <ol>, where the order carries meaning -->
+    <!-- data type: a list. <ol> is the only list element, and the order of
+         its items is part of what the document says -->
     <def name="aList">
         <ol>
             <li>item1</li>
@@ -181,10 +174,10 @@
     <def name="mainStrategy" as="Strategy">
         verified through testing and review
         <subGoals>
-            <ul>
+            <ol>
                 <li var="evidenceGoal"/>
                 <li var="G1"/>
-            </ul>
+            </ol>
         </subGoals>
     </def>
 

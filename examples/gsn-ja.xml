@@ -29,10 +29,10 @@
         <Strategy>
             YYYYYY
             <subGoals>
-                <ul>
+                <ol>
                     <li var="x_secure"/>
                     <li var="y_secure"/>
-                </ul>
+                </ol>
             </subGoals>
         </Strategy>
     </Goal>

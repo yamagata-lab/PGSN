@@ -135,7 +135,7 @@ def main():
     for i, top in enumerate(tops, 1):
         if len(tops) > 1:
             print(f"¥n=== Top-level Goal #{i} ===")
-        (pgsn.gsn.gsn_tree(top.fully_eval())).show()
+        (pgsn.gsn.gsn_tree(top.fully_eval())).show(sorting=False)
 
 if __name__ == "__main__":
     main()
