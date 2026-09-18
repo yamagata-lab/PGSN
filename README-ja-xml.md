@@ -110,7 +110,7 @@ XML では `<` をエスケープする必要があります。`i &lt; n` と書
 
 `//` が整数除算です。`7 // 2` は `3` になります。`/` は同義語として受け付けるのではなくエラーにしています。将来 PGSN に浮動小数点数を導入したとき、`/` を通常の除算に割り当てられるようにするためです。
 
-大小比較は整数のみなので、`"a" < "b"` には値がありません。等価比較はどんな値にも使えるので `"a" == "a"` は `True` です。
+大小比較は整数のみなので、`"a" < "b"` には値がありません。等価比較はデータだけを比べます。基本の値（文字列・整数・真偽値・`undefined`）と、それらから組んだリストとレコードです。だから `"a" == "a"` は `True` ですが、関数どうし・クラスどうし・GSN ノードどうしの比較には、`"a" < "b"` と同じく値がありません。リストが空かどうかは `is_empty` を適用して聞いてください。`empty` との比較で答えが出るのは、要素が基本の値のリストに限られます。
 
 **演算子は再定義できません。** `plus` という名前を束縛しているスコープの中でも `1 + 2` は加算のままです。
 
@@ -383,7 +383,7 @@ import が jail に入ると、その jail が import 先モジュールの封�
 
 以下の名前はあらかじめ定義済みで、`<var name="..."/>` で参照し `apply` に適用できます。これは `pgsn` パッケージが公開する項値の名前とちょうど一致しており、Python から使えるものは同じ名前で XML からも使えます。
 
-- リスト操作: `cons`・`head`・`tail`・`index`・`concat`・`map_term`・`fold`・`foldr`・`list_all`・`empty`
+- リスト操作: `cons`・`head`・`tail`・`index`・`is_empty`・`concat`・`map_term`・`fold`・`foldr`・`list_all`・`empty`
 - 真偽値: `true`・`false`・`if_then_else`・`boolean_and`・`boolean_or`・`boolean_not`・`equal`・`less_than`・`guard`
 - 整数: `plus`・`minus`・`times`・`div`・`mod`・`integer_sum`
 - レコード: `has_label`・`list_labels`・`add_attribute`・`remove_attribute`・`overwrite_record`・`empty_record`

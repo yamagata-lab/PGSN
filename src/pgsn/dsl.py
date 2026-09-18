@@ -136,6 +136,7 @@ cons = Cons.named()
 head = Head.named()
 tail = Tail.named()
 index = Index.named()
+is_empty = IsEmpty.named()
 #fold = Fold.named()
 map_term = Map.named()
 
@@ -144,8 +145,11 @@ _list = variable('list')
 _acc = variable('acc')
 _foldr = variable('_foldr')
 empty: List = List.named(terms=tuple())
+# The base case asks `is_empty` rather than comparing the list with `empty`:
+# equality is defined on data only, so a list of anything else -- a list of GSN
+# nodes, say -- would leave the comparison stuck and the fold with it.
 _F = lambda_abs_vars((_foldr, _f, _acc, _list),
-                     if_then_else(equal(_list)(empty))
+                     if_then_else(is_empty(_list))
                      (_acc)
                      (_f(head(_list))(_foldr(_f)(_acc)(tail(_list))) )
                      )

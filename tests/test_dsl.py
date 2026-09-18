@@ -286,7 +286,7 @@ def test_stuck_condition_leaves_both_branches_alone():
 
 
 def test_fold_over_a_stuck_list_terminates():
-    # `equal(_stuck)(empty)` never becomes a boolean, so the recursive call in
+    # `is_empty(_stuck)` never becomes a boolean, so the recursive call in
     # the else branch must stay unexpanded instead of unfolding forever.
     fold(plus)(integer(0))(_stuck).fully_eval(steps=1000)
 

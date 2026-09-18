@@ -13,7 +13,8 @@ from pgsn.jail import JailError, is_within
 from pgsn.dsl import (
     variable, string, list_term, record, empty_record, let, let_vars,
     lambda_abs, lambda_abs_keywords, lambda_abs_vars,
-    fix, map_term, fold, foldr, concat, cons, head, tail, index, repeat,
+    fix, map_term, fold, foldr, concat, cons, head, tail, index, is_empty,
+    repeat,
     list_all, integer_sum, integer,
     true, false, if_then_else, guard,
     equal, less_than, plus, minus, times, div, mod,
@@ -628,6 +629,7 @@ _BUILTINS: dict[str, Term] = {
     "fix": fix, "map_term": map_term, "fold": fold, "foldr": foldr,
     "concat": concat, "list_all": list_all,
     "cons": cons, "head": head, "tail": tail, "index": index, "empty": empty,
+    "is_empty": is_empty,
     "repeat": repeat, "integer_sum": integer_sum,
     "equal": equal, "less_than": less_than,
     "guard": guard, "if_then_else": if_then_else,

@@ -48,7 +48,8 @@ not a rewrite rule: it does not survive the substitution of `"a"` for `x`.
 Evaluating `map_term (λx. if (equal x "a") "yes" "no")` over `["a"]` could
 therefore reach `["yes"]` or `["no"]` depending on the order of reduction.
 With evaluation stopping at abstractions, every term the evaluator reduces is
-closed, and the question does not arise.
+closed, and the question does not arise. Equality has since been narrowed to
+data (§1.5), which refuses a variable for a second reason.
 
 **A function held in data has no normal form.** Lists and records may hold
 functions — a module is a record of templates, a class is a record of methods —
@@ -100,8 +101,8 @@ the step budget runs out. Under an abstraction there is nothing to reduce
 (§1.1), so instead the application stays as it stands and is reported stuck.
 
 This is what makes a missing record key visible where it occurs. A lookup that
-cannot proceed reaches a fold as the list being folded; the guard `equal list
-empty` cannot proceed either; and the fold now stops. The same holds for a
+cannot proceed reaches a fold as the list being folded; the guard `is_empty
+list` cannot proceed either; and the fold now stops. The same holds for a
 recursion the author writes themselves, through `<if>` and a recursive binding,
 because `<if>` expands to an application of this same term (§4.1). Measured on
 such a recursion, guarded by a comparison against a stuck term: 86 s to exhaust
@@ -162,13 +163,33 @@ lives, in `_applicable_args`. Builtins that build a term containing
 applications (`Map`, a method call on an object) can return that term for the
 machine to continue with, which is what `_apply_args` already does.
 
-Two rules were answered by comparing terms. One still needs a decision before
-a machine can implement it; the other was changed so that it no longer asks:
+Two rules were answered by comparing terms. Both have since been settled, so
+neither leaves a machine to decide what it is for two terms to be the same:
 
-- **Equality.** Structural equality of data is well defined. Equality of
-  functions is not definable, and comparing closures structurally is
-  meaningless. Comparing them by identity is not referentially transparent:
-  `let f = λx.x in equal f f` and `equal (λx.x) (λx.x)` would differ.
+- **Equality.** `equal` compares data and declines everything else. A term is
+  comparable when it is a base value — a string, an integer, a boolean, a
+  named constant — or a list or a record whose components are comparable in
+  turn; the leaves of a comparable term are therefore always base values.
+  Anything else leaves the application stuck, so the question is refused
+  rather than answered wrongly.
+
+  Structural equality of data is well defined. Equality of functions is not
+  definable, and comparing closures structurally is meaningless. Comparing
+  them by identity is not referentially transparent: `let f = λx.x in equal f
+  f` and `equal (λx.x) (λx.x)` would differ. Identity is the worse answer here
+  for a second reason: the evaluator does not share, so a binding read twice
+  is reduced twice and would carry two identities, where a machine with
+  environments and closures would carry one — the sharing a machine adds for
+  speed would change what programs mean. And a notation whose premise is that
+  code is collected from several places needs the same definition, written in
+  two of them, to be the same value. Structure gives that; identity cannot.
+
+  Two consequences were visible in the code. `equal [plus 1 1] [2]` answered
+  `false`, because the elements were compared as terms before they had values;
+  it waits now, and answers `true`. And `foldr` asked for its base case by
+  comparing the list with `empty`, which a list of GSN nodes cannot answer, so
+  emptiness is asked directly with `is_empty` — a question about the list and
+  not about its elements.
 - **Class identity.** A machine does not need one. `is_subclass` walked the
   inheritance chain comparing classes with structural equality, so the same
   class reached along two paths compared unequal once its defaults had been
@@ -202,9 +223,11 @@ a machine can implement it; the other was changed so that it no longer asks:
   no name cannot be converted at all, since there is nothing to report it as:
   a limit of the readback rather than a claim about the value.
 
-  One caveat for whoever implements `equal`: it accepts classes today, since
-  it declines only applications and abstractions, so the comparison that was
-  removed is one builtin away from returning.
+  The caveat this left is closed. `equal` accepted classes, since it declined
+  only applications and abstractions, so the comparison that was removed was
+  one builtin away from returning. A class is not data and neither is an
+  object, and `equal` declines both: what makes two classes the same is left
+  open (§7) rather than decided here by accident.
 
 ## 2. Names and scope
 
@@ -473,8 +496,8 @@ Keeping `ul` as an alias would have been the cheaper change and the worse one.
 Authors would have come to depend on the order it preserved — every example
 that passes sub-goals through a list was written with it — and a set added
 later would silently reorder their documents. A set also needs more than a tag:
-an equality on its elements, which is undecided for closures (§1.5, §7), and a
-canonical order to render it in. If one is ever wanted it gets its own element
+an equality on its elements, which data has and functions and nodes do not
+(§1.5), and a canonical order to render it in. If one is ever wanted it gets its own element
 and its own term type, so that no existing document changes meaning under it.
 
 ## 5. GSN classes
@@ -539,7 +562,10 @@ they produce, since they are material rather than specification.
   carries the name its author gave it (§1.5), but that name is a label for
   readback: nothing in the language compares one with another, and names given
   in documents written apart from each other are not unique. The inheritance
-  chain holds the real answer, and only the readback can see it.
+  chain holds the real answer, and only the readback can see it. Behind the
+  check is a larger question that is not yet formulated: what it is for two
+  definitions collected from different places to be the same, and how the
+  provenance of either is established.
 - A GSN element's compiler picks out the children it knows by tag, so a child
   it does not know is neither read nor refused: a `<Goal>` whose `<Defeater>`
   is spelled `<Rebuttal>` compiles to a goal with one defeater fewer and says

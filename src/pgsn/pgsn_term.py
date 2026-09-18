@@ -1001,6 +1001,19 @@ class Tail(ConstMixin, Unary):
         return List.build(terms=arg.terms[1:], is_named=self.is_named)
 
 
+# Emptiness is a question about the list itself, not about its elements, so it
+# is asked directly rather than by comparing the list with `empty`: equality
+# looks at the elements and declines a list that holds anything but data.
+@frozen
+class IsEmpty(ConstMixin, Unary):
+
+    def _applicable(self, arg: Term):
+        return isinstance(arg, List)
+
+    def _apply_arg(self, arg: List) -> Term:
+        return Boolean.build(is_named=self.is_named, value=len(arg.terms) == 0)
+
+
 @frozen
 class Index(ConstMixin, Builtin):
 
@@ -1194,7 +1207,25 @@ class LessThan(ConstMixin, Builtin):
                              value=args[0].value < args[1].value)
 
 
-# Comparison. does not compare App and Abs
+# Comparison. Only data can be compared. A term is comparable when it is a base
+# value, or a list or a record whose components are all comparable in turn; the
+# leaves of a comparable term are therefore always base values. Anything else is
+# declined, and the application stays stuck rather than being called unequal: a
+# function has no structural equality to speak of, a term still to be reduced
+# holds no value yet, and a class or an object is not data -- what makes two of
+# them the same is an open question, and answering it here would decide it by
+# accident. Refusing the question is not the same answer as `false`, and a
+# document that asks it stops where it asked.
+def _comparable(term: Term) -> bool:
+    if isinstance(term, (String, Integer, Boolean, Constant)):
+        return True
+    if isinstance(term, List):
+        return all(_comparable(t) for t in term.terms)
+    if isinstance(term, Record):
+        return all(_comparable(t) for t in term._attributes.values())
+    return False
+
+
 @frozen
 class Equal(ConstMixin, Builtin):
 
@@ -1202,8 +1233,10 @@ class Equal(ConstMixin, Builtin):
     def build(cls, is_named: bool, **kwarg) -> Term:
         return super().build(arity=2, is_named=is_named, **kwarg)
 
+    # Only the two arguments being compared are inspected; anything further
+    # along the spine is passed on by `apply_args` and is none of our business.
     def _applicable_args(self, args: tuple[Term,...]):
-        return all((not isinstance(arg, App) and not isinstance(arg, Abs) for arg in args))
+        return len(args) >= 2 and all(_comparable(arg) for arg in args[:2])
 
     def _apply_args(self, args: tuple[Term,...]):
         return Boolean.build(is_named=self.is_named, value=args[0] == args[1])
