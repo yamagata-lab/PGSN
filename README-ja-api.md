@@ -40,7 +40,7 @@ pgsn.goal(description=..., support=...)       # キーワードのレコード
 
 ```python
 term.eval()                  # 1 ステップだけ簡約
-term.fully_eval()            # 弱正規形まで簡約、既定は steps=100000
+term.fully_eval()            # 弱正規形まで簡約、既定は steps=1000000
 term.fully_eval(steps=5000)  # 上限を明示
 ```
 
@@ -254,10 +254,10 @@ term = pgsn.load_xml_string(source)
 
 どちらもコンパイルと評価まで行い、弱正規形を返します。ドキュメントの構文は [README-ja-xml.md](README-ja-xml.md) を参照してください。
 
-どちらも `steps` を取ります。意味は `fully_eval` と同じで、省けばそのメソッド自身の既定がそのまま使われます。上限を使い切るほど大きいドキュメントが間違っているわけではないので、上限は呼び出す側のものです。`pgsn` コマンドは既定の10倍を許すので、`pgsn doc` が評価できるドキュメントでも、ここでは上限を明示する必要があることがあります。
+どちらも `steps` を取ります。意味は `fully_eval` と同じで、省けば既定の上限が使われます。既定はひとつしかなく、`pgsn` コマンドが使うのと同じ数なので、コマンドで評価できるドキュメントはプログラムからも評価できます。上限を使い切るほど大きいドキュメントが間違っているわけではないので、事情を知っている呼び出し側はこう書きます。
 
 ```python
-term = pgsn.load_xml("big.xml", steps=1_000_000)
+term = pgsn.load_xml("big.xml", steps=5_000_000)
 ```
 
 ### jail

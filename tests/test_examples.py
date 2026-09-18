@@ -28,11 +28,6 @@ EXAMPLES = Path(__file__).resolve().parent.parent / "examples"
 # the tests are named.
 SLOW = {"EU_AI_ACT/eu_ai_act_full.xml"}
 
-# The budget the `pgsn` command allows, so that a document it evaluates is
-# one this test evaluates too. `fully_eval`'s own default is ten times
-# smaller, and `EU_AI_ACT/eu_ai_act_full.xml` needs more than that.
-STEPS = 1_000_000
-
 
 def _entry_points() -> list:
     params = []
@@ -48,7 +43,7 @@ def _entry_points() -> list:
 
 @pytest.mark.parametrize("path", _entry_points())
 def test_an_example_evaluates(path):
-    pgsn.python_value(pgsn.load_xml(path, steps=STEPS))
+    pgsn.python_value(pgsn.load_xml(path))
 
 
 def test_the_two_figure6_documents_agree():
