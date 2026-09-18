@@ -5,6 +5,22 @@ GSN nodes (Goal, Strategy, Evidence) are treated as first-class values and can b
 
 ---
 
+## Design Principles
+
+Five properties hold everywhere in the language. The sections that follow describe the syntax; these describe what that syntax is a syntax for.
+
+**Everything is a value.** A Goal, a Strategy, a piece of Evidence, a class, a template — each is a value like a string or a list, and can be bound to a name, held in a list, passed to a template or returned from one. There are no name slots and no class-name strings to work around: wherever an element takes content, it takes an expression. See [Values](#values).
+
+**The language is purely functional.** Nothing is mutated and nothing is performed. A `<def>` binds a name for the scope that follows it and never changes what an earlier binding meant; binding the same name again shadows it rather than assigns to it. A document therefore denotes one value, and denotes the same value however many times it is evaluated. See [Definitions](#definitions-def).
+
+**Evaluation does not fail; it stops.** An unbound variable, a record read at a label it does not carry, a `typeOf` check the value does not satisfy — none of these is an error. The application has no rule to reduce by, so it stays as it is, and the term holding it never reaches a normal form. Reduction stops at a function as well: a function is a value, and its body is not entered until it is applied. Nothing is raised here. What raises is whatever asks for a value afterwards — `pgsn doc`, `python_value` — which cannot produce one from a term that is not in normal form, and says at which path the reduction stopped. Compilation is a separate matter: malformed syntax and rejected imports are errors, and are raised as such.
+
+**The only way out is `import`, and it is confined.** A document reads no file, reaches no network and consults no clock. Its one connection to anything outside itself is `<from>`, which may name only a file inside the directory tree the document is confined to, or inside a jail registered by whoever ran PGSN. See [Import paths and jails](#import-paths-and-jails).
+
+**Identity is data, and nothing else.** Equality compares base values — strings, integers, booleans, `undefined` — and the lists and records built out of them. Two functions, two classes or two GSN nodes have no value when compared. There is no physical identity either: a value carries no address and no timestamp, so a copy cannot be told apart from the original, and neither can two nodes written with the same description. See [Expressions](#expressions-expr).
+
+---
+
 ## Document Structure
 
 PGSN has two root elements: `<PGSN>` for standalone documents and `<PGSNModule>` for reusable modules.
@@ -193,8 +209,11 @@ ways.
 
 ## Parameters (param)
 
-`param` declares variables that a `<PGSNModule>` receives from the caller.
-Parameters are only valid inside `<PGSNModule>` and must appear before any `<from>` or `<def>` elements.
+`param` declares a variable bound from outside the element that holds it.
+Three elements take parameters: a `<PGSNModule>`, which receives them from the
+document that imports it, a `<template>`, which receives them from the
+`<apply>` that calls it, and a `<method>`, which receives them from the
+`<send>` that invokes it.
 
 ```xml
 <param name="A1"/>
@@ -202,6 +221,10 @@ Parameters are only valid inside `<PGSNModule>` and must appear before any `<fro
 <!-- with a default value -->
 <param name="threshold">100</param>
 ```
+
+In a `<PGSNModule>`, parameters come before any `<from>` or `<def>`.
+
+Parameters are positional or keyword wherever they appear; [Template Definition](#template-definition-template) describes the two kinds, the order they are declared in, and which of them may carry a default value.
 
 ---
 
@@ -524,11 +547,11 @@ Application is binary, so an `<apply>` with no `<arg>` applies nothing and is th
 > `is_subtype` compares the attribute and method *names* two classes declare,
 > and `inherit` plays no part in it. So a class satisfies every type whose
 > labels it covers, related to it or not, and asking which class a value
-> belongs to has no answer — only asking what it carries does. The predicates
-> that did compare classes, `is_instance` and `is_subclass`, are gone: two
-> copies of one class could not be relied on to compare equal, so the answer
-> depended on where the copies came from. `<instanceOf>` inside `<object>`
-> names the class to instantiate and is a different thing again.
+> belongs to has no answer — only asking what it carries does. There is no
+> predicate for it: two copies of one class cannot be relied on to compare
+> equal, so an answer would depend on where the copies came from.
+> `<instanceOf>` inside `<object>` names the class to instantiate and is a
+> different thing again.
 
 ### Object Instantiation (object)
 
@@ -555,6 +578,8 @@ Application is binary, so an `<apply>` with no `<arg>` applies nothing and is th
 <get key="x"><var name="my_record"/></get>
 <apply><var name="my_record"/><arg>x</arg></apply>
 ```
+
+A record carries the labels it was built with, and reading a label it does not carry is an application with no rule to reduce by. The term stays as it is and never reaches a normal form, so `pgsn doc` and `python_value` have no value to give and report the path at which the reduction stopped — see [Design Principles](#design-principles). A misspelled key therefore leaves the document with no value at all, rather than passing on as a silent gap. That is what makes it safe for a template to read a record it did not build itself.
 
 ### Method Invocation (send)
 
@@ -587,7 +612,7 @@ When the receiver is a complex expression rather than a plain variable, omit `to
 </ol>
 ```
 
-`ol` is the only list element, and the order of its items is part of what the document says: every rendering reports them in the order they were written. There is no set — `ul` used to build the same value as `ol` while standing for an unordered one, and it is no longer an element.
+`ol` is the only list element, and the order of its items is part of what the document says: every rendering reports them in the order they were written. There is no set.
 
 ### Dictionary (dl)
 
