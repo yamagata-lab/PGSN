@@ -101,6 +101,8 @@ pgsn.python_value(double(pgsn.integer(21)).fully_eval())   # 42
 
 `fold` の引数の順は `fold(f)(accumulator)(list)` です。`repeat(f, accumulator, n)` は accumulator に `f` を `n` 回適用します。
 
+`fold` は `foldr` の別名で、左畳み込みはありません。畳み込みは右からで、`f` は要素を先に、accumulator を後に受け取ります。つまり `fold(f)(z)([x1, x2])` は `f(x1)(f(x2)(z))` です。
+
 ---
 
 ## GSN コンストラクタ
@@ -182,8 +184,8 @@ pgsn.is_subtype(pgsn.type_of(node))(pgsn.goal_class).fully_eval().value
 型付けは構造的です。`is_subtype` が比べるのは2つのクラスが宣言する属性名とメソッド名だけで、
 `inherit` は関与しません。`description` と `defeaters` を持つ自作のクラスは `evidence_class` を
 満たしますし、goal もそれらを（さらに多く）宣言しているので満たします。「どのクラスに属するか」を
-尋ねる述語はありません。`is_instance` と `is_subclass` は削除しました。同一のクラスでも
-コピーどうしが等しいとは限らず、答えがコピーの出自に左右されたからです。
+尋ねる述語はありません。同一のクラスでもコピーどうしが等しいとは限らず、答えがコピーの
+出自に左右されてしまうからです。
 クラスの出自を知りたいときは、オブジェクトから継承チェーンを読み出してください。
 
 ```python

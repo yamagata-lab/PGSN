@@ -101,6 +101,8 @@ These are terms, not Python functions: they are values you apply. XML exposes ex
 
 Note that `fold` takes its arguments as `fold(f)(accumulator)(list)`, and `repeat(f, accumulator, n)` applies `f` to the accumulator `n` times.
 
+`fold` is another name for `foldr`; there is no left fold. It folds from the right, and `f` receives an element first and the accumulator second, so `fold(f)(z)([x1, x2])` is `f(x1)(f(x2)(z))`.
+
 ---
 
 ## GSN constructors
@@ -185,9 +187,9 @@ Typing is structural: `is_subtype` compares the attribute and method names the
 two classes declare, and `inherit` plays no part. A class of your own
 satisfies `evidence_class` by carrying `description` and `defeaters`, and a
 goal satisfies it too, since it declares those and more. There is no predicate
-that asks which class a value belongs to — `is_instance` and `is_subclass`
-were removed, because two copies of one class could not be relied on to
-compare equal, so the answer depended on where the copies came from.
+that asks which class a value belongs to: two copies of one class cannot be
+relied on to compare equal, so the answer would depend on where the copies
+came from.
 To ask where a class came from, read the inheritance chain off the object:
 
 ```python
