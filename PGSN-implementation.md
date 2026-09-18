@@ -385,7 +385,7 @@ element's content model. Each element's content is therefore a named pattern
 that the element and `as` both refer to. What RELAX NG cannot say is which
 element `as` named, because a schema cannot branch on an attribute's value. So
 the `as` branch is the choice of every content model, and each is still
-checked internally: a document may write a `<dl>`'s content under `as="ul"`
+checked internally: a document may write a `<dl>`'s content under `as="ol"`
 and the schema will not object, though the compiler will.
 
 Validating is worth the trouble because it catches what evaluating cannot. The
@@ -421,9 +421,61 @@ computed label needs nothing new — it is written as that application. The
 attribute holds a literal, which is why it is an attribute and not a value
 position.
 
-The old spelling is rejected by name rather than ignored: an unknown
-attribute would be dropped in silence and the element would then fail for want
-of a `key`, without saying that anything had been renamed.
+The old spelling is not carried as an error. While the language is young
+enough to rename things, a document written against the old one is told
+nothing about the rename: `label` is an unknown attribute, unknown attributes
+are dropped in silence, and the element then fails for want of a `key`. That
+silence is the same gap §7 describes for an unrecognised child element, and
+validating before compiling is what closes both.
+
+### 4.6 A list is ordered, and there is one kind of it
+
+Sub-goals, contexts, assumptions and defeaters are `List` terms, and nothing in
+the language used to say whether the order of their elements carried meaning.
+The implementation answered the question twice, differently. `python_value`
+returned the elements in the order the document gave them, while every
+rendering path sorted them alphabetically: `gsn_tree` builds a `treelib.Tree`,
+and treelib sorts siblings by tag unless told otherwise. That reached
+`tree.show` (`pgsn doc`), `tree.to_json` (`pgsn doc -d json`) and the
+`expand_tree` walk in `gsn_dot` (`pgsn render`), so all three command-line
+outputs reordered what the Python API did not.
+
+The GSN Community Standard does not settle it. It defines the node types and
+the SupportedBy and InContextOf relations, and assigns no meaning to the order
+of siblings; ordering there is a matter of layout. So the question is PGSN's to
+answer, not a point of conformance.
+
+The answer is that the order is part of what the document says. It is the
+reading that costs nothing — a document that does not care about the order of
+its sub-goals loses nothing by having it preserved — while the other reading
+costs the author the ability to say "these hazards in this order", which no
+notation gives back. Every renderer therefore asks treelib not to sort. The
+option is passed at the call, not hidden in a subclass of `Tree`: `gsn_tree`
+returns treelib's own tree, and a caller who renders it passes `sorting=False`
+(or `sort=False` to `to_json`) the way `pgsn doc` does. Wrapping the library to
+change its defaults would make our tree something the reader has to learn
+before trusting treelib's documentation about it.
+
+Within a node, the children a renderer reports are the node's attributes, whose
+order is the order the record was built in rather than anything sorted. The
+constructors in `gsn.py` write them in one order for that reason: what the node
+is stated in the context of, then what challenges it, then what it rests on.
+
+`ul` is gone. It compiled to the same `List` as `ol` while standing for a set,
+and `README-xml.md` told authors to use `ol` "when order matters" — so a
+document could express the distinction and the compiler would discard it. Now
+there is one list element and it is ordered. The tag is simply not in the
+language: a document that writes it is told that the expression is unknown,
+which is what the language is young enough for. `as="ul"` fails with it, since
+the shorthand expands to the element before anything reads it.
+
+Keeping `ul` as an alias would have been the cheaper change and the worse one.
+Authors would have come to depend on the order it preserved — every example
+that passes sub-goals through a list was written with it — and a set added
+later would silently reorder their documents. A set also needs more than a tag:
+an equality on its elements, which is undecided for closures (§1.5, §7), and a
+canonical order to render it in. If one is ever wanted it gets its own element
+and its own term type, so that no existing document changes meaning under it.
 
 ## 5. GSN classes
 

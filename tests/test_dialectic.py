@@ -11,8 +11,11 @@ def run(source: str):
 
 
 def tree(source: str) -> str:
+    # `sorting=False` is how a caller asks for document order: treelib sorts
+    # siblings by tag by default, and `pgsn doc` passes the same option.
     return pgsn.gsn_tree(
-        pgsn.load_xml_string(f"<PGSN>{source}</PGSN>")).show(stdout=False)
+        pgsn.load_xml_string(f"<PGSN>{source}</PGSN>")).show(stdout=False,
+                                                             sorting=False)
 
 
 def class_marker(node: dict) -> str:
@@ -96,7 +99,8 @@ def test_nodes_without_defeaters_are_unchanged():
     """Adding the attribute must not disturb documents that never use it."""
     g = pgsn.goal(description="safe", support=pgsn.undeveloped).fully_eval()
     assert pgsn.python_value(g)["defeaters"] == []
-    assert "defeaters" not in pgsn.gsn_tree(g).show(stdout=False)
+    assert "defeaters" not in pgsn.gsn_tree(g).show(stdout=False,
+                                                    sorting=False)
 
 
 # ------------------------------------------------------------------ #

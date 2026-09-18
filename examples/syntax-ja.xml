@@ -132,15 +132,8 @@
         </div>
     </def>
 
-    <!-- データ型: <ul> で書いたリスト。要素名は文書上の区別 -->
-    <def name="aSet">
-        <ul>
-            <li>item1</li>
-            <li>item2</li>
-        </ul>
-    </def>
-
-    <!-- 同じ値を <ol> で書いたもの。順序が意味を持つ場合に使う -->
+    <!-- データ型: リスト。リストの要素は <ol> だけで、項目の順序は文書が述べて
+         いることの一部 -->
     <def name="aList">
         <ol>
             <li>item1</li>
@@ -181,10 +174,10 @@
     <def name="mainStrategy" as="Strategy">
         テストとレビューによる検証
         <subGoals>
-            <ul>
+            <ol>
                 <li var="evidenceGoal"/>
                 <li var="G1"/>
-            </ul>
+            </ol>
         </subGoals>
     </def>
 

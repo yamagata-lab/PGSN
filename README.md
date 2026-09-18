@@ -95,7 +95,7 @@ import pgsn
 
 cfg = pgsn.Config(jails={"lib": "/opt/pgsn-lib"})
 term = pgsn.load_xml("main.xml", config=cfg)
-print(pgsn.gsn_tree(term).show(stdout=False))
+print(pgsn.gsn_tree(term).show(stdout=False, sorting=False))
 ```
 
 It exposes constructors for PGSN constants and terms (`string`, `record`, `lambda_abs`, `map_term`, ...), constructors for GSN nodes and classes (`goal`, `strategy`, `evidence`, `goal_class`, ...), the conversion and rendering functions (`python_value`, `gsn_tree`, `gsn_dot`, `save_gsn`), and the XML front end with its configuration (`load_xml`, `load_xml_string`, `Config`, `Jails`, `configure`).
@@ -125,7 +125,7 @@ g = goal(
     )
 )
 
-gsn_tree(g.fully_eval()).show()
+gsn_tree(g.fully_eval()).show(sorting=False)
 ```
 
 The same case is in `examples/gsn.py`, which binds it to `main` for the command
@@ -179,7 +179,7 @@ top = goal(
     )
 )
 
-gsn_tree(top.fully_eval()).show()
+gsn_tree(top.fully_eval()).show(sorting=False)
 ```
 
 ---
@@ -207,7 +207,7 @@ secure_goal = goal(
     support=immediate(goals)
 )
 
-gsn_tree(secure_goal.fully_eval()).show()
+gsn_tree(secure_goal.fully_eval()).show(sorting=False)
 ```
 
 ---
@@ -227,7 +227,7 @@ g = instantiate(CustomGoal, description="Secure connection established",
                 project='Alpha',
                 support=evidence(description="Verified by audit"))
 
-gsn_tree(g.fully_eval()).show()
+gsn_tree(g.fully_eval()).show(sorting=False)
 ```
 
 These advanced examples demonstrate how to:

@@ -215,14 +215,11 @@ def _name_error(name: str, where: str = "") -> PGSNError:
 def _check_source(elem: ET.Element) -> None:
     """Check the document as written, before any of it is rewritten.
 
-    Both checks below are only possible here. Whether a name is reserved is a
+    The check below is only possible here: whether a name is reserved is a
     question about how the document spells it, and desugaring introduces
-    reserved names on purpose; a retired attribute is recognisable only where
-    its author put it, and an attribute no pass reads is dropped without a
-    word.
+    reserved names on purpose.
     """
     _check_names(elem)
-    _check_retired(elem)
     for child in elem:
         _check_source(child)
 
@@ -235,40 +232,6 @@ def _check_names(elem: ET.Element) -> None:
             continue
         if value.startswith(_RESERVED_PREFIX) or not value.isidentifier():
             raise _name_error(value, f' in <{elem.tag} {attr}="{value}">')
-
-
-def _check_retired(elem: ET.Element) -> None:
-    """Reject spellings that no longer mean what they once did."""
-    # The `instanceOf` attribute became `typeOf` when the check stopped
-    # walking the inheritance chain and started comparing attribute and method
-    # names. Saying so is worth a few lines: an unknown attribute is otherwise
-    # ignored, so a document carrying the old spelling would lose its check
-    # without a word.
-    if "instanceOf" in elem.attrib:
-        raise PGSNError(
-            f"<{elem.tag} instanceOf=...>: the attribute is now spelled "
-            f"'typeOf', and asks whether the value carries at least the "
-            f"attributes and methods the type declares, rather than where its "
-            f"class came from. The <instanceOf> child of <object> names the "
-            f"class to instantiate and keeps its name.")
-
-    # `label` on <get> became `key`, so that a record label is spelled the
-    # same way wherever one is written: <dt key=> builds an entry and
-    # <get key=> reads it back. Without this the document would fail for want
-    # of a `key`, which does not say that the attribute was renamed.
-    if elem.tag == "get" and "label" in elem.attrib:
-        raise PGSNError(
-            "<get label=...>: the attribute is now spelled 'key', which is "
-            "how a record label is written wherever one appears -- <dt key=> "
-            "builds the entry that <get key=> reads back.")
-
-    # A parameter is bound by a lambda, so a guard on it would have to be
-    # planted in the body. The attribute did nothing at all before; say so
-    # rather than ignoring it a second time.
-    if elem.tag == "param" and "typeOf" in elem.attrib:
-        raise PGSNError(
-            "<param typeOf=...>: a parameter cannot carry a type. Check the "
-            "value where it is used, with <var name=\"...\" typeOf=\"...\"/>.")
 
 
 # ------------------------------------------------------------------ #
@@ -324,7 +287,7 @@ def _expr_error(node: ast.AST) -> PGSNError:
     return PGSNError(
         f"{type(node).__name__} is not allowed in <expr>. The expression "
         "syntax covers arithmetic, comparison, boolean operators and "
-        "f-strings; use <apply>, <get> or <ul>/<dl> for anything else.")
+        "f-strings; use <apply>, <get> or <ol>/<dl> for anything else.")
 
 
 def _translate(node: ast.AST) -> ET.Element:
@@ -1105,7 +1068,6 @@ def _expr(elem: ET.Element, chroot: _Chroot,
         "get":      _e_get,
         "send":     _e_send,
         "div":      _e_div,
-        "ul":       _e_list,
         "ol":       _e_list,
         "dl":       _e_dict,
         "Goal":     _e_goal,
@@ -1360,7 +1322,7 @@ def _e_dict(elem: ET.Element, chroot: _Chroot,
 # Tags that stand for a value, as opposed to the tags that give a GSN node its
 # structure. A lone value child of a GSN header is its description.
 _VALUE_TAGS = {"var", "num", "str", "builtin", "apply", "get", "send",
-               "div", "ul", "ol", "dl", "template", "class", "object"}
+               "div", "ol", "dl", "template", "class", "object"}
 
 
 def _header_description(elem: ET.Element, chroot: _Chroot,

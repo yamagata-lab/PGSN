@@ -290,7 +290,7 @@ def test_same_module_imported_twice_is_allowed(tmp_path):
     src = write(tmp_path / "main.xml", """<PGSN>
         <from file="/lib/mod.xml" import="greeting" as="a"/>
         <from file="/lib/mod.xml" import="greeting" as="b"/>
-        <ul><li><var name="a"/></li><li><var name="b"/></li></ul>
+        <ol><li><var name="a"/></li><li><var name="b"/></li></ol>
     </PGSN>""")
     cfg = Config(jails={"lib": str(lib)})
     assert python_value(load_xml(src, config=cfg)) == \

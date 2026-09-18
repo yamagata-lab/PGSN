@@ -10,4 +10,4 @@ g = instantiate(CustomGoal, description="Secure connection established",
                 project='Alpha',
                 support=evidence(description="Verified by audit"))
 
-gsn_tree(g.fully_eval()).show()
+gsn_tree(g.fully_eval()).show(sorting=False)

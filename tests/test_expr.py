@@ -47,7 +47,7 @@ def test_num_rejects_non_integers():
 def test_bare_text_is_still_a_string():
     """Adding <num> must not change what a bare number in text means."""
     assert run("2024") == "2024"
-    assert run("<ul><li>1</li></ul>") == ["1"]
+    assert run("<ol><li>1</li></ol>") == ["1"]
 
 
 def test_str_is_verbatim():
@@ -293,7 +293,7 @@ def test_generating_sub_goals_by_recursion():
         <template><param name="i" positional="true"/>
           <apply><var name="if_then_else"/>
             <arg><expr>i == 0</expr></arg>
-            <arg><ul/></arg>
+            <arg><ol/></arg>
             <arg><apply><var name="cons"/>
               <arg><Goal>
                 <description><expr>f"requirement {i} is met"</expr></description>

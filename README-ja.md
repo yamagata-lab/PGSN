@@ -92,7 +92,7 @@ import pgsn
 
 cfg = pgsn.Config(jails={"lib": "/opt/pgsn-lib"})
 term = pgsn.load_xml("main.xml", config=cfg)
-print(pgsn.gsn_tree(term).show(stdout=False))
+print(pgsn.gsn_tree(term).show(stdout=False, sorting=False))
 ```
 
 公開しているのは、PGSN 定数および項を構築する関数（`string`、`record`、`lambda_abs`、`map_term` など）、GSN ノードとクラスを構築する関数（`goal`、`strategy`、`evidence`、`goal_class` など）、変換・描画の関数（`python_value`、`gsn_tree`、`gsn_dot`、`save_gsn`）、そして XML フロントエンドとその設定（`load_xml`、`load_xml_string`、`Config`、`Jails`、`configure`）です。
@@ -122,7 +122,7 @@ g = goal(
     )
 )
 
-gsn_tree(g.fully_eval()).show()
+gsn_tree(g.fully_eval()).show(sorting=False)
 ```
 
 同じケースが `examples/gsn.py` にあり、コマンドラインから描画できるよう `main` に束縛してあります。
@@ -175,7 +175,7 @@ top = goal(
     )
 )
 
-gsn_tree(top.fully_eval()).show()
+gsn_tree(top.fully_eval()).show(sorting=False)
 ```
 
 ---
@@ -203,7 +203,7 @@ secure_goal = goal(
     support=immediate(goals)
 )
 
-gsn_tree(secure_goal.fully_eval()).show()
+gsn_tree(secure_goal.fully_eval()).show(sorting=False)
 ```
 
 ---
@@ -223,7 +223,7 @@ g = instantiate(CustomGoal, description="Secure connection established",
                 project='Alpha',
                 support=evidence(description="Verified by audit"))
 
-gsn_tree(g.fully_eval()).show()
+gsn_tree(g.fully_eval()).show(sorting=False)
 ```
 ---
 

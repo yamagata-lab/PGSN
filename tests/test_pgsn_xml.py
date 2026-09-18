@@ -86,13 +86,13 @@ def test_div_local_scope(tmp_path):
 # ul / ol / dl
 # ------------------------------------------------------------------ #
 
-def test_ul(tmp_path):
+def test_ol(tmp_path):
     result = run("""
     <PGSN>
-        <ul>
+        <ol>
             <li>a</li>
             <li>b</li>
-        </ul>
+        </ol>
     </PGSN>""", tmp_path)
     assert result == ["a", "b"]
 
@@ -276,7 +276,7 @@ def test_type_of_is_structural(tmp_path):
             <object>
                 <instanceOf var="MyNode"/>
                 <attribute name="description">an audit</attribute>
-                <attribute name="defeaters"><ul/></attribute>
+                <attribute name="defeaters"><ol/></attribute>
                 <attribute name="owner">QA</attribute>
             </object>
         </def>
@@ -314,39 +314,13 @@ def test_type_of_on_a_var_reference(tmp_path):
 
 
 @pytest.mark.parametrize("source", [
-    '<def name="x" instanceOf="MyClass">v</def><var name="x"/>',
-    '<def name="x">v</def><var name="x" instanceOf="MyClass"/>',
+    '<ol><li><ul><li>a</li></ul></li></ol>',
+    '<def name="xs" as="ul"><li>a</li></def><var name="xs"/>',
 ])
-def test_the_old_instance_of_spelling_is_rejected(source, tmp_path):
-    """An unknown attribute would be ignored in silence, and the check would
-    disappear with it.
-    """
-    with pytest.raises(PGSNError, match="typeOf"):
+def test_there_is_no_ul_element(source, tmp_path):
+    """There is one list and it is ordered, so `ul` is not an element."""
+    with pytest.raises(PGSNError, match="Unknown expression"):
         run(f"<PGSN>{source}</PGSN>", tmp_path)
-
-
-@pytest.mark.parametrize("source", [
-    '<def name="r" as="dl"><dt key="a"/><dd>v</dd></def><get label="a" of="r"/>',
-    '<def name="r" as="dl"><dt key="a"/><dd>v</dd></def>'
-    '<get label="a"><var name="r"/></get>',
-])
-def test_the_old_get_label_spelling_is_rejected(source, tmp_path):
-    """A record label is spelled `key` wherever one is written. The old
-    spelling would otherwise be ignored as an unknown attribute, and the
-    element would fail for want of a `key` without saying it was renamed.
-    """
-    with pytest.raises(PGSNError, match="key"):
-        run(f"<PGSN>{source}</PGSN>", tmp_path)
-
-
-def test_type_of_on_a_param_is_rejected(tmp_path):
-    """A parameter is bound by a lambda, so it cannot carry a guard. The
-    attribute was accepted and ignored before either spelling existed.
-    """
-    with pytest.raises(PGSNError, match="typeOf"):
-        run('<PGSN><def name="t" as="template">'
-            '<param name="p" typeOf="Goal"/>v</def><var name="t"/></PGSN>',
-            tmp_path)
 
 
 # ------------------------------------------------------------------ #
@@ -957,10 +931,10 @@ def test_var_attribute_on_subGoals(tmp_path):
     result = run("""
     <PGSN>
         <def name="goals">
-            <ul>
+            <ol>
                 <li><Goal>G1<undeveloped/></Goal></li>
                 <li><Goal>G2<undeveloped/></Goal></li>
-            </ul>
+            </ol>
         </def>
         <Goal>
             top

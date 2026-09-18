@@ -72,6 +72,8 @@ REJECTED = {
         '<PGSN><dl><dt key="k"/></dl></PGSN>',
     "a <param> on a <PGSN>, which takes none":
         '<PGSN><param name="p"/>v</PGSN>',
+    "the retired <ul>, now that the one list is ordered":
+        "<PGSN><ul><li>a</li></ul></PGSN>",
 }
 
 

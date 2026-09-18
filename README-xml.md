@@ -320,7 +320,7 @@ written out.
 <def name="myGoal" as="Goal">...</def>
 ```
 
-`<def name="x" as="T">C</def>` and `<def name="x"><T>C</T></def>` are the same document written two ways. The attribute is not tied to `<def>`: wherever an element holds content, `as` names an element to wrap that content in. `<from>` and `<import>` are the exception, because `as` renames an imported name there. Any tag that is valid in that position can be named, `object` and `ul` and `Goal` alike. The one restriction is that a tag requiring an attribute of its own cannot be named — `var` requires `name`, `get` requires `key`, `send` requires `method`, and a named `class` requires `name` — because `as` moves the content and leaves the attributes where they were.
+`<def name="x" as="T">C</def>` and `<def name="x"><T>C</T></def>` are the same document written two ways. The attribute is not tied to `<def>`: wherever an element holds content, `as` names an element to wrap that content in. `<from>` and `<import>` are the exception, because `as` renames an imported name there. Any tag that is valid in that position can be named, `object` and `ol` and `Goal` alike. The one restriction is that a tag requiring an attribute of its own cannot be named — `var` requires `name`, `get` requires `key`, `send` requires `method`, and a named `class` requires `name` — because `as` moves the content and leaves the attributes where they were.
 
 ### `typeOf` Attribute
 
@@ -578,21 +578,16 @@ When the receiver is a complex expression rather than a plain variable, omit `to
 
 ## Data Types
 
-### Set (ul) and List (ol)
+### List (ol)
 
 ```xml
-<ul>
-    <li>expr1</li>
-    <li var="x"/>    <!-- shorthand -->
-</ul>
-
 <ol>
     <li>expr1</li>
-    <li>expr2</li>
+    <li var="x"/>    <!-- shorthand -->
 </ol>
 ```
 
-`ul` and `ol` build the same value; the difference is documentary. Use `ol` where the order carries meaning, such as a list passed to `map_term`.
+`ol` is the only list element, and the order of its items is part of what the document says: every rendering reports them in the order they were written. There is no set — `ul` used to build the same value as `ol` while standing for an unordered one, and it is no longer an element.
 
 ### Dictionary (dl)
 
@@ -727,16 +722,16 @@ document itself will say so.
 </Strategy>
 ```
 
-A set (`ul`) or list (`ol`) can be passed to `subGoals` to specify sub-goals dynamically.
+A list (`ol`) can be passed to `subGoals` to specify sub-goals dynamically.
 
 ```xml
 <Strategy>
     argument
     <subGoals>
-        <ul>
+        <ol>
             <li var="goal1"/>
             <li var="goal2"/>
-        </ul>
+        </ol>
     </subGoals>
 </Strategy>
 ```
@@ -829,9 +824,9 @@ A complete example combining parameters and imports.
     <def name="mainStrategy" as="Strategy">
         verified through testing and review
         <subGoals>
-            <ul>
+            <ol>
                 <li var="G1"/>
-            </ul>
+            </ol>
         </subGoals>
     </def>
 

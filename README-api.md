@@ -143,7 +143,7 @@ g = pgsn.goal(
         )),
     ),
 )
-print(pgsn.gsn_tree(g.fully_eval()).show(stdout=False))
+print(pgsn.gsn_tree(g.fully_eval()).show(stdout=False, sorting=False))
 ```
 
 ```
@@ -226,9 +226,11 @@ Returns a [treelib](https://treelib.readthedocs.io/) `Tree`.
 
 ```python
 tree = pgsn.gsn_tree(evaluated)
-print(tree.show(stdout=False))   # text rendering
-tree.to_json()                   # JSON rendering
+print(tree.show(stdout=False, sorting=False))   # text rendering
+tree.to_json(sort=False)                        # JSON rendering
 ```
+
+treelib sorts siblings by tag unless told otherwise, so ask it not to: the order of a list is part of what the document says, and `python_value` reports that order. `pgsn doc` passes the same options.
 
 ### `gsn_dot(term, layout_attrs=None)`
 
