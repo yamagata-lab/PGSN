@@ -17,7 +17,7 @@ try:
     from pgsn import pgsn_xml
     from pgsn.config import Config
     from pgsn.jail import JailError, Jails
-    from pgsn.pgsn_term import Term
+    from pgsn.pgsn_term import DEFAULT_STEPS, Term
 except ImportError as e:
     print(f"Error: Could not import PGSN modules: {e}")
     print("Please ensure gsn.py, dsl.py, pgsn_term.py, and pgsn_xml.py are accessible.")
@@ -118,7 +118,7 @@ def cli():
 @click.option('--doc-type', '-d', default='plain', type=click.Choice(['plain', 'json']),
               help='The output document format.')
 @click.option('--output', '-o', default=None, help='The output filename.')
-@click.option('--steps', '-s', help='maximum number of evaluation steps', type=int, default=1000000)
+@click.option('--steps', '-s', help='maximum number of evaluation steps', type=int, default=DEFAULT_STEPS)
 @jail_option
 def doc(input_file, term_name, doc_type, output, steps, jail_specs):
     """Evaluates a PGSN term and outputs a document in a specified format."""
@@ -164,7 +164,7 @@ def doc(input_file, term_name, doc_type, output, steps, jail_specs):
 @click.option('--output', '-o', default=None, help='The output filename (without extension).')
 @click.option('--format', '-f', 'image_format', type=click.Choice(['svg', 'png', 'pdf']), default='svg',
               help='The output image format.')
-@click.option('--steps', '-s', help='maximum number of evaluation steps', type=int, default=1000000)
+@click.option('--steps', '-s', help='maximum number of evaluation steps', type=int, default=DEFAULT_STEPS)
 @jail_option
 def render(input_file, term_name, output, image_format, steps, jail_specs):
     """Evaluates a PGSN term and renders it as a graph."""

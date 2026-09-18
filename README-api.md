@@ -40,7 +40,7 @@ Python values are cast automatically where a term is expected, so `pgsn.string("
 
 ```python
 term.eval()                  # one reduction step
-term.fully_eval()            # reduce to a weak normal form, default steps=100000
+term.fully_eval()            # reduce to a weak normal form, default steps=1000000
 term.fully_eval(steps=5000)  # with an explicit budget
 ```
 
@@ -258,10 +258,10 @@ term = pgsn.load_xml_string(source)
 
 Both compile *and* evaluate, returning a weak normal form. The document syntax is described in [README-xml.md](README-xml.md).
 
-Both also take `steps`, which bounds the evaluation exactly as it does in `fully_eval`; omitting it leaves that method's own budget in place. A document large enough to exhaust the budget is not thereby wrong, so the budget belongs to the caller. The `pgsn` command allows ten times the default, which is why a document `pgsn doc` evaluates may need to say so here:
+Both also take `steps`, which bounds the evaluation exactly as it does in `fully_eval`. Omitting it leaves the default budget in place, and there is one such budget: the same number the `pgsn` command starts from, so a document the command evaluates is one a program evaluates too. A document large enough to exhaust it is not thereby wrong, so a caller who knows better says so:
 
 ```python
-term = pgsn.load_xml("big.xml", steps=1_000_000)
+term = pgsn.load_xml("big.xml", steps=5_000_000)
 ```
 
 ### Jails
