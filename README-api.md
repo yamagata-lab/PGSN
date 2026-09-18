@@ -85,7 +85,7 @@ pgsn.python_value(double(pgsn.integer(21)).fully_eval())   # 42
 
 These are terms, not Python functions: they are values you apply. XML exposes exactly the same names — see [README-xml.md](README-xml.md).
 
-**Lists** — `cons`, `head`, `tail`, `index`, `concat`, `map_term`, `fold`, `foldr`, `list_all`, `empty`
+**Lists** — `cons`, `head`, `tail`, `index`, `is_empty`, `concat`, `map_term`, `fold`, `foldr`, `list_all`, `empty`
 
 **Booleans** — `true`, `false`, `if_then_else`, `boolean_and`, `boolean_or`, `boolean_not`, `equal`, `less_than`, `guard`
 

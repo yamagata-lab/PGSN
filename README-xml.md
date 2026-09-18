@@ -112,7 +112,7 @@ Everything else is rejected with an error naming what was found. There are no fu
 
 `//` is integer division: `7 // 2` is `3`. `/` is rejected rather than treated as a synonym, so that it stays available for true division if PGSN ever gains a floating point type.
 
-Ordering compares integers only, so `"a" < "b"` has no value. Equality works on any value, so `"a" == "a"` is `True`.
+Ordering compares integers only, so `"a" < "b"` has no value. Equality compares data only: base values — a string, an integer, a boolean, `undefined` — and lists and records built out of them. So `"a" == "a"` is `True`, while two functions, two classes or two GSN nodes have no value when compared, just as `"a" < "b"` has none. To ask whether a list is empty, apply `is_empty`; comparing the list with `empty` answers for a list of base values only.
 
 **Operators cannot be redefined.** `1 + 2` is addition even inside a scope that binds the name `plus`.
 
@@ -389,7 +389,7 @@ References a previously defined name.
 
 The following names are predefined; reference them with `<var name="..."/>` and apply them via `apply`. They are exactly the values the `pgsn` Python package exports, so anything usable from Python is usable here under the same name.
 
-- List operations: `cons`, `head`, `tail`, `index`, `concat`, `map_term`, `fold`, `foldr`, `list_all`, `empty`
+- List operations: `cons`, `head`, `tail`, `index`, `is_empty`, `concat`, `map_term`, `fold`, `foldr`, `list_all`, `empty`
 - Booleans: `true`, `false`, `if_then_else`, `boolean_and`, `boolean_or`, `boolean_not`, `equal`, `less_than`, `guard`
 - Integers: `plus`, `minus`, `times`, `div`, `mod`, `integer_sum`
 - Records: `has_label`, `list_labels`, `add_attribute`, `remove_attribute`, `overwrite_record`, `empty_record`
