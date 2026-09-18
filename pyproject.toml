@@ -50,3 +50,10 @@ pgsn = "pgsn.cli:cli"
 # setuptoolsに、どこにパッケージのコードがあるか教える
 [tool.setuptools.packages.find]
 where = ["src"]
+
+# Tests. `slow` marks an example that takes minutes rather than seconds to
+# evaluate. A plain `pytest` leaves those out and says so ("deselected");
+# `pytest -m slow` runs only them, and `pytest -m ""` runs everything.
+[tool.pytest.ini_options]
+markers = ["slow: minutes rather than seconds to evaluate; run it with -m slow"]
+addopts = "-m 'not slow'"
