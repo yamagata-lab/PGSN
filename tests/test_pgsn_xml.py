@@ -2,7 +2,9 @@
 
 import pytest
 from pathlib import Path
+import pgsn
 from pgsn.dsl import python_value
+from pgsn.pgsn_term import LambdaInterpreterError
 from pgsn.pgsn_xml import compile_pgsn, PGSNError, load_string
 from pgsn.gsn import gsn_tree
 
@@ -1146,3 +1148,31 @@ def test_an_object_of_an_anonymous_class_cannot_be_reported(tmp_path):
                 <attribute name="part">sensor</attribute>
             </object>
         </PGSN>""", tmp_path)
+
+
+# ------------------------------------------------------------------ #
+# The evaluation budget
+# ------------------------------------------------------------------ #
+
+DOC = ('<PGSN><apply><var name="plus"/>'
+       '<arg><num>1</num></arg><arg><num>2</num></arg></apply></PGSN>')
+
+
+def test_a_budget_too_small_to_finish_is_reported():
+    """The budget belongs to the caller, so the loaders have to take one.
+    Without this a program could not evaluate what `pgsn doc` evaluates:
+    the command allows ten times what `fully_eval` does by default."""
+    with pytest.raises(LambdaInterpreterError):
+        pgsn.load_xml_string(DOC, steps=1)
+
+
+def test_a_budget_large_enough_finishes():
+    assert python_value(pgsn.load_xml_string(DOC, steps=1000)) == 3
+
+
+def test_the_file_loader_takes_a_budget_too(tmp_path):
+    path = tmp_path / "budget.xml"
+    path.write_text(DOC)
+    with pytest.raises(LambdaInterpreterError):
+        pgsn.load_xml(path, steps=1)
+    assert python_value(pgsn.load_xml(path, steps=1000)) == 3
