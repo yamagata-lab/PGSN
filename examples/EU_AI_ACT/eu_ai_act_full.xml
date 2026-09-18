@@ -81,7 +81,7 @@
 
   <from file="proctoring_system.xml" import="system"/>
 
-  <def name="systemName"><get label="name" of="system"/></def>
+  <def name="systemName"><get key="name" of="system"/></def>
 
   <!-- ================================================================
        Helpers. Folding a list of conditions and flattening a list of
@@ -239,29 +239,29 @@
   <def name="functionGoal" as="template">
     <param name="f" positional="true"/>
 
-    <def name="fname"><get label="name" of="f"/></def>
-    <def name="purpose"><get label="intendedPurpose" of="f"/></def>
+    <def name="fname"><get key="name" of="f"/></def>
+    <def name="purpose"><get key="intendedPurpose" of="f"/></def>
 
     <!-- The record's answer for one provision: a fact plus its evidence. -->
     <def name="prohibitedAnswer" as="template">
       <param name="p" positional="true"/>
-      <apply><get label="prohibitedUse" of="f"/><arg><get label="ref" of="p"/></arg></apply>
+      <apply><get key="prohibitedUse" of="f"/><arg><get key="ref" of="p"/></arg></apply>
     </def>
 
     <def name="routeAnswer" as="template">
       <param name="p" positional="true"/>
-      <apply><get label="classification" of="f"/><arg><get label="ref" of="p"/></arg></apply>
+      <apply><get key="classification" of="f"/><arg><get key="ref" of="p"/></arg></apply>
     </def>
 
     <!-- Art. 5. A practice that does not apply is dismissed; a practice that
          applies leaves nothing to write, so the term does not reduce. -->
     <def name="prohibitedGuardOrStop" as="template">
       <param name="p" positional="true"/>
-      <def name="ref"><get label="ref" of="p"/></def>
-      <def name="text"><get label="text" of="p"/></def>
+      <def name="ref"><get key="ref" of="p"/></def>
+      <def name="text"><get key="text" of="p"/></def>
       <def name="a"><apply template="prohibitedAnswer"><arg var="p"/></apply></def>
       <if>
-        <cond><get label="applies" of="a"/></cond>
+        <cond><get key="applies" of="a"/></cond>
         <then var="undefined"/>
         <else>
           <ol>
@@ -269,7 +269,7 @@
               <apply template="dismissedGuard">
                 <arg>{fname} may deploy {text} ({ref}), in which case Art. 5 forbids placing it on the market at all</arg>
                 <arg>{fname} does not deploy {text} ({ref})</arg>
-                <arg><get label="evidence" of="a"/></arg>
+                <arg><get key="evidence" of="a"/></arg>
               </apply>
             </li>
           </ol>
@@ -280,11 +280,11 @@
     <!-- A high-risk route that does not apply is dismissed. -->
     <def name="routeGuardOrNothing" as="template">
       <param name="p" positional="true"/>
-      <def name="ref"><get label="ref" of="p"/></def>
-      <def name="text"><get label="text" of="p"/></def>
+      <def name="ref"><get key="ref" of="p"/></def>
+      <def name="text"><get key="text" of="p"/></def>
       <def name="a"><apply template="routeAnswer"><arg var="p"/></apply></def>
       <if>
-        <cond><get label="applies" of="a"/></cond>
+        <cond><get key="applies" of="a"/></cond>
         <then><ol/></then>
         <else>
           <ol>
@@ -292,7 +292,7 @@
               <apply template="dismissedGuard">
                 <arg>{fname} may be high-risk as {text} ({ref}), in which case Art. 8-17, 43, 48 and 49 apply</arg>
                 <arg>{fname} is not {text} ({ref})</arg>
-                <arg><get label="evidence" of="a"/></arg>
+                <arg><get key="evidence" of="a"/></arg>
               </apply>
             </li>
           </ol>
@@ -304,17 +304,17 @@
          Several may apply at once; each contributes its own goal. -->
     <def name="routeGoalOrNothing" as="template">
       <param name="p" positional="true"/>
-      <def name="ref"><get label="ref" of="p"/></def>
-      <def name="text"><get label="text" of="p"/></def>
+      <def name="ref"><get key="ref" of="p"/></def>
+      <def name="text"><get key="text" of="p"/></def>
       <def name="a"><apply template="routeAnswer"><arg var="p"/></apply></def>
       <if>
-        <cond><get label="applies" of="a"/></cond>
+        <cond><get key="applies" of="a"/></cond>
         <then>
           <ol>
             <li>
               <Goal>
                 {fname} is high-risk as {text} ({ref})
-                <supportedBy><get label="evidence" of="a"/></supportedBy>
+                <supportedBy><get key="evidence" of="a"/></supportedBy>
               </Goal>
             </li>
           </ol>
@@ -325,7 +325,7 @@
 
     <def name="routeApplies" as="template">
       <param name="p" positional="true"/>
-      <get label="applies"><apply template="routeAnswer"><arg var="p"/></apply></get>
+      <get key="applies"><apply template="routeAnswer"><arg var="p"/></apply></get>
     </def>
 
     <!-- The disjunction the Act states and GSN cannot draw: high-risk if any
@@ -358,10 +358,10 @@
          the function record, under the key the enumeration names. -->
     <def name="obligationGoal" as="template">
       <param name="o" positional="true"/>
-      <def name="claim"><get label="claim" of="o"/></def>
+      <def name="claim"><get key="claim" of="o"/></def>
       <Goal>
         {claim}
-        <supportedBy><apply><var name="f"/><arg><get label="key" of="o"/></arg></apply></supportedBy>
+        <supportedBy><apply><var name="f"/><arg><get key="key" of="o"/></arg></apply></supportedBy>
       </Goal>
     </def>
 
@@ -372,7 +372,7 @@
 
     <def name="gpaiObligations">
       <if>
-        <cond><get label="isSystemicRisk" of="f"/></cond>
+        <cond><get key="isSystemicRisk" of="f"/></cond>
         <then><apply template="concat"><arg var="art53Obligations"/><arg var="art55Obligations"/></apply></then>
         <else var="art53Obligations"/>
       </if>
@@ -400,7 +400,7 @@
           </then>
         </case>
         <case>
-          <cond><get label="isLimitedRisk" of="f"/></cond>
+          <cond><get key="isLimitedRisk" of="f"/></cond>
           <then>
             <ol>
               <li>
@@ -422,7 +422,7 @@
 
     <def name="gpaiGoals">
       <if>
-        <cond><get label="isGPAI" of="f"/></cond>
+        <cond><get key="isGPAI" of="f"/></cond>
         <then>
           <ol>
             <li>
@@ -446,7 +446,7 @@
          dismiss, not a goal to claim. -->
     <def name="gpaiDefeaters">
       <if>
-        <cond><get label="isGPAI" of="f"/></cond>
+        <cond><get key="isGPAI" of="f"/></cond>
         <then><ol/></then>
         <else>
           <ol>
@@ -454,7 +454,7 @@
               <apply template="dismissedGuard">
                 <arg>{fname} may be a general-purpose AI model, in which case Art. 53 and, under systemic risk, Art. 55 apply</arg>
                 <arg>{fname} is not a general-purpose AI model within the meaning of Art. 3(63)</arg>
-                <arg><get label="notGpaiAssessment" of="f"/></arg>
+                <arg><get key="notGpaiAssessment" of="f"/></arg>
               </apply>
             </li>
           </ol>
@@ -511,13 +511,13 @@
   <def name="inventoryGoal" as="Goal">
     The AI functions enumerated for {systemName} are all of the AI functions it provides
     <Context>EU AI Act Art. 11 and Annex IV: the technical documentation states the intended purpose and the components of the system</Context>
-    <supportedBy><get label="functionInventoryEvidence" of="system"/></supportedBy>
+    <supportedBy><get key="functionInventoryEvidence" of="system"/></supportedBy>
   </def>
 
   <def name="functionGoals">
     <apply template="map_term">
       <arg var="functionGoal"/>
-      <arg><get label="functions" of="system"/></arg>
+      <arg><get key="functions" of="system"/></arg>
     </apply>
   </def>
 

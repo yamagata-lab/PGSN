@@ -34,7 +34,7 @@
 
   <from file="proctoring_simplified.xml" import="system"/>
 
-  <def name="systemName"><get label="name" of="system"/></def>
+  <def name="systemName"><get key="name" of="system"/></def>
 
   <def name="any_true" as="template">
     <param name="conditions" positional="true"/>
@@ -99,29 +99,29 @@
   ================================================================ -->
   <def name="functionGoal" as="template">
     <param name="f" positional="true"/>
-    <def name="fname"><get label="name" of="f"/></def>
+    <def name="fname"><get key="name" of="f"/></def>
 
     <def name="routeAnswer" as="template">
       <param name="p" positional="true"/>
-      <apply><get label="classification" of="f"/><arg><get label="ref" of="p"/></arg></apply>
+      <apply><get key="classification" of="f"/><arg><get key="ref" of="p"/></arg></apply>
     </def>
 
     <!-- Art. 5 admits no compliance argument: a practice that applies stops
          the evaluation instead of producing a goal. -->
     <def name="prohibitedGuardOrStop" as="template">
       <param name="p" positional="true"/>
-      <def name="ref"><get label="ref" of="p"/></def>
-      <def name="text"><get label="text" of="p"/></def>
-      <def name="a"><apply><get label="prohibitedUse" of="f"/><arg var="ref"/></apply></def>
+      <def name="ref"><get key="ref" of="p"/></def>
+      <def name="text"><get key="text" of="p"/></def>
+      <def name="a"><apply><get key="prohibitedUse" of="f"/><arg var="ref"/></apply></def>
       <if>
-        <cond><get label="applies" of="a"/></cond>
+        <cond><get key="applies" of="a"/></cond>
         <then var="undefined"/>
         <else>
           <ol><li>
             <apply template="dismissedGuard">
               <arg>{fname} may deploy {text} ({ref}), in which case Art. 5 forbids placing it on the market at all</arg>
               <arg>{fname} does not deploy {text} ({ref})</arg>
-              <arg><get label="evidence" of="a"/></arg>
+              <arg><get key="evidence" of="a"/></arg>
             </apply>
           </li></ol>
         </else>
@@ -130,18 +130,18 @@
 
     <def name="routeGuardOrNothing" as="template">
       <param name="p" positional="true"/>
-      <def name="ref"><get label="ref" of="p"/></def>
-      <def name="text"><get label="text" of="p"/></def>
+      <def name="ref"><get key="ref" of="p"/></def>
+      <def name="text"><get key="text" of="p"/></def>
       <def name="a"><apply template="routeAnswer"><arg var="p"/></apply></def>
       <if>
-        <cond><get label="applies" of="a"/></cond>
+        <cond><get key="applies" of="a"/></cond>
         <then><ol/></then>
         <else>
           <ol><li>
             <apply template="dismissedGuard">
               <arg>{fname} may be high-risk as {text} ({ref}), in which case Art. 8-17 and 43 apply</arg>
               <arg>{fname} is not {text} ({ref})</arg>
-              <arg><get label="evidence" of="a"/></arg>
+              <arg><get key="evidence" of="a"/></arg>
             </apply>
           </li></ol>
         </else>
@@ -151,16 +151,16 @@
     <!-- Several routes may apply at once; each contributes its own goal. -->
     <def name="routeGoalOrNothing" as="template">
       <param name="p" positional="true"/>
-      <def name="ref"><get label="ref" of="p"/></def>
-      <def name="text"><get label="text" of="p"/></def>
+      <def name="ref"><get key="ref" of="p"/></def>
+      <def name="text"><get key="text" of="p"/></def>
       <def name="a"><apply template="routeAnswer"><arg var="p"/></apply></def>
       <if>
-        <cond><get label="applies" of="a"/></cond>
+        <cond><get key="applies" of="a"/></cond>
         <then>
           <ol><li>
             <Goal>
               {fname} is high-risk as {text} ({ref})
-              <supportedBy><get label="evidence" of="a"/></supportedBy>
+              <supportedBy><get key="evidence" of="a"/></supportedBy>
             </Goal>
           </li></ol>
         </then>
@@ -170,7 +170,7 @@
 
     <def name="routeApplies" as="template">
       <param name="p" positional="true"/>
-      <get label="applies"><apply template="routeAnswer"><arg var="p"/></apply></get>
+      <get key="applies"><apply template="routeAnswer"><arg var="p"/></apply></get>
     </def>
 
     <!-- The disjunction the Act states and GSN cannot draw. A fold, not a
@@ -183,10 +183,10 @@
 
     <def name="obligationGoal" as="template">
       <param name="o" positional="true"/>
-      <def name="claim"><get label="claim" of="o"/></def>
+      <def name="claim"><get key="claim" of="o"/></def>
       <Goal>
         {claim}
-        <supportedBy><apply><var name="f"/><arg><get label="key" of="o"/></arg></apply></supportedBy>
+        <supportedBy><apply><var name="f"/><arg><get key="key" of="o"/></arg></apply></supportedBy>
       </Goal>
     </def>
 
@@ -245,7 +245,7 @@
   <def name="inventoryGoal" as="Goal">
     The AI functions enumerated for {systemName} are all of the AI functions it provides
     <Context>EU AI Act Art. 11 and Annex IV</Context>
-    <supportedBy><get label="functionInventoryEvidence" of="system"/></supportedBy>
+    <supportedBy><get key="functionInventoryEvidence" of="system"/></supportedBy>
   </def>
 
   <Goal>
@@ -257,7 +257,7 @@
         <apply template="concat_all">
           <arg><ol>
             <li><ol><li var="inventoryGoal"/></ol></li>
-            <li><apply template="map_term"><arg var="functionGoal"/><arg><get label="functions" of="system"/></arg></apply></li>
+            <li><apply template="map_term"><arg var="functionGoal"/><arg><get key="functions" of="system"/></arg></apply></li>
           </ol></arg>
         </apply>
       </subGoals>
