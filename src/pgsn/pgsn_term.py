@@ -938,7 +938,7 @@ class PGSNObject(Unary):
         if not isinstance(arg, String):
             return False
         k = arg.value
-        if k in self.attributes().keys() or self.methods().keys():
+        if k in self.attributes().keys() or k in self.methods().keys():
             return True
         else:
             return False
@@ -1138,8 +1138,10 @@ class Div(ConstMixin, Builtin):
     def build(cls, is_named: bool, **kwarg) -> Term:
         return super().build(arity=2, is_named=is_named, **kwarg)
 
+    # A zero divisor leaves the application stuck.
     def _applicable_args(self, args: tuple[Term, ...]):
-        return len(args) >= 2 and isinstance(args[0], Integer) and isinstance(args[1], Integer)
+        return (len(args) >= 2 and isinstance(args[0], Integer) and isinstance(args[1], Integer)
+                and args[1].value != 0)
 
     def _apply_args(self, args: tuple[Term, ...]):
         i1 = args[0].value
@@ -1154,8 +1156,10 @@ class Mod(ConstMixin, Builtin):
     def build(cls, is_named: bool, **kwarg) -> Term:
         return super().build(arity=2, is_named=is_named, **kwarg)
 
+    # A zero divisor leaves the application stuck.
     def _applicable_args(self, args: tuple[Term, ...]):
-        return len(args) >= 2 and isinstance(args[0], Integer) and isinstance(args[1], Integer)
+        return (len(args) >= 2 and isinstance(args[0], Integer) and isinstance(args[1], Integer)
+                and args[1].value != 0)
 
     def _apply_args(self, args: tuple[Term, ...]):
         i1 = args[0].value
