@@ -20,8 +20,17 @@ undeveloped_class = pgsn.dsl.define_class(inherit=support_class,
                                           defaults={"description": ""})
 undeveloped = undeveloped_class()
 evidence_class = pgsn.dsl.define_class(inherit=support_class, name='Evidence')
+# A Context or an Assumption attaches to a Goal or a Strategy, which is what
+# lets a strategy carry the assumption its reasoning depends on -- GSN
+# Community Standard Figure 6 does exactly that with "All hazards have been
+# identified". Evidence takes neither: the standard attaches nothing to a
+# Solution.
 strategy_class = pgsn.dsl.define_class(inherit=support_class, name='Strategy',
-                                          attributes=["sub_goals"])
+                                          attributes=["assumptions",
+                                                      "contexts",
+                                                      "sub_goals"],
+                                          defaults={"assumptions": [],
+                                                    "contexts": []})
 
 goal_class = pgsn.dsl.define_class(inherit=gsn_class,
                                       name='Goal',
@@ -59,10 +68,17 @@ evidence = pgsn.dsl.lambda_abs_keywords(
     body=evidence_class(description=_d, defeaters=_defeaters))
 strategy = pgsn.dsl.lambda_abs_keywords(
     arguments={'description': _d, 'sub_goals': _sub_goals,
+               'assumptions': _assumptions, 'contexts': _contexts,
                'defeaters': _defeaters},
-    defaults=pgsn.dsl.record({'defeaters': pgsn.dsl.empty}),
-    body=strategy_class(description=_d, sub_goals=_sub_goals,
-                        defeaters=_defeaters))
+    defaults=pgsn.dsl.record({'assumptions': pgsn.dsl.empty,
+                              'contexts': pgsn.dsl.empty,
+                              'defeaters': pgsn.dsl.empty}),
+    # The attributes are written in the order a renderer reports them in, now
+    # that nothing sorts them: what a node is said in the context of, then what
+    # challenges it, then what it rests on. A Goal is built the same way.
+    body=strategy_class(description=_d, contexts=_contexts,
+                        assumptions=_assumptions, defeaters=_defeaters,
+                        sub_goals=_sub_goals))
 goal = pgsn.dsl.lambda_abs_keywords(arguments={'description': _d,
                                       'assumptions': _assumptions,
                                       'contexts': _contexts,
@@ -223,7 +239,11 @@ def gsn_dot(gsn: pgsn.pgsn_term.Term,
     horizontal_pairs = []
     skipped_nodes = set()  # 親の箱に吸収された属性ノードのIDを記録
 
-    for node in tree.expand_tree(mode=treelib.Tree.DEPTH):
+    # treelib sorts siblings by tag unless told otherwise, which would draw the
+    # children of a node in alphabetical rather than document order. The order
+    # of a List is part of what a document says, so it is kept here as well:
+    # the sequence the nodes are emitted in is what graphviz lays them out by.
+    for node in tree.expand_tree(mode=treelib.Tree.DEPTH, sorting=False):
         # すでに親の箱に吸収されたノードは、独立した箱として描かない
         if node in skipped_nodes:
             continue

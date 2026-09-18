@@ -1,11 +1,14 @@
 <PGSN>
-    <def name="GoalWithProject" as="class">
-        <inherit>Goal</inherit>
-        <attribute name="project"/>
+    <!-- `as="class"` cannot carry the class's name, so the long form is used -->
+    <def name="GoalWithProject">
+        <class name="GoalWithProject">
+            <inherit var="Goal"/>
+            <attribute name="project"/>
+        </class>
     </def>
 
     <object>
-        <instanceOf>GoalWithProject</instanceOf>
+        <instanceOf var="GoalWithProject"/>
         <attribute name="description">Secure connection established</attribute>
         <attribute name="project">Alpha</attribute>
         <attribute name="support"><Evidence>Verified by audit</Evidence></attribute>

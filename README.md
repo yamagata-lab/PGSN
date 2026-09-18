@@ -2,7 +2,7 @@
 
 Functional Programming for Assurance Case Generation
 
-[![Python](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
@@ -12,14 +12,21 @@ Functional Programming for Assurance Case Generation
 **PGSN** is a functional programming language and platform for constructing and transforming structured assurance cases based on the **Goal Structuring Notation (GSN)**.
 Unlike standard GSN, which primarily consists of static diagrams, PGSN allows dynamic and structured generation of argument elements using a functional and object-oriented programming language.
 
-**PGSN** is currently implemented as an **embedded language in Python**, but other implementations are planned.
+**PGSN** comes in two forms: a DSL embedded in Python, and an XML syntax
+evaluated by the `pgsn` command. Either one can express a whole assurance case
+on its own. [README-api.md](README-api.md) is the reference for the Python API
+and [README-xml.md](README-xml.md) for the XML syntax.
+
+---
 
 ## Key Features
 
--  **GSN Modeling Using Functional Programming**: Write assurance cases as functional programs
--  **Reusable**: Build assurance structures compositionally
--  **Object-Oriented**: Class/inheritance for reusable node types
--  **Security Aware**: PGSN terms are executed in a resource-limited interpreter, ensuring safe evaluation of third-party code.
+- **GSN Modeling Using Functional Programming**: Write assurance cases as functional programs
+- **Reusable**: Build assurance structures compositionally
+- **Object-Oriented**: Class/inheritance for reusable node types
+- **Confined**: a document has no way to reach outside itself — there is no file, network or system access in the language — and the only files it may name are those under a directory root granted to it. Evaluation is bounded by a step budget.
+
+---
 
 ## Installation
 
@@ -43,10 +50,12 @@ cd PGSN
 conda env create -f environment.yml -n PGSN
 ```
 
+---
+
 ## Command-line interface
 
 ```shell
-PGSN % pgsn doc examples/cli.py   
+PGSN % pgsn doc examples/cli.py
 Generating 'None' from 'examples/cli.py'
 Evaluating term 'main'...
 Goal: System is secure
@@ -57,9 +66,9 @@ Goal: System is secure
         └── Evidence: Fuzzing test succeeded
 
 Done.
-````
+```
 
-Use "pgsn --help" for other command and option
+Use `pgsn --help` for the other commands and options.
 
 ### Jails for XML imports
 
@@ -75,6 +84,8 @@ PGSN % pgsn doc main.xml --jail lib=/opt/pgsn-lib
 
 `--jail` may be given more than once, and applies to `.xml` input only. Nothing outside a registered jail can be imported: `..` may not leave the enclosing root, and symbolic links are expanded before that check. See [README-xml.md](README-xml.md) for the full rules.
 
+---
+
 ## Public API
 
 `import pgsn` gives you the supported interface:
@@ -84,7 +95,7 @@ import pgsn
 
 cfg = pgsn.Config(jails={"lib": "/opt/pgsn-lib"})
 term = pgsn.load_xml("main.xml", config=cfg)
-print(pgsn.gsn_tree(term).show(stdout=False))
+print(pgsn.gsn_tree(term).show(stdout=False, sorting=False))
 ```
 
 It exposes constructors for PGSN constants and terms (`string`, `record`, `lambda_abs`, `map_term`, ...), constructors for GSN nodes and classes (`goal`, `strategy`, `evidence`, `goal_class`, ...), the conversion and rendering functions (`python_value`, `gsn_tree`, `gsn_dot`, `save_gsn`), and the XML front end with its configuration (`load_xml`, `load_xml_string`, `Config`, `Jails`, `configure`).
@@ -92,6 +103,8 @@ It exposes constructors for PGSN constants and terms (`string`, `record`, `lambd
 Everything else in the package — `pgsn.dsl`, `pgsn.gsn`, `pgsn.pgsn_term`, `pgsn.pgsn_xml`, `pgsn.dcom`, `pgsn.helpers`, `pgsn.cli` — is internal and may change without notice. The examples below import from those submodules directly and predate the public API; prefer `import pgsn` in new code.
 
 [README-api.md](README-api.md) is the full reference.
+
+---
 
 ## Example
 
@@ -112,19 +125,26 @@ g = goal(
     )
 )
 
-gsn_tree(g.fully_eval()).show()
+gsn_tree(g.fully_eval()).show(sorting=False)
 ```
 
-From the project root,
+The same case is in `examples/gsn.py`, which binds it to `main` for the command
+line to render:
 ```shell
-% python examples/gsn.py
+% pgsn doc examples/gsn.py
+Generating 'None' from 'examples/gsn.py'
+Evaluating term 'main'...
 Goal: System is secure
-└── Strategy: Break into sub-goals    pyproject-build    python             python3            python3.1          python3.12-config  
+└── Strategy: Break into sub-goals
     ├── Goal: Input validated
     │   └── Evidence: Static analysis passed
     └── Goal: Output sanitized
         └── Evidence: Fuzzing test succeeded
+
+Done.
 ```
+
+---
 
 ## Advanced Examples
 
@@ -159,8 +179,10 @@ top = goal(
     )
 )
 
-gsn_tree(top.fully_eval()).show()
+gsn_tree(top.fully_eval()).show(sorting=False)
 ```
+
+---
 
 ### Example 2: Auto-expanding Multiple Goals with `map_term`
 
@@ -185,12 +207,14 @@ secure_goal = goal(
     support=immediate(goals)
 )
 
-gsn_tree(secure_goal.fully_eval()).show()
+gsn_tree(secure_goal.fully_eval()).show(sorting=False)
 ```
+
+---
 
 ### Example 3: Class-based Node Composition Using Object System
 
-Use `object_term.py` to define a custom goal class and instantiate it with additional metadata.
+Define a custom goal class and instantiate it with additional metadata.
 
 ```python
 from pgsn.dsl import *
@@ -203,7 +227,7 @@ g = instantiate(CustomGoal, description="Secure connection established",
                 project='Alpha',
                 support=evidence(description="Verified by audit"))
 
-gsn_tree(g.fully_eval()).show()
+gsn_tree(g.fully_eval()).show(sorting=False)
 ```
 
 These advanced examples demonstrate how to:
@@ -215,6 +239,18 @@ These advanced examples demonstrate how to:
 | Metadata handling | Extend GSN nodes via custom classes |
 
 You can adapt these techniques to build domain-specific GSN templates, automate assurance case generation, or validate structural constraints programmatically.
+
+---
+
+## Summary of Techniques
+
+| Purpose                      | Technique                                   |
+|------------------------------|---------------------------------------------|
+| Reusing a template           | Lambda abstraction with keyword parameters  |
+| Generating structure in bulk | List expansion with `map_term`              |
+| Attaching metadata           | Class definition and `instantiate`          |
+
+---
 
 ## Summary of Common Constructs
 
@@ -232,17 +268,24 @@ You can adapt these techniques to build domain-specific GSN templates, automate 
 | `define_class(...)`         | Defines a new object-based Goal class   |
 | `instantiate(...)`          | Instantiates an object-based Goal       |
 
+---
+
 ## Architecture
 
-| Layer    | Component          | Purpose                          |
-|----------|--------------------|----------------------------------|
-| Core     | `pgsn_term.py`     | Lambda calculus interpreter      |
-| DSL      | `dsl.py`, `gsn.py` | Human-friendly API to define GSN |
+| Layer          | Component              | Purpose                                       |
+|----------------|------------------------|-----------------------------------------------|
+| Core           | `pgsn_term.py`         | Lambda calculus interpreter                   |
+| Python DSL     | `dsl.py`, `gsn.py`     | Builds GSN nodes from a program               |
+| XML front end  | `pgsn_xml.py`          | Compiles the XML syntax onto the core         |
+| Sandbox        | `jail.py`, `config.py` | Confines what an import may reach             |
+| CLI            | `cli.py`               | `pgsn doc`, `pgsn render`, `pgsn compile`     |
 
 
-##  License
+---
+
+## License
 
 MIT License – see [LICENSE](LICENSE).
 
-Copyright: National Institute of Advanced Industrial Science and Technology (AIST) 2023-2024,
+Copyright: National Institute of Advanced Industrial Science and Technology (AIST) 2023-2024,  
 Yoriyuki Yamagata 2025-

@@ -39,15 +39,15 @@ def test_the_earlier_binding_is_still_visible_to_what_precedes_it():
     assert run('<def name="x">first</def>'
                '<def name="seen"><var name="x"/></def>'
                '<def name="x">second</def>'
-               '<ul><li><var name="seen"/></li><li><var name="x"/></li></ul>'
+               '<ol><li><var name="seen"/></li><li><var name="x"/></li></ol>'
                ) == ["first", "second"]
 
 
 def test_rebinding_inside_a_div_does_not_escape():
     assert run('<def name="x">outer</def>'
-               '<ul><li><div><def name="x">inner</def>'
+               '<ol><li><div><def name="x">inner</def>'
                '<var name="x"/></div></li>'
-               '<li><var name="x"/></li></ul>') == ["inner", "outer"]
+               '<li><var name="x"/></li></ol>') == ["inner", "outer"]
 
 
 def test_rebinding_inside_a_template_does_not_escape():
@@ -55,8 +55,8 @@ def test_rebinding_inside_a_template_does_not_escape():
     assert run('<def name="x">outer</def>'
                '<def name="t" as="template"><def name="x">inner</def>'
                '<var name="x"/></def>'
-               '<ul><li><var name="t"/></li>'
-               '<li><var name="x"/></li></ul>') == ["inner", "outer"]
+               '<ol><li><var name="t"/></li>'
+               '<li><var name="x"/></li></ol>') == ["inner", "outer"]
 
 
 def test_a_parameter_shadows_an_outer_binding():
@@ -72,7 +72,7 @@ def test_a_parameter_shadows_an_outer_binding():
 
 def test_an_unbound_builtin_name_denotes_the_builtin():
     assert run('<apply><var name="head"/>'
-               '<arg><ul><li>a</li><li>b</li></ul></arg></apply>') == "a"
+               '<arg><ol><li>a</li><li>b</li></ol></arg></apply>') == "a"
 
 
 def test_a_document_may_rebind_a_builtin_name():
@@ -96,7 +96,7 @@ def test_rebinding_a_builtin_does_not_leak_out_of_its_block():
     assert run('<div><def name="head">mine</def><var name="head"/></div>'
                ) == "mine"
     assert run('<apply><var name="head"/>'
-               '<arg><ul><li>a</li></ul></arg></apply>') == "a"
+               '<arg><ol><li>a</li></ol></arg></apply>') == "a"
 
 
 def test_a_gsn_constructor_name_may_be_rebound_too():
@@ -112,13 +112,13 @@ def test_a_gsn_constructor_name_may_be_rebound_too():
     '<def name="_x">v</def><var name="_x"/>',
     '<def name="t" as="template"><param name="_x"/>v</def><var name="t"/>',
     '<var name="_plus"/>',
-    '<var name="x" instanceOf="_c"/>',
-    '<def name="x" instanceOf="_c">v</def>',
+    '<var name="x" typeOf="_c"/>',
+    '<def name="x" typeOf="_c">v</def>',
     '<apply template="_f"><arg>a</arg></apply>',
-    '<get label="a" of="_obj"/>',
+    '<get key="a" of="_obj"/>',
     '<send method="m" to="_obj"/>',
     '<apply><var name="head"/><arg name="_k">v</arg></apply>',
-    '<ul><li var="_x"/></ul>',
+    '<ol><li var="_x"/></ol>',
 ])
 def test_reserved_names_are_rejected(source):
     with pytest.raises(PGSNError, match="not a valid name"):
@@ -148,7 +148,7 @@ def test_record_labels_are_not_reserved():
     """Labels are a different namespace, so the restriction does not reach
     them. Only names that denote variables are affected."""
     assert run('<dl><dt key="_k"/><dd>v</dd></dl>') == {"_k": "v"}
-    assert run('<get name="_k"><dl><dt key="_k"/><dd>v</dd></dl></get>') == "v"
+    assert run('<get key="_k"><dl><dt key="_k"/><dd>v</dd></dl></get>') == "v"
 
 
 # ------------------------------------------------------------------ #
@@ -166,9 +166,9 @@ def test_a_module_may_rebind_a_builtin_without_affecting_its_importer(tmp_path):
           '<PGSNModule><def name="head">module head</def></PGSNModule>')
     main = write(tmp_path, "main.xml",
                  '<PGSN><from file="lib.xml" import="head" as="theirs"/>'
-                 '<ul><li><var name="theirs"/></li>'
+                 '<ol><li><var name="theirs"/></li>'
                  '<li><apply><var name="head"/>'
-                 '<arg><ul><li>a</li></ul></arg></apply></li></ul></PGSN>')
+                 '<arg><ol><li>a</li></ol></arg></apply></li></ol></PGSN>')
     assert pgsn.python_value(pgsn.load_xml(main)) == ["module head", "a"]
 
 

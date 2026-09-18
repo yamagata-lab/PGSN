@@ -1,0 +1,59 @@
+<PGSN>
+  <!--
+    Factory Line Management HMI — IEC 62443 Security Level 2.
+
+    The same ssl_lib module that medical_app.xml imports, reused in an
+    unrelated domain: the same package, the same evidence, a different
+    standard. That reuse is the point of assurance carrying code — the
+    package's case is written once and travels with the package.
+
+    IEC 62443 has no SOUP concept equivalent to IEC 62304 §8, so only the
+    hazard-level goals are picked up here; they satisfy SR 4.1 (data
+    confidentiality) without re-evaluation.
+  -->
+
+  <from file="ssl_lib.xml" import="componentGoal" as="sslGoal"/>
+
+  <!-- Communication security, reused verbatim from ssl_lib (IEC 62443 SR 4.1) -->
+  <def name="G_cmdInterception"><get key="eavesdropping" of="sslGoal"/></def>
+  <def name="G_ctrllerSpoof"><get key="certificate_spoofing" of="sslGoal"/></def>
+
+  <!-- Factory-specific goals, not covered by any imported component -->
+  <def name="G_authControl" as="Goal">
+    HMI control functions require authentication (IEC 62443 SR 1.1)
+    <Context>IEC 62443-3-3:2013, SR 1.1: Identification and Authentication Control</Context>
+    <Evidence>Role-based authentication implementation and test report</Evidence>
+  </def>
+
+  <def name="G_netSegment" as="Goal">
+    Control network is segmented from corporate network (IEC 62443 SR 5.1)
+    <Context>IEC 62443-3-3:2013, SR 5.1: Network Segmentation</Context>
+    <Evidence>Network architecture diagram and firewall rule audit</Evidence>
+  </def>
+
+  <def name="G_replayProtect" as="Goal">
+    Control commands are protected against replay attacks (IEC 62443 SR 3.3)
+    <Context>IEC 62443-3-3:2013, SR 3.3: Security Functionality Verification</Context>
+    <Evidence>Sequence number and timestamp validation test report</Evidence>
+  </def>
+
+  <Goal>
+    Factory HMI is secure (IEC 62443 Security Level 2)
+    <Context>IEC 62443-3-3:2013, Security Level 2</Context>
+    <Strategy>
+      Argument over IEC 62443 SL-2 security requirements
+      <subGoals>
+        <ol>
+          <!-- Reused from ssl_lib at zero additional cost -->
+          <li var="G_cmdInterception"/>
+          <li var="G_ctrllerSpoof"/>
+          <!-- Factory-specific requirements -->
+          <li var="G_authControl"/>
+          <li var="G_netSegment"/>
+          <li var="G_replayProtect"/>
+        </ol>
+      </subGoals>
+    </Strategy>
+  </Goal>
+
+</PGSN>

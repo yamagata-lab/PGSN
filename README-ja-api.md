@@ -40,11 +40,11 @@ pgsn.goal(description=..., support=...)       # キーワードのレコード
 
 ```python
 term.eval()                  # 1 ステップだけ簡約
-term.fully_eval()            # 正規形まで簡約、既定は steps=100000
+term.fully_eval()            # 弱正規形まで簡約、既定は steps=100000
 term.fully_eval(steps=5000)  # 上限を明示
 ```
 
-すでに正規形なら `fully_eval` はそのまま返します。`steps` は簡約回数の上限であって時間の上限ではありません。簡約するたびに項が膨らむ形だと、上限に達する前にこちらの忍耐が尽きます。自由変数が残った項や、型の合わない引数に適用された項はエラーにならず、単に「詰まった」状態のまま返ってきます。
+すでに弱正規形なら `fully_eval` はそのまま返します。関数の本体の中までは簡約しません（関数は値です）。リストの要素・レコードのフィールド・オブジェクトの属性は中まで簡約されるので、`python_value` が必要とする形にはなります。`steps` は簡約回数の上限であって時間の上限ではありません。簡約するたびに項が膨らむ形だと、上限に達する前にこちらの忍耐が尽きます。自由変数が残った項や、型の合わない引数に適用された項はエラーにならず、単に「詰まった」状態のまま返ってきます。理由は [PGSN-implementation.md](PGSN-implementation.md) にあります。
 
 ---
 
@@ -85,7 +85,7 @@ pgsn.python_value(double(pgsn.integer(21)).fully_eval())   # 42
 
 これらは Python の関数ではなく項です。適用して使う値です。XML 側もまったく同じ名前を公開しています（[README-ja-xml.md](README-ja-xml.md)）。
 
-**リスト** — `cons`・`head`・`tail`・`index`・`concat`・`map_term`・`fold`・`foldr`・`list_all`・`empty`
+**リスト** — `cons`・`head`・`tail`・`index`・`is_empty`・`concat`・`map_term`・`fold`・`foldr`・`list_all`・`empty`
 
 **真偽値** — `true`・`false`・`if_then_else`・`boolean_and`・`boolean_or`・`boolean_not`・`equal`・`less_than`・`guard`
 
@@ -95,7 +95,7 @@ pgsn.python_value(double(pgsn.integer(21)).fully_eval())   # 42
 
 **文字列** — `format_string`
 
-**クラスとオブジェクト** — `define_class`・`instantiate`・`instance`・`is_instance`・`is_subclass`・`base_class`
+**クラスとオブジェクト** — `define_class`・`instantiate`・`type_of`・`is_subtype`・`base_class`
 
 **その他** — `fix`・`undefined`
 
@@ -110,7 +110,7 @@ pgsn.python_value(double(pgsn.integer(21)).fully_eval())   # 42
 | コンストラクタ | 引数 |
 |--------------|------|
 | `goal` | `description`・`support`・`contexts`（既定は空）・`assumptions`（既定は空）・`defeaters`（既定は空） |
-| `strategy` | `description`・`sub_goals`・`defeaters`（既定は空） |
+| `strategy` | `description`・`sub_goals`・`contexts`（既定は空）・`assumptions`（既定は空）・`defeaters`（既定は空） |
 | `evidence` | `description`・`defeaters`（既定は空） |
 | `context` | `description` |
 | `assumption` | `description` |
@@ -118,7 +118,9 @@ pgsn.python_value(double(pgsn.integer(21)).fully_eval())   # 42
 
 `support` に既定値はありません。支持のないゴールは `support=pgsn.undeveloped` と明示的に書きます。
 
-`defeaters` は GSN v3 の dialectic extension です。defeater は、それを保持するノードへの支持ではなく疑いを記録します。どのノード型も defeater を持てますし、defeater 自身もノードなので反証は入れ子になります。規格そのものには Defeater 要素はなく、defeater は Challenges 関係で対象に繋がった Goal または Solution ですが、項の言語には関係を担う辺がないため、PGSN では攻撃するという役割をクラスとして表現しています。rebutting と undercutting は 1 クラスで足ります。対抗論拠を伴うなら `support` を埋め、異議を述べるだけなら省略します。
+`contexts` と `assumptions` はゴールと戦略が持ちます。規格がこの2つに付けるからです。Evidence はどちらも取りません。
+
+`defeaters` は GSN v3 の dialectic extension です。defeater は、それを保持するノードへの支持ではなく疑いを記録します。どのノード型も defeater を持てますし、defeater 自身もノードなので反証は入れ子になります。規格そのものには Defeater 要素はなく、defeater は Challenges 関係で対象に繋がった Goal または Solution ですが、値の言語には関係を担う辺がないため、PGSN では攻撃するという役割をクラスとして表現しています。rebutting と undercutting は 1 クラスで足ります。対抗論拠を伴うなら `support` を埋め、異議を述べるだけなら省略します。
 
 よく使う形のための補助が 2 つあります。
 
@@ -141,7 +143,7 @@ g = pgsn.goal(
         )),
     ),
 )
-print(pgsn.gsn_tree(g.fully_eval()).show(stdout=False))
+print(pgsn.gsn_tree(g.fully_eval()).show(stdout=False, sorting=False))
 ```
 
 ```
@@ -156,13 +158,37 @@ Goal: System is secure
 
 ### クラス
 
-コンストラクタの背後にあるクラス値は `gsn_class`・`goal_class`・`strategy_class`・`evidence_class`・`context_class`・`assumption_class`・`defeater_class`・`support_class`・`undeveloped_class` です。`define_class` と組み合わせて独自のノード型を派生させたり、`is_instance` で判定したりできます。
+コンストラクタの背後にあるクラス値は `gsn_class`・`goal_class`・`strategy_class`・`evidence_class`・`context_class`・`assumption_class`・`defeater_class`・`support_class`・`undeveloped_class` です。`define_class` と組み合わせて独自のノード型を派生させられます。
 
 ```python
 my_goal_class = pgsn.define_class(
+    name="OwnedGoal",
     inherit=pgsn.goal_class,
     attributes=pgsn.list_term((pgsn.string("owner"),)),
 )
+```
+
+`name` はそのクラスが何と呼ばれるかで、オブジェクトはその名前で報告されます（下の
+`__ClassName__` キー）。ラベルであって何かと比較されることはありませんが、インスタンスを
+読み出すつもりのクラスには必要です。無いと何として報告すればよいかが無くなります。継承もされません。
+
+`type_of` はオブジェクトのクラスを返し、`is_subtype` は2つのクラスを比べます。
+値を型と照合するときはこう書きます（`node` は自分で組んだ項です）。
+
+```python
+pgsn.is_subtype(pgsn.type_of(node))(pgsn.goal_class).fully_eval().value
+```
+
+型付けは構造的です。`is_subtype` が比べるのは2つのクラスが宣言する属性名とメソッド名だけで、
+`inherit` は関与しません。`description` と `defeaters` を持つ自作のクラスは `evidence_class` を
+満たしますし、goal もそれらを（さらに多く）宣言しているので満たします。「どのクラスに属するか」を
+尋ねる述語はありません。`is_instance` と `is_subclass` は削除しました。同一のクラスでも
+コピーどうしが等しいとは限らず、答えがコピーの出自に左右されたからです。
+クラスの出自を知りたいときは、オブジェクトから継承チェーンを読み出してください。
+
+```python
+pgsn.python_value(node.fully_eval(),
+                  with_inherit_chain=True)["__parent_classes__"]
 ```
 
 ### テンプレート
@@ -182,13 +208,13 @@ goals = pgsn.map_term(template)(requirements)
 
 ## 結果の読み出し
 
-先に評価してください。以下はいずれも正規形の項を前提にしています。
+先に評価してください。以下はいずれも評価済みの項を前提にしています。
 
 ### `python_value(term, with_inherit_chain=False)`
 
-項を素の Python のデータ（`dict`・`list`・`str`・`int`・`bool`）に変換します。オブジェクトノードには `__ClassName__` というマーカーキーが付くので、評価済みのゴールは `description`・`support`・`contexts`・`assumptions`・`__Goal__` というキーを持つ辞書になります。`with_inherit_chain=True` を渡すと `__parent_classes__` も付きます。
+項を素の Python のデータ（`dict`・`list`・`str`・`int`・`bool`）に変換します。オブジェクトノードには `__ClassName__` というマーカーキーが付くので、評価済みのゴールは `description`・`support`・`contexts`・`assumptions`・`defeaters`・`__Goal__` というキーを持つ辞書になります。`with_inherit_chain=True` を渡すと `__parent_classes__` も付きます。
 
-項が評価しきれていない場合は `ValueError` を送出します。メッセージに問題のノードまでのパスが入るので、詰まった部分項を特定する最短の手段になります。
+項が評価しきれていない場合は `ValueError` を送出します。メッセージに問題のノードまでのパスが入るので、詰まった部分項を特定する最短の手段になります。クラスに名前が無いオブジェクトでも送出します。付けるマーカーキーが無いからです。
 
 ### `gsn_tree(term)`
 
@@ -196,9 +222,11 @@ goals = pgsn.map_term(template)(requirements)
 
 ```python
 tree = pgsn.gsn_tree(evaluated)
-print(tree.show(stdout=False))   # テキスト表示
-tree.to_json()                   # JSON
+print(tree.show(stdout=False, sorting=False))   # テキスト表示
+tree.to_json(sort=False)                        # JSON
 ```
+
+treelib は指定しないと兄弟をタグ順に並べ替えるので、並べ替えないよう渡してください。リストの順序は文書が述べていることの一部で、`python_value` はその順序で報告します。`pgsn doc` も同じオプションを渡しています。
 
 ### `gsn_dot(term, layout_attrs=None)`
 
@@ -222,7 +250,7 @@ term = pgsn.load_xml("main.xml")
 term = pgsn.load_xml_string(source)
 ```
 
-どちらもコンパイルと完全評価まで行い、正規形を返します。ドキュメントの構文は [README-ja-xml.md](README-ja-xml.md) を参照してください。
+どちらもコンパイルと評価まで行い、弱正規形を返します。ドキュメントの構文は [README-ja-xml.md](README-ja-xml.md) を参照してください。
 
 ### jail
 

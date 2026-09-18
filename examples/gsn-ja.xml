@@ -1,6 +1,12 @@
 <?xml version="1.0" ?>
 <PGSN>
 
+    <!-- 変数として参照される前提と文脈の文言 -->
+    <def name="A1">サードパーティ製の部品は改変されていない</def>
+    <def name="c">運用環境は社内ネットワークに限る</def>
+
+    <def name="y_evidence" as="Evidence">第三者検証レポート</def>
+
     <def name="x_secure" as="Goal">
         Xはセキュア
         <Evidence>
@@ -11,7 +17,7 @@
     <def name="y_secure" as="Goal">
         Yはセキュア
         <Assumption var="A1"/>
-        <supportedBy var="A1"/>
+        <supportedBy var="y_evidence"/>
     </def>
 
 
@@ -23,10 +29,10 @@
         <Strategy>
             YYYYYY
             <subGoals>
-                <ul>
+                <ol>
                     <li var="x_secure"/>
                     <li var="y_secure"/>
-                </ul>
+                </ol>
             </subGoals>
         </Strategy>
     </Goal>

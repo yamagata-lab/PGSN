@@ -132,10 +132,13 @@ def doc(input_file, term_name, doc_type, output, steps, jail_specs):
 
         tree = gsn.gsn_tree(evaluated_gsn)
 
+        # Both renderings are asked not to sort: treelib orders siblings by tag
+        # by default, and the order of a List is part of what the document
+        # says. `python_value` has always reported document order.
         if doc_type == 'plain':
-            document = tree.show(stdout=False)
+            document = tree.show(stdout=False, sorting=False)
         elif doc_type == 'json':
-            document = tree.to_json()
+            document = tree.to_json(sort=False)
         else:
             click.echo("Error: Unsupported document type. Use plain or json.", err=True)
             return

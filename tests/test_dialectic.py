@@ -11,8 +11,11 @@ def run(source: str):
 
 
 def tree(source: str) -> str:
+    # `sorting=False` is how a caller asks for document order: treelib sorts
+    # siblings by tag by default, and `pgsn doc` passes the same option.
     return pgsn.gsn_tree(
-        pgsn.load_xml_string(f"<PGSN>{source}</PGSN>")).show(stdout=False)
+        pgsn.load_xml_string(f"<PGSN>{source}</PGSN>")).show(stdout=False,
+                                                             sorting=False)
 
 
 def class_marker(node: dict) -> str:
@@ -29,9 +32,10 @@ def class_marker(node: dict) -> str:
 def ancestry(node) -> list[str]:
     """The class names a node descends from, nearest first.
 
-    `is_instance` is not used here: it answers False for any class whose
-    defaults hold an unevaluated term, which covers `goal_class` and
-    `defeater_class` alike. That defect predates this branch.
+    The names, not `is_subtype`: subtyping is structural, and a Defeater
+    declares a subset of what a Goal declares, so every Goal satisfies the
+    Defeater type. Telling the two apart is a question about where a class
+    came from, which only the inheritance chain answers.
     """
     return pgsn.python_value(node.fully_eval(),
                              with_inherit_chain=True)["__parent_classes__"]
@@ -95,7 +99,8 @@ def test_nodes_without_defeaters_are_unchanged():
     """Adding the attribute must not disturb documents that never use it."""
     g = pgsn.goal(description="safe", support=pgsn.undeveloped).fully_eval()
     assert pgsn.python_value(g)["defeaters"] == []
-    assert "defeaters" not in pgsn.gsn_tree(g).show(stdout=False)
+    assert "defeaters" not in pgsn.gsn_tree(g).show(stdout=False,
+                                                    sorting=False)
 
 
 # ------------------------------------------------------------------ #

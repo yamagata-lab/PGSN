@@ -58,8 +58,8 @@ def test_importing_more_names_does_not_embed_the_module_again(project):
     three = compile_pgsn(project(
         '<from file="lib.xml"><import name="a"/><import name="b"/>'
         '<import name="c"/><arg name="prefix">p</arg></from>'
-        '<ul><li><var name="a"/></li><li><var name="b"/></li>'
-        '<li><var name="c"/></li></ul>'))
+        '<ol><li><var name="a"/></li><li><var name="b"/></li>'
+        '<li><var name="c"/></li></ol>'))
 
     # Each further import adds a projection and a list entry, nothing like a
     # second copy of the module — which on its own is an order of magnitude
@@ -71,7 +71,7 @@ def test_several_imported_names_all_arrive(project):
     result = pgsn.python_value(pgsn.load_xml(project(
         '<from file="lib.xml"><import name="a"/><import name="c" as="z"/>'
         '<arg name="prefix">p</arg></from>'
-        '<ul><li><var name="a"/></li><li><var name="z"/></li></ul>')))
+        '<ol><li><var name="a"/></li><li><var name="z"/></li></ol>')))
     assert result == ["p a", "p c"]
 
 
@@ -84,7 +84,7 @@ def test_two_modules_in_one_block_do_not_interfere(project, tmp_path):
         '<from file="lib.xml"><import name="a"/>'
         '<arg name="prefix">p</arg></from>'
         '<from file="other.xml"><import name="a" as="other_a"/></from>'
-        '<ul><li><var name="a"/></li><li><var name="other_a"/></li></ul>')))
+        '<ol><li><var name="a"/></li><li><var name="other_a"/></li></ol>')))
     assert result == ["p a", "from other"]
 
 
@@ -119,7 +119,7 @@ def test_a_module_can_be_bound_and_selected_from(project):
     result = pgsn.python_value(pgsn.load_xml(project(
         '<def name="lib"><from file="lib.xml">'
         '<arg name="prefix">p</arg></from></def>'
-        '<get label="b" of="lib"/>')))
+        '<get key="b" of="lib"/>')))
     assert result == "p b"
 
 
@@ -129,15 +129,15 @@ def test_a_bound_module_is_an_ordinary_value(project):
         '<def name="lib"><from file="lib.xml">'
         '<arg name="prefix">p</arg></from></def>'
         '<def name="pick" as="template"><param name="m" positional="true"/>'
-        '<get label="c" of="m"/></def>'
-        '<ul><li><get label="a" of="lib"/></li>'
-        '<li><apply><var name="pick"/><arg var="lib"/></apply></li></ul>')))
+        '<get key="c" of="m"/></def>'
+        '<ol><li><get key="a" of="lib"/></li>'
+        '<li><apply><var name="pick"/><arg var="lib"/></apply></li></ol>')))
     assert result == ["p a", "p c"]
 
 
 def test_selecting_from_a_module_needs_no_binding_at_all(project):
     result = pgsn.python_value(pgsn.load_xml(project(
-        '<get name="a"><from file="lib.xml">'
+        '<get key="a"><from file="lib.xml">'
         '<arg name="prefix">p</arg></from></get>')))
     assert result == "p a"
 

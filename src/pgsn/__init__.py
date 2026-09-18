@@ -22,7 +22,7 @@ a document reaches files inside one by writing ``/<jail>/sub/file.xml``::
 
     cfg = pgsn.Config(jails={"lib": "/opt/pgsn-lib"})
     term = pgsn.load_xml("main.xml", config=cfg)
-    print(pgsn.gsn_tree(term).show(stdout=False))
+    print(pgsn.gsn_tree(term).show(stdout=False, sorting=False))
 
 Nothing outside a registered jail — or outside the document's own directory —
 can be imported.
@@ -87,6 +87,7 @@ from pgsn.dsl import (
     head,
     tail,
     index,
+    is_empty,
     map_term,
     fold,
     foldr,
@@ -103,9 +104,8 @@ from pgsn.dsl import (
     base_class,
     define_class,
     instantiate,
-    instance,
-    is_instance,
-    is_subclass,
+    type_of,
+    is_subtype,
     # Conversion
     python_value,
 )
@@ -196,6 +196,7 @@ __all__ = [
     "head",
     "tail",
     "index",
+    "is_empty",
     "map_term",
     "fold",
     "foldr",
@@ -212,9 +213,8 @@ __all__ = [
     "base_class",
     "define_class",
     "instantiate",
-    "instance",
-    "is_instance",
-    "is_subclass",
+    "type_of",
+    "is_subtype",
     # GSN node constructors
     "goal",
     "strategy",

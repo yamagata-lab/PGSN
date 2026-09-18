@@ -1,3 +1,4 @@
+import pgsn
 from pgsn.dsl import *
 
 a = string('a')
@@ -26,11 +27,40 @@ def test_class():
     assert set(cls3.fully_eval().methods().keys()) == {'v'}
 
 
-def test_subclass():
-    assert isinstance(cls1.fully_eval(), PGSNClass)
-    assert is_subclass(cls)(cls).fully_eval().value
-    assert is_subclass(cls1)(cls).fully_eval().value
-    assert not is_subclass(base_class)(cls).fully_eval().value
+def test_subtype():
+    """Structural: the labels decide, not where a class came from."""
+    assert is_subtype(cls)(cls).fully_eval().value
+    assert is_subtype(cls1)(cls).fully_eval().value
+    assert is_subtype(cls2)(cls).fully_eval().value
+    assert not is_subtype(cls)(cls2).fully_eval().value
+    assert is_subtype(cls3)(cls2).fully_eval().value
+    # cls3 declares a method, so nothing lacking it covers cls3.
+    assert not is_subtype(cls2)(cls3).fully_eval().value
+    # A type that demands nothing is satisfied by everything, itself included.
+    # The inheritance-walking predicate this replaces answered False for
+    # base_class in every direction, its own reflexive case among them.
+    assert is_subtype(cls)(base_class).fully_eval().value
+    assert is_subtype(base_class)(base_class).fully_eval().value
+
+
+def test_subtype_ignores_inheritance():
+    """A class that inherits nothing from `cls` is still a subtype of it as
+    long as it declares the same labels. That is the whole point of the
+    change: `inherit` records where a class came from, not what it satisfies.
+    """
+    twin = define_class(inherit=base_class, defaults=defaults,
+                        attributes=["a"], methods={})
+    assert is_subtype(twin)(cls).fully_eval().value
+    assert is_subtype(cls)(twin).fully_eval().value
+
+
+def test_subtype_sees_past_unevaluated_defaults():
+    """`goal_class` defaults `support` to an application, which the previous
+    predicate could not compare, so it answered False for every goal. Labels
+    are readable without reducing anything.
+    """
+    g = pgsn.goal(description="g", support=pgsn.undeveloped)
+    assert is_subtype(type_of(g))(pgsn.goal_class).fully_eval().value
 
 
 obj1 = cls({})
@@ -49,8 +79,8 @@ def test_obj_instance():
     assert isinstance(obj4.fully_eval(), PGSNObject)
     assert isinstance(obj5.fully_eval(), PGSNObject)
     assert isinstance(obj6.fully_eval(), PGSNObject)
-    assert is_instance(obj1)(cls).fully_eval().value
-    assert not is_instance(obj1)(cls1).fully_eval().value
+    assert isinstance(type_of(obj1).fully_eval(), PGSNClass)
+    assert is_subtype(type_of(obj1))(cls).fully_eval().value
 
 
 def test_obj_values():

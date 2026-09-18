@@ -1,0 +1,57 @@
+<PGSN>
+  <!--
+    Patient Data Management System — IEC 62304 Class C medical device software.
+
+    The system imports the assurance cases carried by its SOUP components
+    (ssl_lib, db_driver). Their evidence flows into the system-level case
+    directly: the system developer never re-evaluates a pip package.
+  -->
+
+  <from file="ssl_lib.xml" import="componentGoal" as="sslGoal"/>
+  <from file="db_driver.xml" import="componentGoal" as="dbGoal"/>
+
+  <!-- Hazard-level goals, taken straight out of the component records -->
+  <def name="G_eavesdrop"><get key="eavesdropping" of="sslGoal"/></def>
+  <def name="G_certSpoof"><get key="certificate_spoofing" of="sslGoal"/></def>
+  <def name="G_sqlInject"><get key="sql_injection" of="dbGoal"/></def>
+  <def name="G_unauthAccess"><get key="unauthorized_access" of="dbGoal"/></def>
+
+  <!-- SOUP compliance (IEC 62304 §8), pulled from the same records -->
+  <def name="soupGoal" as="Goal">
+    All SOUP components are evaluated per IEC 62304 §8
+    <Strategy>
+      Argument over each SOUP component
+      <Goal>ssl_lib SOUP evaluation complete
+        <supportedBy><get key="soup_evaluation" of="sslGoal"/></supportedBy>
+      </Goal>
+      <Goal>db_driver SOUP evaluation complete
+        <supportedBy><get key="soup_evaluation" of="dbGoal"/></supportedBy>
+      </Goal>
+    </Strategy>
+  </def>
+
+  <!-- IEC 62304 development process compliance -->
+  <def name="processGoal" as="Goal">
+    Software development lifecycle follows IEC 62304 Class C requirements
+    <Evidence>IEC 62304 Class C process audit certificate</Evidence>
+  </def>
+
+  <Goal>
+    Patient Data Management System is safe (IEC 62304 Class C)
+    <Context>IEC 62304:2006+AMD1:2015, Software Safety Class C</Context>
+    <Strategy>
+      Argument over system-level hazards and IEC 62304 compliance
+      <subGoals>
+        <ol>
+          <li var="G_eavesdrop"/>     <!-- ssl_lib   -->
+          <li var="G_certSpoof"/>     <!-- ssl_lib   -->
+          <li var="G_sqlInject"/>     <!-- db_driver -->
+          <li var="G_unauthAccess"/>  <!-- db_driver -->
+          <li var="processGoal"/>
+          <li var="soupGoal"/>
+        </ol>
+      </subGoals>
+    </Strategy>
+  </Goal>
+
+</PGSN>

@@ -86,13 +86,13 @@ def test_div_local_scope(tmp_path):
 # ul / ol / dl
 # ------------------------------------------------------------------ #
 
-def test_ul(tmp_path):
+def test_ol(tmp_path):
     result = run("""
     <PGSN>
-        <ul>
+        <ol>
             <li>a</li>
             <li>b</li>
-        </ul>
+        </ol>
     </PGSN>""", tmp_path)
     assert result == ["a", "b"]
 
@@ -207,7 +207,7 @@ def test_class_object_get(tmp_path):
                 <attribute name="label">test_label</attribute>
             </object>
         </def>
-        <get label="label" of="obj"/>
+        <get key="label" of="obj"/>
     </PGSN>""", tmp_path)
     assert result == "test_label"
 
@@ -233,9 +233,94 @@ def test_class_inheritance(tmp_path):
                 <attribute name="y">py</attribute>
             </object>
         </def>
-        <get label="y" of="obj"/>
+        <get key="y" of="obj"/>
     </PGSN>""", tmp_path)
     assert result == "py"
+
+
+# ------------------------------------------------------------------ #
+# typeOf
+# ------------------------------------------------------------------ #
+
+def test_type_of_admits_a_goal(tmp_path):
+    """The check that used to stall. `goal_class` defaults `support` to an
+    application, and the predicate behind the old `instanceOf` compared
+    classes structurally, so it answered False for every goal.
+    """
+    result = run("""
+    <PGSN>
+        <def name="g" typeOf="Goal">
+            <Goal>
+                <description>system is safe</description>
+                <undeveloped/>
+            </Goal>
+        </def>
+        <var name="g"/>
+    </PGSN>""", tmp_path)
+    assert gsn_type(result) == "Goal"
+    assert result["description"] == "system is safe"
+
+
+def test_type_of_is_structural(tmp_path):
+    """A class of one's own satisfies Evidence by carrying its labels. Nothing
+    connects MyNode to the GSN classes.
+    """
+    result = run("""
+    <PGSN>
+        <def name="MyNode" as="class">
+            <attribute name="description"/>
+            <attribute name="defeaters"/>
+            <attribute name="owner"/>
+        </def>
+        <def name="n" typeOf="Evidence">
+            <object>
+                <instanceOf var="MyNode"/>
+                <attribute name="description">an audit</attribute>
+                <attribute name="defeaters"><ol/></attribute>
+                <attribute name="owner">QA</attribute>
+            </object>
+        </def>
+        <get key="owner" of="n"/>
+    </PGSN>""", tmp_path)
+    assert result == "QA"
+
+
+def test_type_of_stalls_when_a_label_is_missing(tmp_path):
+    """An evidence node carries no `support`, so it does not satisfy Goal. A
+    failed check leaves the document unreduced, and the readback says where.
+    """
+    with pytest.raises(ValueError, match="unexpected term type"):
+        run("""
+        <PGSN>
+            <def name="e" typeOf="Goal">
+                <Evidence><description>a report</description></Evidence>
+            </def>
+            <var name="e"/>
+        </PGSN>""", tmp_path)
+
+
+def test_type_of_on_a_var_reference(tmp_path):
+    result = run("""
+    <PGSN>
+        <def name="g">
+            <Goal>
+                <description>system is safe</description>
+                <undeveloped/>
+            </Goal>
+        </def>
+        <var name="g" typeOf="Goal"/>
+    </PGSN>""", tmp_path)
+    assert gsn_type(result) == "Goal"
+
+
+@pytest.mark.parametrize("source", [
+    '<ol><li><ul><li>a</li></ul></li></ol>',
+    '<def name="xs" as="ul"><li>a</li></def><var name="xs"/>',
+])
+def test_there_is_no_ul_element(source, tmp_path):
+    """There is one list and it is ordered, so `ul` is not an element."""
+    with pytest.raises(PGSNError, match="Unknown expression"):
+        run(f"<PGSN>{source}</PGSN>", tmp_path)
 
 
 # ------------------------------------------------------------------ #
@@ -420,6 +505,32 @@ def test_context_rejects_two_expressions(tmp_path):
                 <undeveloped/>
             </Goal>
         </PGSN>""", tmp_path)
+
+
+def test_context_and_assumption_on_a_strategy(tmp_path):
+    # A strategy carries contexts and assumptions of its own: GSN allows
+    # InContextOf from a strategy, and the constructor once bound them and
+    # dropped them without a word. Written on a strategy they have to reach
+    # the term, the same way they do on a goal.
+    result = run("""
+    <PGSN>
+        <Strategy>
+            <description>argue over each identified hazard</description>
+            <Context>hazard log rev 3</Context>
+            <Assumption>all hazards have been identified</Assumption>
+            <Goal>
+                <description>H1 is mitigated</description>
+                <undeveloped/>
+            </Goal>
+        </Strategy>
+    </PGSN>""", tmp_path)
+    assert gsn_type(result) == "Strategy"
+    ctx = result["contexts"][0]
+    assert gsn_type(ctx) == "Context"
+    assert ctx["description"] == "hazard log rev 3"
+    assm = result["assumptions"][0]
+    assert gsn_type(assm) == "Assumption"
+    assert assm["description"] == "all hazards have been identified"
 
 
 # ------------------------------------------------------------------ #
@@ -820,10 +931,10 @@ def test_var_attribute_on_subGoals(tmp_path):
     result = run("""
     <PGSN>
         <def name="goals">
-            <ul>
+            <ol>
                 <li><Goal>G1<undeveloped/></Goal></li>
                 <li><Goal>G2<undeveloped/></Goal></li>
-            </ul>
+            </ol>
         </def>
         <Goal>
             top
@@ -933,7 +1044,7 @@ def test_send_method_to(tmp_path):
         <def name="Greeter" as="class">
             <attribute name="greeting"/>
             <method name="greet">
-                <get label="greeting" of="self"/>
+                <get key="greeting" of="self"/>
             </method>
         </def>
         <def name="g" as="object">
@@ -952,7 +1063,7 @@ def test_send_method_without_to(tmp_path):
         <def name="Greeter" as="class">
             <attribute name="greeting"/>
             <method name="greet">
-                <get label="greeting" of="self"/>
+                <get key="greeting" of="self"/>
             </method>
         </def>
         <def name="g" as="object">
@@ -974,7 +1085,7 @@ def test_send_method_to_equiv_without_to(tmp_path):
         <def name="Wrapper" as="class">
             <attribute name="val"/>
             <method name="unwrap">
-                <get label="val" of="self"/>
+                <get key="val" of="self"/>
             </method>
         </def>
         <def name="w" as="object">
@@ -993,3 +1104,45 @@ def test_send_method_to_equiv_without_to(tmp_path):
         tmp_path)
 
     assert with_to == without_to
+
+# ------------------------------------------------------------------ #
+# A class carries its own name
+# ------------------------------------------------------------------ #
+
+def test_an_object_is_reported_under_its_class_name(tmp_path):
+    """The name travels with the class, so an instance of it says what it is.
+    It is not the binding: `<def>` names a value in a scope, `name=` names the
+    class itself."""
+    result = run("""
+    <PGSN>
+        <def name="Component">
+            <class name="Component">
+                <attribute name="part"/>
+            </class>
+        </def>
+        <def name="c">
+            <object>
+                <instanceOf var="Component"/>
+                <attribute name="part">sensor</attribute>
+            </object>
+        </def>
+        <var name="c"/>
+    </PGSN>""", tmp_path)
+    assert result["part"] == "sensor"
+    assert result["__Component__"] is True
+
+
+def test_an_object_of_an_anonymous_class_cannot_be_reported(tmp_path):
+    """There is nothing to report it as, so the conversion says so rather
+    than producing a value with a hole in it."""
+    with pytest.raises(ValueError, match="class has no name"):
+        run("""
+        <PGSN>
+            <def name="Component">
+                <class><attribute name="part"/></class>
+            </def>
+            <object>
+                <instanceOf var="Component"/>
+                <attribute name="part">sensor</attribute>
+            </object>
+        </PGSN>""", tmp_path)

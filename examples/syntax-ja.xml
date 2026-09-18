@@ -1,0 +1,202 @@
+<?xml version="1.0" ?>
+<?xml-model href="../PGSN.rng" type="application/xml" schematypens="http://relaxng.org/ns/structure/1.0"?>
+<PGSN>
+
+    <!-- ==============================
+         param: 外部から受け取る変数。
+         受け取れるのは <PGSNModule> だけなので、ここではコメントアウトして示す。
+         <PGSN> は値を1つ生成する文書で、<param> を受け取らない。
+         ============================== -->
+
+    <!-- モジュールは呼び出し元から A1 を、threshold はデフォルト値つきで受け取る
+    <param name="A1"/>
+    <param name="threshold">100</param>
+    -->
+
+
+    <!-- ==============================
+         import（from）
+         ============================== -->
+
+    <!-- 単一 import
+    <from file="security.pgsn" import="secureGoal" as="G1"/>
+    -->
+
+    <!-- 子要素による複数 import
+    <from file="evidence.pgsn">
+        <import name="auditEvidence"/>
+        <import name="testReport" as="TR"/>
+    </from>
+    -->
+
+    <!-- パラメーターを渡しながら import
+    <from file="other.pgsn">
+        <import name="someGoal" as="G2"/>
+        <arg name="A1" var="A1"/>
+        <arg name="threshold" var="threshold"/>
+    </from>
+    -->
+
+
+    <!-- ==============================
+         def: 名前を値に束縛する
+         ============================== -->
+
+    <!-- 単純な束縛 -->
+    <def name="x">expr</def>
+
+    <!-- 変数参照 -->
+    <def name="varExample"><var name="x"/></def>
+
+    <!-- 無名関数（テンプレート）: expr1 がデフォルト値、expr2 が本体 -->
+    <def name="f">
+        <template>
+            <param name="arg1">expr1</param>
+            <param name="arg2"/>
+            expr2
+        </template>
+    </def>
+
+    <!-- テンプレート適用（apply）: f を arg1 と arg2 に適用する -->
+    <def name="result">
+        <apply>
+            <var name="f"/>
+            <arg name="arg1">expr1</arg>
+            <arg name="arg2">expr2</arg>
+        </apply>
+    </def>
+
+    <!-- 下のクラスが継承するクラス -->
+    <def name="klass">
+        <class name="klass">
+            <attribute name="attr0"/>
+        </class>
+    </def>
+
+    <!-- クラス定義: klass を継承し、属性とメソッドを持つ -->
+    <def name="ClassB">
+        <class name="ClassB">
+            <inherit var="klass"/>
+            <attribute name="attr1">C</attribute>
+            <attribute name="attr2"/>
+            <method name="m">
+                <param name="param1">expr</param>
+                <param name="param2"/>
+                expr
+            </method>
+        </class>
+    </def>
+
+    <!-- 下のオブジェクトが属するクラス -->
+    <def name="Ubuntu">
+        <class name="Ubuntu">
+            <attribute name="version"/>
+            <method name="m">
+                <param name="arg1"/>
+                <param name="arg2"/>
+                expr
+            </method>
+        </class>
+    </def>
+
+    <!-- オブジェクト生成: Ubuntu のインスタンス -->
+    <def name="ubuntu">
+        <object>
+            <instanceOf var="Ubuntu"/>
+            <attribute name="version">20.0</attribute>
+        </object>
+    </def>
+
+    <!-- 型検査: 値は Ubuntu が宣言するラベルを少なくとも全部宣言していなければならない -->
+    <def name="checked" typeOf="Ubuntu"><var name="ubuntu"/></def>
+
+    <!-- 属性アクセス -->
+    <def name="ver">
+        <get key="version"><var name="ubuntu"/></get>
+    </def>
+
+    <!-- メソッド呼び出し: ubuntu のメソッド m を呼ぶ -->
+    <def name="sent">
+        <send method="m"><var name="ubuntu"/>
+            <arg name="arg1">expr1</arg>
+            <arg name="arg2">expr2</arg>
+        </send>
+    </def>
+
+    <!-- 局所定義 -->
+    <def name="localExample">
+        <div>
+            <def name="x">expr1</def>
+            <def name="y">expr2</def>
+            expr
+        </div>
+    </def>
+
+    <!-- データ型: リスト。リストの要素は <ol> だけで、項目の順序は文書が述べて
+         いることの一部 -->
+    <def name="aList">
+        <ol>
+            <li>item1</li>
+            <li>item2</li>
+        </ol>
+    </def>
+
+    <!-- データ型: 辞書 -->
+    <def name="aDict">
+        <dl>
+            <dt>key1</dt><dd>value1</dd>
+            <dt key="key2"/><dd>value2</dd>
+        </dl>
+    </def>
+
+    <!-- クラスの継承による GSN ノードの拡張 -->
+    <def name="GoalWithURL">
+        <class name="GoalWithURL">
+            <inherit var="Goal"/>
+            <attribute name="URL"/>
+        </class>
+    </def>
+
+    <!-- GSN: Evidence に支えられた Goal -->
+    <def name="evidenceGoal" as="Goal">
+        <description>システムXはセキュアである</description>
+        <Evidence>運用実績</Evidence>
+    </def>
+
+    <!-- G1 を取り込む import は上でコメントアウトしてあるので、
+         ここでゴールとして定義しておく -->
+    <def name="G1" as="Goal">
+        通信は暗号化されている
+        <Evidence>TLS 設定のレビュー</Evidence>
+    </def>
+
+    <!-- GSN: 変数経由でサブゴールを参照する Strategy -->
+    <def name="mainStrategy" as="Strategy">
+        テストとレビューによる検証
+        <subGoals>
+            <ol>
+                <li var="evidenceGoal"/>
+                <li var="G1"/>
+            </ol>
+        </subGoals>
+    </def>
+
+    <!-- 略記。下の各組は同じ文書の書き分け:
+         <tag var="x"/>                 と  <tag><var name="x"/></tag>
+         <def name="x" as="tag">...</def>   <def name="x"><tag>...</tag></def>
+    -->
+
+
+    <!-- ==============================
+         最終的な値: トップレベルの Goal
+         ============================== -->
+
+    <Goal>
+        <description>システムXはセキュアである</description>
+        <Context>規格XXXXによる認証</Context>
+        <Context><get key="version"><var name="ubuntu"/></get></Context>
+        <Assumption>ゼロデイ攻撃はない</Assumption>
+        <supportedBy var="mainStrategy"/>
+    </Goal>
+
+</PGSN>

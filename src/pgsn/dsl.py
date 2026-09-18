@@ -63,7 +63,7 @@ def boolean(b: bool) -> Boolean:
 
 true = boolean(True)
 false = boolean(False)
-if_then_else = IfThenElse.named()
+_if_then_else_builtin = IfThenElse.named()
 guard = Guard.named()
 
 
@@ -72,6 +72,29 @@ def lambda_abs_vars(vs: tuple[Variable,...], t) -> Term:
     for v in reversed(vs):
         t1 = lambda_abs(v, t1)
     return t1
+
+
+# The conditional is lazy in its branches.  The builtin only selects one of its
+# arguments, but the evaluator reduces the arguments of a head it cannot apply
+# yet, so a condition that never becomes a boolean would drag both branches into
+# reduction -- and a recursive branch would then unfold until the step limit.
+# Wrapping each branch in an abstraction before the builtin sees it prevents
+# that: beta reduction substitutes an argument without evaluating it, and
+# evaluation stops at a lambda.  The branch that wins is forced by applying it to
+# a dummy argument.  Names starting with an underscore are reserved, so the
+# thunk parameter cannot capture a variable written by a user.
+_thunk = variable('_thunk')
+_cond = variable('_cond')
+_then = variable('_then')
+_else = variable('_else')
+
+if_then_else = lambda_abs_vars(
+    (_cond, _then, _else),
+    _if_then_else_builtin(_cond)
+    (lambda_abs(_thunk, _then))
+    (lambda_abs(_thunk, _else))
+    (undefined)
+)
 
 
 boolean_and = lambda_abs_vars(
@@ -113,6 +136,7 @@ cons = Cons.named()
 head = Head.named()
 tail = Tail.named()
 index = Index.named()
+is_empty = IsEmpty.named()
 #fold = Fold.named()
 map_term = Map.named()
 
@@ -121,8 +145,11 @@ _list = variable('list')
 _acc = variable('acc')
 _foldr = variable('_foldr')
 empty: List = List.named(terms=tuple())
+# The base case asks `is_empty` rather than comparing the list with `empty`:
+# equality is defined on data only, so a list of anything else -- a list of GSN
+# nodes, say -- would leave the comparison stuck and the fold with it.
 _F = lambda_abs_vars((_foldr, _f, _acc, _list),
-                     if_then_else(equal(_list)(empty))
+                     if_then_else(is_empty(_list))
                      (_acc)
                      (_f(head(_list))(_foldr(_f)(_acc)(tail(_list))) )
                      )
@@ -191,7 +218,6 @@ def list_term(terms: tuple[Term,...]) -> List:
 
 
 ### internal variables
-_obj = variable("_obj")
 _class = variable("_class")
 _attrs = variable("_attrs")
 
@@ -205,12 +231,16 @@ ObjectTerm = PGSNObject
 base_class = PGSNClass.named(name="BaseClass")
 define_class = DefineClass.named()
 
-# subclass
-is_subclass = IsSubclass.named()
+# subtyping: structural, by attribute and method names. `inherit` says where a
+# class came from; it says nothing about which types the class satisfies.
+is_subtype = IsSubtype.named()
 
 ## Objects
-instance = Instance.named()
-is_instance = lambda_abs_vars((_obj, _class), is_subclass(instance(_obj))(_class))
+# `type_of` projects an object onto its class. A value is checked against a
+# type by `is_subtype(type_of(v), t)`, so there is no separate predicate for
+# it. The `Instance` builtin behind the name is unchanged: it still returns
+# the `instance` field of a PGSNObject.
+type_of = Instance.named()
 instantiate = lambda_abs_vars((_class, _attrs), _class(_attrs))
 
 

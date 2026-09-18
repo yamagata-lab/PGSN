@@ -1,24 +1,26 @@
 <?xml version="1.0" ?>
-<?xml-model href="../PGSN.rng" type="application/xml"?>
+<?xml-model href="../PGSN.rng" type="application/xml" schematypens="http://relaxng.org/ns/structure/1.0"?>
 <PGSN>
 
     <!-- ==============================
-         params: variables received from outside
+         param: variables received from outside.
+         Only a <PGSNModule> takes them, so they are shown commented out:
+         <PGSN> produces a value and does not accept <param>.
          ============================== -->
 
-    <!-- this PGSN receives A1 from the caller -->
-    <param name="A1" instanceOf="Assumption"/>
-
-    <!-- with a default value -->
+    <!-- a module receives A1 from its caller, and threshold with a default
+    <param name="A1"/>
     <param name="threshold">100</param>
+    -->
 
 
     <!-- ==============================
          import
          ============================== -->
 
-    <!-- single import -->
+    <!-- single import
     <from file="security.pgsn" import="secureGoal" as="G1"/>
+    -->
 
     <!-- multiple imports using child elements
     <from file="evidence.pgsn">
@@ -64,10 +66,17 @@
         </apply>
     </def>
 
+    <!-- the class the one below inherits from -->
+    <def name="klass">
+        <class name="klass">
+            <attribute name="attr0"/>
+        </class>
+    </def>
+
     <!-- class definition: inherits from klass, with attributes and a method -->
     <def name="ClassB">
-        <class>
-            <inherit>klass</inherit>
+        <class name="ClassB">
+            <inherit var="klass"/>
             <attribute name="attr1">C</attribute>
             <attribute name="attr2"/>
             <method name="m">
@@ -78,22 +87,37 @@
         </class>
     </def>
 
+    <!-- the class the object below instantiates -->
+    <def name="Ubuntu">
+        <class name="Ubuntu">
+            <attribute name="version"/>
+            <method name="m">
+                <param name="arg1"/>
+                <param name="arg2"/>
+                expr
+            </method>
+        </class>
+    </def>
+
     <!-- object instantiation: an instance of Ubuntu -->
     <def name="ubuntu">
         <object>
-            <instanceOf>Ubuntu</instanceOf>
+            <instanceOf var="Ubuntu"/>
             <attribute name="version">20.0</attribute>
         </object>
     </def>
 
+    <!-- type check: the value must declare at least the labels Ubuntu does -->
+    <def name="checked" typeOf="Ubuntu"><var name="ubuntu"/></def>
+
     <!-- attribute access -->
     <def name="ver">
-        <get name="version"><var name="ubuntu"/></get>
+        <get key="version"><var name="ubuntu"/></get>
     </def>
 
     <!-- method invocation: call method m on ubuntu -->
     <def name="sent">
-        <send name="m"><var name="ubuntu"/>
+        <send method="m"><var name="ubuntu"/>
             <arg name="arg1">expr1</arg>
             <arg name="arg2">expr2</arg>
         </send>
@@ -108,15 +132,8 @@
         </div>
     </def>
 
-    <!-- data type: set (unordered) -->
-    <def name="aSet">
-        <ul>
-            <li>item1</li>
-            <li>item2</li>
-        </ul>
-    </def>
-
-    <!-- data type: list (ordered) -->
+    <!-- data type: a list. <ol> is the only list element, and the order of
+         its items is part of what the document says -->
     <def name="aList">
         <ol>
             <li>item1</li>
@@ -134,8 +151,8 @@
 
     <!-- extending a GSN node via class inheritance -->
     <def name="GoalWithURL">
-        <class>
-            <inherit>Goal</inherit>
+        <class name="GoalWithURL">
+            <inherit var="Goal"/>
             <attribute name="URL"/>
         </class>
     </def>
@@ -146,26 +163,27 @@
         <Evidence>operational track record</Evidence>
     </def>
 
+    <!-- the import that would bring in G1 is commented out above, so the
+         goal is defined here instead -->
+    <def name="G1" as="Goal">
+        the connection is encrypted
+        <Evidence>TLS configuration review</Evidence>
+    </def>
+
     <!-- GSN: a Strategy referencing sub-goals via a variable -->
     <def name="mainStrategy" as="Strategy">
         verified through testing and review
         <subGoals>
-            <ul>
+            <ol>
                 <li var="evidenceGoal"/>
                 <li var="G1"/>
-            </ul>
+            </ol>
         </subGoals>
     </def>
 
-    <!-- shorthand notation (expanded by preprocessor):
-         <tag var="x"/>
-         expands to
-         <tag><var name="x"/></tag>
-
-         similarly:
-         <def name="x" as="tag">...</def>
-         expands to
-         <def name="x"><tag>...</tag></def>
+    <!-- shorthands. Each pair below is one document written two ways:
+         <tag var="x"/>                 and  <tag><var name="x"/></tag>
+         <def name="x" as="tag">...</def>    <def name="x"><tag>...</tag></def>
     -->
 
 
@@ -176,9 +194,9 @@
     <Goal>
         <description>X is secure</description>
         <Context>certified under standard XXXX</Context>
-        <Context><get name="version"><var name="ubuntu"/></get></Context>
+        <Context><get key="version"><var name="ubuntu"/></get></Context>
         <Assumption>no zero-day attacks</Assumption>
-        <Strategy var="mainStrategy"/>
+        <supportedBy var="mainStrategy"/>
     </Goal>
 
 </PGSN>

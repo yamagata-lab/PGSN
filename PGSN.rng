@@ -1,145 +1,292 @@
-<grammar  xmlns="http://relaxng.org/ns/structure/1.0">
+<?xml version="1.0" encoding="UTF-8"?>
+<grammar xmlns="http://relaxng.org/ns/structure/1.0">
+
+  <!-- ==================================================================
+       A RELAX NG schema for the PGSN XML surface syntax.
+
+       It describes the document as an author writes it, shorthands and
+       all, because that is what a schema is asked about. The compiler
+       expands the shorthands before anything else looks at them (see
+       PGSN-implementation.md §4.2), so the two descriptions have to agree
+       on the surface form rather than on the expansion.
+
+       Two things follow from that, and they shape the whole file.
+
+       A shorthand attribute stands in place of the content it abbreviates,
+       so it is written as a *choice* against that content and never as an
+       addition to it: `var`, `expr` and `as` in `val_pat`, `template` on
+       <apply>, `of` on <get>, `to` on <send>.
+
+       `as` names the element to wrap the content in, so the content that
+       follows is that element's content model. Every element's content is
+       therefore a named pattern of its own, which the element and `as`
+       both refer to. What RELAX NG cannot say is which of them `as` picked:
+       the attribute's value is a name, and a schema cannot branch on it.
+       So `as_content_pat` is the choice of all of them, and each remains
+       checked internally.
+
+       Limits worth knowing. The grammar is ambiguous in places, which
+       RELAX NG allows and which makes some error messages vague. `<text/>`
+       matches the empty string, so a value position is satisfied by an
+       empty element; the compiler is the one that rejects those.
+       ================================================================== -->
+
+  <start>
+    <choice>
+      <ref name="pgsn_pat"/>
+      <ref name="pgsn_module_pat"/>
+    </choice>
+  </start>
 
 
-  <define name="list_pat">
+  <!-- ============================== documents ============================== -->
+
+  <!-- A document is a block: bindings, then the value it stands for. -->
+  <define name="pgsn_pat">
+    <element name="PGSN">
+      <ref name="bindings_pat"/>
+      <ref name="base_val_pat"/>
+    </element>
+  </define>
+
+  <!-- A module has no value of its own: it exports what it binds, and it is
+       the only document that takes parameters. -->
+  <define name="pgsn_module_pat">
+    <element name="PGSNModule">
+      <zeroOrMore>
+        <ref name="param_pat"/>
+      </zeroOrMore>
+      <ref name="bindings_pat"/>
+    </element>
+  </define>
+
+
+  <!-- ============================== bindings ============================== -->
+
+  <define name="bindings_pat">
+    <zeroOrMore>
+      <choice>
+        <ref name="def_pat"/>
+        <ref name="import_pat"/>
+      </choice>
+    </zeroOrMore>
+  </define>
+
+  <define name="def_pat">
+    <element name="def">
+      <attribute name="name"/>
+      <optional>
+        <attribute name="typeOf"/>
+      </optional>
+      <optional>
+        <!-- the binding is in scope in its own value -->
+        <attribute name="recursive">
+          <choice>
+            <value>true</value>
+            <value>false</value>
+          </choice>
+        </attribute>
+      </optional>
+      <ref name="val_pat"/>
+    </element>
+  </define>
+
+  <!-- <from> in a binding position: the named exports come into scope. -->
+  <define name="import_pat">
+    <element name="from">
+      <attribute name="file"/>
+      <choice>
+        <group>
+          <attribute name="import"/>
+          <optional>
+            <attribute name="as"/>
+          </optional>
+        </group>
+        <oneOrMore>
+          <element name="import">
+            <attribute name="name"/>
+            <optional>
+              <attribute name="as"/>
+            </optional>
+          </element>
+        </oneOrMore>
+      </choice>
+      <ref name="module_args_pat"/>
+    </element>
+  </define>
+
+  <!-- <from> in a value position: the module's record, nothing selected. -->
+  <define name="module_pat">
+    <element name="from">
+      <attribute name="file"/>
+      <ref name="module_args_pat"/>
+    </element>
+  </define>
+
+  <define name="module_args_pat">
+    <zeroOrMore>
+      <ref name="arg_pat"/>
+    </zeroOrMore>
+  </define>
+
+
+  <!-- ============================== values ==============================
+
+       `val_pat` is a value that is the whole content of its element, which
+       is where the attribute shorthands can be used: they say in an
+       attribute what the content would have said, so there is no room for
+       content beside them.
+
+       `base_val_pat` is a value standing among other things — the function
+       of an <apply>, the receiver of a <send>, the last item of a block —
+       where an attribute could not say which of them it meant.
+       ====================================================================== -->
+
+  <define name="val_pat">
+    <choice>
+      <attribute name="var"/>
+      <attribute name="expr"/>
+      <group>
+        <attribute name="as"/>
+        <ref name="as_content_pat"/>
+      </group>
+      <ref name="base_val_pat"/>
+    </choice>
+  </define>
+
+  <define name="base_val_pat">
+    <choice>
+      <text/>
+      <ref name="value_element_pat"/>
+      <ref name="if_pat"/>
+      <ref name="cases_pat"/>
+      <ref name="module_pat"/>
+      <ref name="gsn_node_pat"/>
+    </choice>
+  </define>
+
+  <!-- The elements that stand for a value and are not GSN nodes. A GSN
+       header takes one of these as its description, which is why they are
+       named apart from the rest. -->
+  <define name="value_element_pat">
+    <choice>
+      <ref name="var_pat"/>
+      <ref name="literal_pat"/>
+      <ref name="expr_pat"/>
+      <ref name="apply_pat"/>
+      <ref name="get_pat"/>
+      <ref name="send_pat"/>
+      <ref name="div_pat"/>
+      <ref name="template_pat"/>
+      <ref name="class_pat"/>
+      <ref name="object_pat"/>
+      <ref name="data_type_pat"/>
+    </choice>
+  </define>
+
+  <!-- What follows an `as` attribute: the content of the element it names.
+       Nothing here carries an attribute of its own, because `as` moves the
+       content and leaves the attributes where they were. -->
+  <define name="as_content_pat">
+    <choice>
+      <text/>
+      <ref name="list_content"/>
+      <ref name="dict_content"/>
+      <ref name="defun_pat"/>
+      <ref name="class_content"/>
+      <ref name="object_content"/>
+      <ref name="block_content"/>
+      <ref name="call_pat"/>
+      <ref name="if_content"/>
+      <ref name="cases_content"/>
+      <ref name="goal_content"/>
+      <ref name="strategy_content"/>
+      <ref name="evidence_content"/>
+      <ref name="defeater_content"/>
+      <ref name="annotation_content"/>
+    </choice>
+  </define>
+
+
+  <!-- ============================== literals ============================== -->
+
+  <define name="var_pat">
+    <element name="var">
+      <attribute name="name"/>
+      <optional>
+        <attribute name="typeOf"/>
+      </optional>
+    </element>
+  </define>
+
+  <define name="literal_pat">
+    <choice>
+      <element name="num"><text/></element>
+      <element name="str"><text/></element>
+    </choice>
+  </define>
+
+  <define name="expr_pat">
+    <element name="expr"><text/></element>
+  </define>
+
+
+  <!-- ============================== data ============================== -->
+
+  <define name="data_type_pat">
+    <choice>
+      <element name="ol"><ref name="list_content"/></element>
+      <element name="dl"><ref name="dict_content"/></element>
+    </choice>
+  </define>
+
+  <define name="list_content">
     <zeroOrMore>
       <element name="li"><ref name="val_pat"/></element>
     </zeroOrMore>
   </define>
 
-
-  <define name="data_type_pat">
-    <choice>
-      <element name="ul">
-        <ref name="list_pat"/>
-      </element>
-      <element name="ol">
-        <ref name="list_pat"/>
-      </element>
-      <element name="dl">
-        <zeroOrMore>
-          <element name="dt">
-            <choice>
-              <attribute name="key"/>
-              <ref name="val_pat"/>
-            </choice>
-          </element>
-          <element name="dd">
-            <ref name="val_pat"/>
-          </element>
-        </zeroOrMore>
-      </element>
-    </choice>
-  </define>
-
-
-  <define name="gsn_header">
-    <choice>
-      <element name="description"><ref name="val_pat"/></element>
-      <text/>
-    </choice>
+  <!-- A record label is a string literal, so <dt> takes a key or text and
+       not a general value. -->
+  <define name="dict_content">
     <zeroOrMore>
-      <choice>
-      <element name="Context">
+      <element name="dt">
         <choice>
-          <element name="description"><ref name="val_pat"/></element>
-          <ref name="val_pat"/>
+          <attribute name="key"/>
+          <text/>
         </choice>
       </element>
-        <element name="Assumption">
-          <optional>
-            <choice>
-              <element name="description"><ref name="val_pat"/></element>
-              <text/>
-            </choice>
-          </optional>
-          <choice>
-            <attribute name="var"/>
-            <ref name="var_pat"/>
-          </choice>
-        </element>
-        <ref name="defeater_pat"/>
-      </choice>
+      <element name="dd"><ref name="val_pat"/></element>
     </zeroOrMore>
   </define>
 
 
-  <!-- Dialectic extension (GSN v3). A Defeater challenges the node holding
-       it. Its support is optional: a defeater that argues its case supplies
-       one, a defeater that merely states an objection leaves it undeveloped.
-       Being a GSN node, a defeater can be challenged in turn, which is why
-       this pattern refers back to gsn_header. -->
-  <define name="defeater_pat">
-    <element name="Defeater">
-      <ref name="gsn_header"/>
-      <optional>
-        <ref name="support_pat"/>
-      </optional>
-    </element>
+  <!-- ============================== blocks ============================== -->
+
+  <define name="div_pat">
+    <element name="div"><ref name="block_content"/></element>
   </define>
 
-
-  <define name="support_pat">
-    <choice>
-      <ref name="str_pat"/>
-      <ref name="ev_pat"/>
-      <oneOrMore>
-        <ref name="goal_pat"/>
-      </oneOrMore>
-      <element name="supportedBy">
-        <ref name="val_pat"/>
-      </element>
-      <element name="undeveloped"><empty/></element>
-    </choice>
+  <define name="block_content">
+    <ref name="bindings_pat"/>
+    <ref name="base_val_pat"/>
   </define>
 
-
-  <define name="goal_pat">
-    <element name="Goal">
-      <ref name="gsn_header" />
-      <ref name="support_pat"/>
-    </element>
+  <!-- A definition with parameters: <template>, and a class's <method>. -->
+  <define name="defun_pat">
+    <zeroOrMore>
+      <ref name="param_pat"/>
+    </zeroOrMore>
+    <ref name="block_content"/>
   </define>
 
-
-  <define name="str_pat">
-    <element name="Strategy">
-      <ref name="gsn_header"/>
-      <choice>
-        <oneOrMore>
-          <ref name="goal_pat"/>
-        </oneOrMore>
-        <element name="subGoals">
-          <ref name="val_pat"/>
-        </element>
-      </choice>
-    </element>
+  <define name="template_pat">
+    <element name="template"><ref name="defun_pat"/></element>
   </define>
-
-
-  <define name="ev_pat">
-    <element name="Evidence">
-      <ref name="gsn_header"/>
-    </element>
-  </define>
-
-
-  <define name="GSNNode">
-    <choice>
-      <ref name="goal_pat"/>
-      <ref name="str_pat"/>
-      <ref name="ev_pat"/>
-      <ref name="defeater_pat"/>
-    </choice>
-  </define>
-
 
   <define name="param_pat">
     <element name="param">
       <attribute name="name"/>
-      <optional>
-        <attribute name="instanceOf"/>
-      </optional>
       <optional>
         <attribute name="positional">
           <choice>
@@ -148,56 +295,96 @@
           </choice>
         </attribute>
       </optional>
-      <optional>
-        <ref name="val_pat"/>
-      </optional>
+      <!-- the content, if any, is the default value -->
+      <ref name="val_pat"/>
     </element>
   </define>
 
 
-  <define name="defun_pat">
-    <zeroOrMore>
-      <ref name="param_pat"/>
-    </zeroOrMore>
-    <zeroOrMore>
-      <ref name="def_pat"/>
-    </zeroOrMore>
-    <ref name="base_val_pat"/>
+  <!-- ============================== application ============================== -->
+
+  <define name="arg_pat">
+    <element name="arg">
+      <optional>
+        <attribute name="name"/>
+      </optional>
+      <ref name="val_pat"/>
+    </element>
   </define>
 
-
+  <!-- A function and its arguments. An empty argument list is allowed: the
+       application is then the function itself. -->
   <define name="call_pat">
-    <ref name="val_pat"/>
+    <ref name="base_val_pat"/>
     <zeroOrMore>
-      <!-- var="x" is not repeated here: val_pat already offers it as one of
-           its choices, and declaring the attribute twice in one group is what
-           RELAX NG calls an attribute conflict. -->
-      <element name="arg">
-        <optional>
-          <attribute name="name"/>
-        </optional>
-        <optional>
-          <ref name="val_pat"/>
-        </optional>
-      </element>
+      <ref name="arg_pat"/>
     </zeroOrMore>
   </define>
 
+  <define name="apply_pat">
+    <element name="apply">
+      <choice>
+        <group>
+          <!-- template="f" names the function, in place of writing it -->
+          <attribute name="template"/>
+          <zeroOrMore>
+            <ref name="arg_pat"/>
+          </zeroOrMore>
+        </group>
+        <ref name="call_pat"/>
+      </choice>
+    </element>
+  </define>
 
+  <define name="get_pat">
+    <element name="get">
+      <!-- the record label to read -->
+      <attribute name="key"/>
+      <choice>
+        <!-- of="obj" names the receiver, in place of writing it -->
+        <attribute name="of"/>
+        <ref name="val_pat"/>
+      </choice>
+    </element>
+  </define>
+
+  <define name="send_pat">
+    <element name="send">
+      <attribute name="method"/>
+      <choice>
+        <group>
+          <!-- to="obj" names the receiver, in place of writing it -->
+          <attribute name="to"/>
+          <zeroOrMore>
+            <ref name="arg_pat"/>
+          </zeroOrMore>
+        </group>
+        <ref name="call_pat"/>
+      </choice>
+    </element>
+  </define>
+
+
+  <!-- ============================== classes ============================== -->
+
+  <!-- `name` is what the class is called. It sits on the element rather
+       than in the content model because `as` cannot carry it: a named
+       class is written in the long form. -->
   <define name="class_pat">
     <element name="class">
       <optional>
-        <element name="inherit">
-          <ref name="val_pat"/>
-        </element>
-      </optional>
-    <zeroOrMore>
-      <element name="attribute">
         <attribute name="name"/>
-        <optional>
-          <ref name="val_pat"/>
-        </optional>
-      </element>
+      </optional>
+      <ref name="class_content"/>
+    </element>
+  </define>
+
+  <define name="class_content">
+    <optional>
+      <element name="inherit"><ref name="val_pat"/></element>
+    </optional>
+    <zeroOrMore>
+      <ref name="attribute_pat"/>
     </zeroOrMore>
     <zeroOrMore>
       <element name="method">
@@ -205,271 +392,174 @@
         <ref name="defun_pat"/>
       </element>
     </zeroOrMore>
-    </element>
   </define>
-
 
   <define name="object_pat">
-      <element name="object">
-        <element name="instanceOf">
-          <ref name="val_pat"/>
-        </element>
-      <zeroOrMore>
-        <element name="attribute">
-          <attribute name="name">
-          </attribute>
-          <optional>
-            <ref name="val_pat"/>
-          </optional>
-      </element>
-      </zeroOrMore>
-    </element>
+    <element name="object"><ref name="object_content"/></element>
   </define>
 
-
-  <define name="apply_pat">
-    <element name="apply">
-      <!-- template="f" is shorthand: inserts <var name="f"/> as the function -->
-      <optional>
-        <attribute name="template"/>
-      </optional>
-      <ref name="call_pat"/>
-    </element>
+  <define name="object_content">
+    <element name="instanceOf"><ref name="val_pat"/></element>
+    <zeroOrMore>
+      <ref name="attribute_pat"/>
+    </zeroOrMore>
   </define>
 
-
-<define name="send_pat">
-  <element name="send">
-    <attribute name="method"/>
-    <!-- to="obj" is shorthand: inserts <var name="obj"/> as the receiver -->
-    <optional>
-      <attribute name="to"/>
-    </optional>
-    <ref name="call_pat"/>
-  </element>
-</define>
-
-
-<define name="get_pat">
-  <element name="get">
-    <!-- label="x" is the user-facing form; preprocessor rewrites it to name="x" -->
-    <choice>
-      <attribute name="label"/>
+  <define name="attribute_pat">
+    <element name="attribute">
       <attribute name="name"/>
-    </choice>
-    <!-- of="obj" is shorthand: inserts <var name="obj"/> as the receiver -->
-    <optional>
-      <attribute name="of"/>
-    </optional>
-    <optional>
       <ref name="val_pat"/>
-    </optional>
-  </element>
-</define>
-
-
-<define name="template_pat">
-  <element name="template">
-    <ref name="defun_pat"/>
-  </element>
-</define>
-
-
-<define name="var_pat">
-  <element name="var">
-      <optional>
-        <attribute name="instanceOf"/>
-      </optional>
-      <attribute name="name"/>
     </element>
-</define>
+  </define>
 
 
-<define name="literal_pat">
-  <choice>
-    <element name="num"><text/></element>
-    <element name="str"><text/></element>
-  </choice>
-</define>
+  <!-- ============================== conditionals ============================== -->
 
-<define name="expr_pat">
-  <element name="expr"><text/></element>
-</define>
+  <define name="if_pat">
+    <element name="if"><ref name="if_content"/></element>
+  </define>
 
+  <define name="if_content">
+    <element name="cond"><ref name="val_pat"/></element>
+    <element name="then"><ref name="val_pat"/></element>
+    <ref name="else_pat"/>
+  </define>
 
-<!-- Conditionals. Each part is a wrapper holding a value, so it accepts the
-     same forms a value does, including the var= and expr= shorthands. -->
-<define name="cond_part_pat">
-  <element name="cond"><ref name="val_pat"/></element>
-</define>
+  <define name="cases_pat">
+    <element name="cases"><ref name="cases_content"/></element>
+  </define>
 
-<define name="then_part_pat">
-  <element name="then"><ref name="val_pat"/></element>
-</define>
-
-<define name="else_part_pat">
-  <element name="else"><ref name="val_pat"/></element>
-</define>
-
-<define name="if_pat">
-  <element name="if">
-    <ref name="cond_part_pat"/>
-    <ref name="then_part_pat"/>
-    <ref name="else_part_pat"/>
-  </element>
-</define>
-
-<define name="cases_pat">
-  <element name="cases">
+  <!-- <else> is required: a conditional with nothing to fall back on
+       cannot proceed when no case matches. -->
+  <define name="cases_content">
     <oneOrMore>
       <element name="case">
-        <ref name="cond_part_pat"/>
-        <ref name="then_part_pat"/>
+        <element name="cond"><ref name="val_pat"/></element>
+        <element name="then"><ref name="val_pat"/></element>
       </element>
     </oneOrMore>
-    <ref name="else_part_pat"/>
-  </element>
-</define>
+    <ref name="else_pat"/>
+  </define>
 
-<define name="expression_pat">
-  <choice>
-    <text/>
-    <ref name="literal_pat"/>
-    <ref name="expr_pat"/>
-    <ref name="class_pat"/>
-    <ref name="object_pat"/>
-    <ref name="apply_pat"/>
-    <ref name="template_pat"/>
-    <ref name="get_pat"/>
-    <ref name="send_pat"/>
-    <element name="div">
-      <zeroOrMore>
-        <ref name="def_pat"/>
-      </zeroOrMore>
-      <ref name="base_val_pat"/>
-    </element>
-    <ref name="if_pat"/>
-    <ref name="cases_pat"/>
-    <ref name="data_type_pat"/>
-    <ref name="module_pat"/>
-    <ref name="GSNNode"/>
-  </choice>
-</define>
+  <define name="else_pat">
+    <element name="else"><ref name="val_pat"/></element>
+  </define>
 
 
-<define name="base_val_pat">
-  <choice>
-    <ref name="var_pat"/>
-    <ref name="expression_pat"/>
-  </choice>
-</define>
+  <!-- ============================== GSN ============================== -->
 
+  <define name="gsn_node_pat">
+    <choice>
+      <ref name="goal_pat"/>
+      <ref name="strategy_pat"/>
+      <ref name="evidence_pat"/>
+      <ref name="defeater_pat"/>
+    </choice>
+  </define>
 
-  <define name="val_pat">
+  <!-- Every GSN node opens with a description: a <description> element, the
+       leading text, or a lone value child. -->
+  <define name="description_pat">
     <choice>
       <attribute name="var"/>
       <attribute name="expr"/>
-      <ref name="base_val_pat"/>
+      <element name="description"><ref name="val_pat"/></element>
+      <ref name="value_element_pat"/>
+      <ref name="if_pat"/>
+      <ref name="cases_pat"/>
+      <text/>
     </choice>
   </define>
 
-
-  <define name="def_pat">
-    <element name="def">
-      <attribute name="name"/>
-      <optional>
-        <attribute name="as"/>
-      </optional>
-      <optional>
-        <attribute name="instanceOf"/>
-      </optional>
-      <ref name="val_pat"/>
-    </element>
+  <define name="gsn_header">
+    <ref name="description_pat"/>
+    <zeroOrMore>
+      <ref name="defeater_pat"/>
+    </zeroOrMore>
   </define>
 
+  <!-- A Context or an Assumption attaches to a Goal or a Strategy, and to
+       nothing else: the standard attaches none to a Solution, and those are
+       the two classes that declare them. Written anywhere else they have
+       nowhere to go and are dropped without a word, which is the sort of
+       thing a schema is for. -->
+  <define name="annotations_pat">
+    <zeroOrMore>
+      <choice>
+        <element name="Context"><ref name="annotation_content"/></element>
+        <element name="Assumption"><ref name="annotation_content"/></element>
+        <ref name="defeater_pat"/>
+      </choice>
+    </zeroOrMore>
+  </define>
 
-  <!-- <from> in a binding position: selected names are brought into scope. -->
-  <define name="import_pat">
-  <element name="from">
-    <attribute name="file"/>
+  <!-- Context and Assumption carry a statement and nothing else. -->
+  <define name="annotation_content">
+    <ref name="description_pat"/>
+  </define>
+
+  <define name="goal_pat">
+    <element name="Goal"><ref name="goal_content"/></element>
+  </define>
+
+  <!-- Support is optional: a goal without one is undeveloped. -->
+  <define name="goal_content">
+    <ref name="description_pat"/>
+    <ref name="annotations_pat"/>
+    <optional>
+      <ref name="support_pat"/>
+    </optional>
+  </define>
+
+  <define name="support_pat">
     <choice>
-      <!-- single -->
-      <group>
-        <attribute name="import"/>
-        <optional>
-          <attribute name="as"/>
-        </optional>
-      </group>
-      <!-- multiple -->
+      <ref name="strategy_pat"/>
+      <ref name="evidence_pat"/>
       <oneOrMore>
-        <element name="import">
-          <attribute name="name"/>
-          <optional>
-            <attribute name="as"/>
-          </optional>
-        </element>
+        <ref name="goal_pat"/>
       </oneOrMore>
+      <element name="supportedBy"><ref name="val_pat"/></element>
+      <element name="undeveloped"><empty/></element>
     </choice>
-    <ref name="module_args_pat"/>
-  </element>
-</define>
+  </define>
 
+  <define name="strategy_pat">
+    <element name="Strategy"><ref name="strategy_content"/></element>
+  </define>
 
-<!-- <from> in a value position: the module's record, with nothing selected. -->
-<define name="module_pat">
-  <element name="from">
-    <attribute name="file"/>
-    <ref name="module_args_pat"/>
-  </element>
-</define>
+  <define name="strategy_content">
+    <ref name="description_pat"/>
+    <ref name="annotations_pat"/>
+    <choice>
+      <oneOrMore>
+        <ref name="goal_pat"/>
+      </oneOrMore>
+      <element name="subGoals"><ref name="val_pat"/></element>
+    </choice>
+  </define>
 
+  <define name="evidence_pat">
+    <element name="Evidence"><ref name="evidence_content"/></element>
+  </define>
 
-<define name="module_args_pat">
-    <zeroOrMore>
-      <!-- var="x" is not repeated here: val_pat already offers it as one of
-           its choices, and declaring the attribute twice in one group is what
-           RELAX NG calls an attribute conflict. -->
-      <element name="arg">
-        <optional>
-          <attribute name="name"/>
-        </optional>
-        <optional>
-          <ref name="val_pat"/>
-        </optional>
-      </element>
-    </zeroOrMore>
-</define>
+  <define name="evidence_content">
+    <ref name="gsn_header"/>
+  </define>
 
-<start>
-  <choice>
-    <ref name="pgsn_pat"/>
-    <ref name="pgsn_module_pat"/>
-  </choice>
-</start>
+  <!-- Dialectic extension (GSN v3). A Defeater challenges the node holding
+       it. Its support is optional: a defeater that argues its case supplies
+       one, a defeater that merely states an objection leaves it
+       undeveloped. Being a GSN node, a defeater can be challenged in turn,
+       which is why its header is the same pattern. -->
+  <define name="defeater_pat">
+    <element name="Defeater"><ref name="defeater_content"/></element>
+  </define>
 
-<define name="pgsn_pat">
-  <element name="PGSN">
-    <zeroOrMore>
-      <choice>
-        <ref name="import_pat"/>
-        <ref name="def_pat"/>
-      </choice>
-    </zeroOrMore>
-    <ref name="val_pat"/>
-  </element>
-</define>
+  <define name="defeater_content">
+    <ref name="gsn_header"/>
+    <optional>
+      <ref name="support_pat"/>
+    </optional>
+  </define>
 
-<define name="pgsn_module_pat">
-  <element name="PGSNModule">
-    <zeroOrMore>
-      <ref name="param_pat"/>
-    </zeroOrMore>
-    <zeroOrMore>
-      <choice>
-        <ref name="import_pat"/>
-        <ref name="def_pat"/>
-      </choice>
-    </zeroOrMore>
-  </element>
-</define>
 </grammar>

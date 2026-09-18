@@ -320,9 +320,12 @@ class Abs(Term):
         else:
             assert False
 
+    # Evaluation stops at an abstraction and leaves its body as written, so a
+    # term evaluates to a weak normal form. Every term the evaluator reduces is
+    # then closed, which keeps builtin reductions stable under substitution,
+    # and recursion through `fix` cannot unfold under a binder.
     def _eval_or_none(self) -> Term | None:
-        t_evaluated = self.t.eval_or_none()
-        return None if t_evaluated is None else self.evolve(t=t_evaluated)
+        return None
 
     def _compute_free_bound(self) -> int:
         # Index 0 in the body is bound by this abstraction.
@@ -814,14 +817,6 @@ class DefineClass(ConstMixin, Unary):
                                           methods=methods)
 
 
-def _is_subclass(cls1: PGSNClass, cls2: PGSNClass):
-    if cls1.inherit is None:
-        return False
-    if cls1 == cls2:
-        return True
-    return _is_subclass(cls1.inherit, cls2)
-
-
 def _inherit_chain(cls: PGSNClass):
     if cls.inherit is None:
         return [cls]
@@ -830,7 +825,16 @@ def _inherit_chain(cls: PGSNClass):
 
 
 @frozen
-class IsSubclass(ConstMixin, Builtin):
+class IsSubtype(ConstMixin, Builtin):
+    """Structural subtyping: one type is a subtype of another when it declares
+    at least the same attribute and method names.
+
+    Only the labels are compared. A default value is never looked at, so the
+    answer does not depend on how far either class has been reduced — which is
+    what the inheritance-walking predicate this replaces could not promise.
+    `inherit` is not consulted either: a class is a subtype of every class
+    whose labels it covers, related to it or not.
+    """
 
     @classmethod
     def build(cls, is_named: bool, **kwarg) -> Term:
@@ -848,10 +852,12 @@ class IsSubclass(ConstMixin, Builtin):
     # builtin consumes, so the tuple is variadic. `_applicable_args` is what
     # checks that args[0] and args[1] are classes.
     def _apply_args(self, args: tuple[Term, ...]) -> Term:
-        cls1 = args[0]
-        cls2 = args[1]
+        sub = args[0]
+        sup = args[1]
+        covered = (set(sup.attributes()) <= set(sub.attributes())
+                   and set(sup.methods()) <= set(sub.methods()))
 
-        return Boolean.nameless(value=_is_subclass(cls1, cls2))
+        return Boolean.nameless(value=covered)
 
 
 @frozen
@@ -993,6 +999,19 @@ class Tail(ConstMixin, Unary):
 
     def _apply_arg(self, arg: List) -> Term:
         return List.build(terms=arg.terms[1:], is_named=self.is_named)
+
+
+# Emptiness is a question about the list itself, not about its elements, so it
+# is asked directly rather than by comparing the list with `empty`: equality
+# looks at the elements and declines a list that holds anything but data.
+@frozen
+class IsEmpty(ConstMixin, Unary):
+
+    def _applicable(self, arg: Term):
+        return isinstance(arg, List)
+
+    def _apply_arg(self, arg: List) -> Term:
+        return Boolean.build(is_named=self.is_named, value=len(arg.terms) == 0)
 
 
 @frozen
@@ -1188,7 +1207,25 @@ class LessThan(ConstMixin, Builtin):
                              value=args[0].value < args[1].value)
 
 
-# Comparison. does not compare App and Abs
+# Comparison. Only data can be compared. A term is comparable when it is a base
+# value, or a list or a record whose components are all comparable in turn; the
+# leaves of a comparable term are therefore always base values. Anything else is
+# declined, and the application stays stuck rather than being called unequal: a
+# function has no structural equality to speak of, a term still to be reduced
+# holds no value yet, and a class or an object is not data -- what makes two of
+# them the same is an open question, and answering it here would decide it by
+# accident. Refusing the question is not the same answer as `false`, and a
+# document that asks it stops where it asked.
+def _comparable(term: Term) -> bool:
+    if isinstance(term, (String, Integer, Boolean, Constant)):
+        return True
+    if isinstance(term, List):
+        return all(_comparable(t) for t in term.terms)
+    if isinstance(term, Record):
+        return all(_comparable(t) for t in term._attributes.values())
+    return False
+
+
 @frozen
 class Equal(ConstMixin, Builtin):
 
@@ -1196,8 +1233,10 @@ class Equal(ConstMixin, Builtin):
     def build(cls, is_named: bool, **kwarg) -> Term:
         return super().build(arity=2, is_named=is_named, **kwarg)
 
+    # Only the two arguments being compared are inspected; anything further
+    # along the spine is passed on by `apply_args` and is none of our business.
     def _applicable_args(self, args: tuple[Term,...]):
-        return all((not isinstance(arg, App) and not isinstance(arg, Abs) for arg in args))
+        return len(args) >= 2 and all(_comparable(arg) for arg in args[:2])
 
     def _apply_args(self, args: tuple[Term,...]):
         return Boolean.build(is_named=self.is_named, value=args[0] == args[1])
@@ -1399,6 +1438,13 @@ def to_python(t: Term, with_inherit_chain=False, _path: str = "<root>") -> Any:
         case PGSNObject():
             attr = t.attributes()
             cls_name = t.instance.name
+            if cls_name is None:
+                raise ValueError(
+                    f"PGSN term cannot be converted to a Python value at path "
+                    f"'{_path}': an object is reported under the name of its "
+                    f"class, and this object's class has no name. Give the "
+                    f"class a name where it is defined."
+                )
             attrs = {}
             for k, t1 in attr.items():
                 child_path = f"{_path}.{k}"

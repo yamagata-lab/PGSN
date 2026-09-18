@@ -10,7 +10,7 @@ import xml.etree.ElementTree as ET
 import pytest
 
 import pgsn
-from pgsn.pgsn_xml import PGSNError, _preprocess
+from pgsn.pgsn_xml import PGSNError, _desugar
 
 
 def run(source: str, defs: str = ""):
@@ -19,7 +19,7 @@ def run(source: str, defs: str = ""):
 
 def expanded(source: str) -> str:
     root = ET.fromstring(f"<PGSN>{source}</PGSN>")
-    _preprocess(root)
+    _desugar(root)
     return ET.tostring(root[0], encoding="unicode")
 
 
@@ -34,7 +34,7 @@ def test_the_attribute_says_what_the_child_says():
 @pytest.mark.parametrize("source,expected", [
     ('<apply><var name="plus"/><arg expr="i"/><arg expr="i * 10"/></apply>', 22),
     ('<def name="n" expr="i + 1"/><var name="n"/>', 3),
-    ('<ul><li expr="i * 2"/><li expr="i - 2"/></ul>', [4, 0]),
+    ('<ol><li expr="i * 2"/><li expr="i - 2"/></ol>', [4, 0]),
     ('<dl><dt key="k"/><dd expr="i + 1"/></dl>', {"k": 3}),
     ('<div><def name="m" expr="i * 3"/><var name="m"/></div>', 6),
 ])
@@ -72,12 +72,12 @@ def test_the_attribute_conflicts_with_content_of_its_own():
     with pytest.raises(PGSNError, match="both an 'expr' attribute"):
         run('<apply><var name="head"/><arg expr="1 + 2">also text</arg></apply>')
     with pytest.raises(PGSNError, match="both an 'expr' attribute"):
-        run('<ul><li expr="1"><num>2</num></li></ul>')
+        run('<ol><li expr="1"><num>2</num></li></ol>')
 
 
 def test_the_expression_is_checked_like_any_other():
     """It goes through the same expansion, so the same rules apply."""
     with pytest.raises(PGSNError, match="Call is not allowed"):
-        run('<ul><li expr="f(x)"/></ul>')
+        run('<ol><li expr="f(x)"/></ol>')
     with pytest.raises(PGSNError, match="not a valid name"):
-        run('<ul><li expr="_plus"/></ul>')
+        run('<ol><li expr="_plus"/></ol>')

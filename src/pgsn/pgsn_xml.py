@@ -1,7 +1,6 @@
 """PGSN XML compiler: purely syntactic mapping from XML to pgsn.dsl Terms.
 
 XML parsing builds a single Term; all evaluation is deferred to fully_eval().
-No shorthand expansion (var-attribute, def-as) in this implementation.
 Semantic errors surface as non-terminating reduction.
 """
 
@@ -14,11 +13,12 @@ from pgsn.jail import JailError, is_within
 from pgsn.dsl import (
     variable, string, list_term, record, empty_record, let, let_vars,
     lambda_abs, lambda_abs_keywords, lambda_abs_vars,
-    fix, map_term, fold, foldr, concat, cons, head, tail, index, repeat,
+    fix, map_term, fold, foldr, concat, cons, head, tail, index, is_empty,
+    repeat,
     list_all, integer_sum, integer,
     true, false, if_then_else, guard,
     equal, less_than, plus, minus, times, div, mod,
-    define_class, instantiate, instance, is_instance, is_subclass,
+    define_class, instantiate, type_of, is_subtype,
     base_class, undefined, empty,
     boolean_and, boolean_or, boolean_not,
     has_label, list_labels, add_attribute, remove_attribute, overwrite_record,
@@ -131,23 +131,31 @@ class _Chroot:
 
 
 # ------------------------------------------------------------------ #
-# Shorthand preprocessor
+# How a document becomes a term
 #
-# Expands shorthands in place on the ElementTree, before compilation,
-# so the compiler proper never sees them:
-#   1. def-as:          <def as="T">..</def>         ->  <def><T>..</T></def>
-#   2. var-attribute:   <tag var="x"/>               ->  <tag><var name="x"/></tag>
-#   2b. expr-attribute: <tag expr="1 + 2"/>          ->  <tag><expr>1 + 2</expr></tag>
-#   3. GSN text:        <Goal>txt<Strategy/>          ->  <Goal><description>txt</description><Strategy/>
-#   4. apply template:  <apply template="f">...</apply>
-#                                                    ->  <apply><var name="f"/>...</apply>
-#   5. get label/of:    <get label="x" of="obj"/>    ->  <get name="x"><var name="obj"/></get>
-#   6. send method/to:  <send method="m" to="obj">   ->  <send name="m"><var name="obj"/>...
-#                       (label/method are user-facing; name= is internal)
+# Compilation is four passes, and what separates them is how much each one is
+# allowed to know about the element in front of it:
+#
+#   1. surface syntax   the document as written                (_check_source)
+#   2. desugaring       var=, expr=, as=, <if>, <cases>             (_desugar)
+#   3. deep syntax      the same document with no shorthand left in it.
+#                       Element-specific attributes -- <apply template=>,
+#                       <get key= of=>, <send method= to=> -- are not
+#                       shorthand and survive this far
+#   4. terms            the compilers below read deep syntax     (_expr, _e_*)
+#
+# The rules in pass 2 are element-agnostic: each reads an attribute and
+# rewrites the element carrying it, whatever element that is. `<tag var="x"/>`
+# means `<tag><var name="x"/></tag>` for every tag, with no exception to
+# remember and none to get wrong. An element-specific attribute is left alone
+# until pass 4, where that element's own compiler maps it onto a term.
+#
+# The order is what keeps the two kinds from interfering. When they were
+# interleaved -- expand `expr=`, rewrite `<apply template=>`, expand `var=` --
+# the generic rules met elements the specific ones had already restructured,
+# and `<apply template="f" var="x"/>` was rejected by a rule that the longhand
+# it stands for never met.
 # ------------------------------------------------------------------ #
-
-_GSN_HEADER_TAGS = {"Goal", "Strategy", "Evidence", "Context", "Assumption",
-                    "Defeater"}
 
 # Tags that attach a defeater to the node holding them.
 _DEFEATER_TAGS = {"Defeater"}
@@ -177,12 +185,13 @@ _MODULE_VAR = _RESERVED_PREFIX + "module"
 
 # Attributes holding the name of a *variable*, by element. `var` is shorthand
 # for a <var> child and is accepted on any element, so it is checked
-# everywhere. Record labels — <get name=>, <attribute name=>, <dt key=>,
-# <send name=> — are a separate namespace and are deliberately not reserved.
+# everywhere. Record labels — <get key=>, <attribute name=>, <dt key=>,
+# <send method=> — are a separate namespace and are deliberately not
+# reserved.
 _NAME_ATTRS: dict[str, tuple[str, ...]] = {
-    "def":    ("name", "instanceOf"),
-    "param":  ("name", "instanceOf"),
-    "var":    ("name", "instanceOf"),
+    "def":    ("name", "typeOf"),
+    "param":  ("name",),
+    "var":    ("name", "typeOf"),
     "from":   ("as",),
     "import": ("name", "as"),
     "apply":  ("template",),
@@ -204,16 +213,26 @@ def _name_error(name: str, where: str = "") -> PGSNError:
     return PGSNError(f"{name!r} is not a valid name{where}: {reason}.")
 
 
+def _check_source(elem: ET.Element) -> None:
+    """Check the document as written, before any of it is rewritten.
+
+    The check below is only possible here: whether a name is reserved is a
+    question about how the document spells it, and desugaring introduces
+    reserved names on purpose.
+    """
+    _check_names(elem)
+    for child in elem:
+        _check_source(child)
+
+
 def _check_names(elem: ET.Element) -> None:
-    """Reject invalid or reserved names anywhere in a source document."""
+    """Reject invalid or reserved names on one element."""
     for attr in ("var",) + _NAME_ATTRS.get(elem.tag, ()):
         value = elem.get(attr)
         if value is None:
             continue
         if value.startswith(_RESERVED_PREFIX) or not value.isidentifier():
             raise _name_error(value, f' in <{elem.tag} {attr}="{value}">')
-    for child in elem:
-        _check_names(child)
 
 
 # ------------------------------------------------------------------ #
@@ -269,7 +288,7 @@ def _expr_error(node: ast.AST) -> PGSNError:
     return PGSNError(
         f"{type(node).__name__} is not allowed in <expr>. The expression "
         "syntax covers arithmetic, comparison, boolean operators and "
-        "f-strings; use <apply>, <get> or <ul>/<dl> for anything else.")
+        "f-strings; use <apply>, <get> or <ol>/<dl> for anything else.")
 
 
 def _translate(node: ast.AST) -> ET.Element:
@@ -527,95 +546,78 @@ def _replace_with(elem: ET.Element, replacement: ET.Element) -> None:
     elem[:] = list(replacement)
 
 
-def _preprocess(elem: ET.Element) -> None:
-    """Recursively expand shorthand notations in place."""
-    # expr: replace with the XML it stands for, before anything else looks at
-    # it. The expansion contains no shorthands, so it needs no further passes.
+def _desugar(elem: ET.Element) -> None:
+    """Expand the element-agnostic shorthands, in place, everywhere.
+
+    Every rule here rewrites the element that carries it without asking what
+    element it is. Nothing element-specific belongs in this pass: see the note
+    at the head of the file.
+    """
+    # <expr> becomes the XML it stands for. That expansion holds no shorthand
+    # of its own, so the recursion stops here.
     if elem.tag == "expr":
         _expand_expr(elem)
         return
 
-    # Conditionals are rewritten into an application of the builtin, and the
-    # result is preprocessed like any other element.
+    # A conditional becomes an application of the builtin, which is then
+    # desugared like any other element: its branches may hold more shorthand.
     if elem.tag == "if":
         _expand_if(elem)
     elif elem.tag == "cases":
         _expand_cases(elem)
 
-    # expr-attribute: <tag expr="1 + 2"/> -> <tag><expr>1 + 2</expr></tag>
-    # The <expr> this leaves behind is expanded when the recursion below
-    # reaches it, so the two spellings go through the same code.
-    if "expr" in elem.attrib:
-        if len(elem) > 0 or (elem.text and elem.text.strip()):
-            raise PGSNError(
-                f"<{elem.tag}> has both an 'expr' attribute and content of "
-                f"its own; the attribute is shorthand for the content.")
-        source = elem.attrib.pop("expr")
-        expr_elem = ET.SubElement(elem, "expr")
-        expr_elem.text = source
+    # The attribute shorthands. Each says in an attribute what the element's
+    # content would otherwise say. `expr=` leaves an <expr> behind for the
+    # recursion below, so both spellings of an expression share one expansion.
+    _expand_expr_attribute(elem)
+    _expand_as_attribute(elem)
+    _expand_var_attribute(elem)
 
-    # def-as: wrap the def body in an element named by the `as` attribute
-    if elem.tag == "def" and "as" in elem.attrib:
-        tag = elem.attrib.pop("as")
-        wrapper = ET.Element(tag)
-        # Move def's text and children into the wrapper
-        wrapper.text = elem.text
-        elem.text = None
-        for child in list(elem):
-            elem.remove(child)
-            wrapper.append(child)
-        elem.append(wrapper)
-
-    # apply template="f": insert <var name="f"/> as the first child
-    if elem.tag == "apply" and "template" in elem.attrib:
-        name = elem.attrib.pop("template")
-        var_elem = ET.Element("var")
-        var_elem.set("name", name)
-        elem.insert(0, var_elem)
-
-    # get label="x" of="obj": rename label->name, insert <var name="obj"/> as child
-    if elem.tag == "get" and "label" in elem.attrib:
-        label = elem.attrib.pop("label")
-        elem.set("name", label)
-        if "of" in elem.attrib:
-            receiver = elem.attrib.pop("of")
-            var_elem = ET.Element("var")
-            var_elem.set("name", receiver)
-            elem.insert(0, var_elem)
-
-    # send method="m" to="obj": rename method->name, insert <var name="obj"/> first
-    if elem.tag == "send" and "method" in elem.attrib:
-        method = elem.attrib.pop("method")
-        elem.set("name", method)
-        if "to" in elem.attrib:
-            receiver = elem.attrib.pop("to")
-            var_elem = ET.Element("var")
-            var_elem.set("name", receiver)
-            elem.insert(0, var_elem)
-
-    # var-attribute: <tag var="x"/> -> <tag><var name="x"/></tag>
-    # (skip apply and send which handle var-like attrs above)
-    if "var" in elem.attrib:
-        if len(elem) > 0:
-            raise PGSNError(
-                f"<{elem.tag}> has both a 'var' attribute and child elements")
-        name = elem.attrib.pop("var")
-        var_elem = ET.SubElement(elem, "var")
-        var_elem.set("name", name)
-
-    # GSN leading text -> <description>: only for GSN header elements that
-    # have other children (so the text is the header's description, not the
-    # element's whole value). A text-only GSN element keeps its text as-is.
-    if (elem.tag in _GSN_HEADER_TAGS and elem.find("description") is None
-            and elem.text and elem.text.strip() and len(elem) > 0):
-        desc = ET.Element("description")
-        desc.text = elem.text.strip()
-        elem.text = None
-        elem.insert(0, desc)
-
-    # Recurse into children (after potential restructuring above)
     for child in elem:
-        _preprocess(child)
+        _desugar(child)
+
+
+def _reject_own_content(elem: ET.Element, attr: str) -> None:
+    """A shorthand attribute stands for content, so it cannot sit beside it."""
+    if len(elem) or (elem.text and elem.text.strip()):
+        article = "an" if attr.startswith(("a", "e", "i", "o", "u")) else "a"
+        raise PGSNError(
+            f"<{elem.tag}> has both {article} {attr!r} attribute and content "
+            f"of its own; the attribute is shorthand for the content.")
+
+
+def _expand_expr_attribute(elem: ET.Element) -> None:
+    """<tag expr="1 + 2"/> -> <tag><expr>1 + 2</expr></tag>"""
+    if "expr" not in elem.attrib:
+        return
+    _reject_own_content(elem, "expr")
+    ET.SubElement(elem, "expr").text = elem.attrib.pop("expr")
+
+
+def _expand_var_attribute(elem: ET.Element) -> None:
+    """<tag var="x"/> -> <tag><var name="x"/></tag>"""
+    if "var" not in elem.attrib:
+        return
+    _reject_own_content(elem, "var")
+    ET.SubElement(elem, "var").set("name", elem.attrib.pop("var"))
+
+
+# `as` renames an imported name on <from> and <import>. Everywhere else it
+# names an element to wrap the content in, which is what lets a <def> hold a
+# list or a record without a nesting level whose only job is to be there.
+_AS_RENAMES = {"from", "import"}
+
+
+def _expand_as_attribute(elem: ET.Element) -> None:
+    """<tag as="dl">..</tag> -> <tag><dl>..</dl></tag>"""
+    if elem.tag in _AS_RENAMES or "as" not in elem.attrib:
+        return
+    wrapper = ET.Element(elem.attrib.pop("as"))
+    wrapper.text, elem.text = elem.text, None
+    for child in list(elem):
+        elem.remove(child)
+        wrapper.append(child)
+    elem.append(wrapper)
 
 
 # Builtins substituted inline during compilation (not at evaluation time).
@@ -627,6 +629,7 @@ _BUILTINS: dict[str, Term] = {
     "fix": fix, "map_term": map_term, "fold": fold, "foldr": foldr,
     "concat": concat, "list_all": list_all,
     "cons": cons, "head": head, "tail": tail, "index": index, "empty": empty,
+    "is_empty": is_empty,
     "repeat": repeat, "integer_sum": integer_sum,
     "equal": equal, "less_than": less_than,
     "guard": guard, "if_then_else": if_then_else,
@@ -638,8 +641,7 @@ _BUILTINS: dict[str, Term] = {
     "overwrite_record": overwrite_record, "format_string": format_string,
     "empty_record": empty_record, "undefined": undefined,
     "define_class": define_class, "instantiate": instantiate,
-    "instance": instance, "is_instance": is_instance,
-    "is_subclass": is_subclass, "base_class": base_class,
+    "type_of": type_of, "is_subtype": is_subtype, "base_class": base_class,
     "goal": goal, "strategy": strategy, "evidence": evidence,
     "context": context, "assumption": assumption,
     "defeater": defeater,
@@ -687,7 +689,7 @@ def _text_to_term(s: str) -> Term:
     return string(s)
 
 
-def _resolve(name: str, instance_of: str | None = None) -> Term:
+def _resolve(name: str, type_name: str | None = None) -> Term:
     """Every name becomes a variable; nothing is substituted inline.
 
     What a name denotes is decided by the binder structure around it, and by
@@ -696,9 +698,19 @@ def _resolve(name: str, instance_of: str | None = None) -> Term:
     silently getting the builtin.
     """
     term = variable(name)
-    if instance_of:
-        term = guard(is_instance(term, variable(instance_of)))(term)
+    if type_name:
+        term = _typed(term, type_name)
     return term
+
+
+def _typed(term: Term, type_name: str) -> Term:
+    """`typeOf`: let the value through only if it satisfies the named type.
+
+    The guard stalls on false, which is how a failed check shows itself: the
+    document does not reduce. The type is a variable like any other, so what
+    it denotes follows the same scoping as every other name.
+    """
+    return guard(is_subtype(type_of(term), variable(type_name)))(term)
 
 
 def _builtin_scope(body: Term) -> Term:
@@ -738,17 +750,28 @@ def _thread_lets(bindings: list[tuple[str, Term]],
     return body
 
 
-def _split_args(arg_elems: list[ET.Element], chroot: _Chroot,
-                visiting: frozenset[Path]) -> tuple[list, dict]:
+def _split_args(items: list[ET.Element | str], chroot: _Chroot,
+                visiting: frozenset[Path], owner: str) -> tuple[list, dict]:
     """
     Collect <arg> children into positional and keyword groups.
     Positional args (no name) must precede keyword args, as in Python.
     Application itself is delegated to Term.__call__.
+
+    Anything that is not an <arg> is an error rather than something to skip.
+    Desugaring expands `var` and `expr` into a child of their own, so skipping
+    would turn `<apply template="f" var="x"/>` into an application of `f` to
+    nothing at all.
     """
     positional, keyword = [], {}
-    for a in arg_elems:
+    for a in items:
+        if isinstance(a, str):
+            raise PGSNError(
+                f"<{owner}> takes its arguments as <arg> children, "
+                f"found the text {a!r}")
         if a.tag != "arg":
-            continue
+            raise PGSNError(
+                f"<{owner}> takes its arguments as <arg> children, "
+                f"found <{a.tag}>")
         name = a.get("name")
         if name is None:
             if keyword:
@@ -809,19 +832,10 @@ def _compile_root(root: ET.Element, chroot: _Chroot,
     """
     if root.tag != "PGSN":
         raise PGSNError(f"Expected <PGSN>, got <{root.tag}>")
-    _check_names(root)
-    _preprocess(root)
-    children = list(root)
-    # The final value may be a bare text node (no child elements)
-    if not children:
-        text = (root.text or "").strip()
-        if text:
-            return _builtin_scope(_text_to_term(text))
-        raise PGSNError("<PGSN> has no value")
+    _check_source(root)
+    _desugar(root)
     visiting = frozenset({entry}) if entry is not None else frozenset()
-    final = _expr(children[-1], chroot, visiting)
-    bindings = _bindings(children[:-1], chroot, visiting)
-    return _builtin_scope(_thread_lets(bindings, final))
+    return _builtin_scope(_block(_items(root), chroot, visiting, "PGSN"))
 
 
 def _compile_module(root: ET.Element, chroot: _Chroot,
@@ -830,23 +844,18 @@ def _compile_module(root: ET.Element, chroot: _Chroot,
     Compile <PGSNModule> to a keyword-lambda Term.
     When applied to a Record of args, yields a Record of exported names.
     """
-    children = list(root)
-    idx, params, defaults_dict = 0, [], {}
+    param_elems, items = _split_params(root)
+    params = [p.get("name") for p in param_elems]
+    defaults_dict = {p.get("name"): _content(p, chroot, visiting)
+                     for p in param_elems if _items(p)}
 
-    while idx < len(children) and children[idx].tag == "param":
-        p = children[idx]
-        name = p.get("name")
-        params.append(name)
-        if list(p) or (p.text and p.text.strip()):
-            defaults_dict[name] = _content(p, chroot, visiting)
-        idx += 1
-
-    body_children = children[idx:]
-    export_names = [c.get("name") for c in body_children if c.tag == "def"]
+    export_names = [i.get("name") for i in items
+                    if isinstance(i, ET.Element) and i.tag == "def"]
 
     # Module body: let-chain ending in a record of all exported names
     exports = record({n: variable(n) for n in export_names})
-    body = _thread_lets(_bindings(body_children, chroot, visiting), exports)
+    body = _thread_lets(
+        _bindings(items, chroot, visiting, "PGSNModule"), exports)
 
     arguments = {p: variable(p) for p in params}
     defaults_rec = record(defaults_dict) if defaults_dict else empty_record
@@ -861,16 +870,24 @@ def _compile_module(root: ET.Element, chroot: _Chroot,
 # Binding sequences  (def / from)
 # ------------------------------------------------------------------ #
 
-def _bindings(elems: list[ET.Element], chroot: _Chroot,
-              visiting: frozenset[Path]) -> list[tuple[str, Term]]:
+def _bindings(items: list[ET.Element | str], chroot: _Chroot,
+              visiting: frozenset[Path], owner: str) -> list[tuple[str, Term]]:
+    """The bindings a block opens with, in order."""
     result = []
-    for elem in elems:
-        if elem.tag == "def":
-            result.append(_compile_def(elem, chroot, visiting))
-        elif elem.tag == "from":
-            result.extend(_compile_from(elem, chroot, visiting))
+    for item in items:
+        if isinstance(item, str):
+            raise PGSNError(
+                f"<{owner}> has text where a binding was expected: {item!r}. "
+                f"A block is bindings and then one value, so only its last "
+                f"item is its value.")
+        if item.tag == "def":
+            result.append(_compile_def(item, chroot, visiting))
+        elif item.tag == "from":
+            result.extend(_compile_from(item, chroot, visiting))
         else:
-            raise PGSNError(f"Unexpected element: <{elem.tag}>")
+            raise PGSNError(
+                f"<{owner}> takes <def> and <from> before its value, "
+                f"found <{item.tag}>")
     return result
 
 
@@ -882,9 +899,9 @@ def _compile_def(elem: ET.Element, chroot: _Chroot,
     if elem.get("recursive", "false").lower() == "true":
         term = fix(lambda_abs(variable(name), term))
 
-    instance_of = elem.get("instanceOf")
-    if instance_of:
-        term = guard(is_instance(term, variable(instance_of)))(term)
+    type_name = elem.get("typeOf")
+    if type_name:
+        term = _typed(term, type_name)
 
     return name, term
 
@@ -904,8 +921,8 @@ def _module_record(elem: ET.Element, chroot: _Chroot,
     root = ET.parse(full).getroot()
     if root.tag != "PGSNModule":
         raise PGSNError(f"Expected <PGSNModule> in {file_path!r}")
-    _check_names(root)
-    _preprocess(root)
+    _check_source(root)
+    _desugar(root)
 
     module_term = _compile_module(root, inner, visiting | {full})
 
@@ -920,7 +937,7 @@ def _e_from(elem: ET.Element, chroot: _Chroot,
     """`<from>` in a value position is the module's record.
 
         <def name="lib"><from file="lib.xml"/></def>
-        <get name="secureGoal" of="lib"/>
+        <get key="secureGoal" of="lib"/>
 
     A module is therefore an ordinary value: it can be bound, passed to a
     template, or held in a list, like anything else. Selecting names out of it
@@ -967,21 +984,76 @@ def _compile_from(elem: ET.Element, chroot: _Chroot,
 
 
 # ------------------------------------------------------------------ #
-# Expression compilers
+# Content
+#
+# The content of an element is a sequence of items in document order: each
+# child element, and each run of text between them. Bare text is a string, so
+# a run of text is a value like any other and stands wherever a child could:
+# `<div>hello</div>` and `<div><str>hello</str></div>` are one document
+# written two ways.
+#
+# Reading content in one place is what keeps that promise. It used to be read
+# where it was needed, and each reader saw a different part of it: a value
+# written after a binding is the tail of the binding rather than the text of
+# the element, so every reader that looked at `elem.text` missed it, and a
+# reader that looked at child elements alone missed bare text entirely.
 # ------------------------------------------------------------------ #
+
+def _items(parent: ET.Element) -> list[ET.Element | str]:
+    """The content of an element, in document order."""
+    items: list[ET.Element | str] = []
+    text = (parent.text or "").strip()
+    if text:
+        items.append(text)
+    for child in parent:
+        items.append(child)
+        tail = (child.tail or "").strip()
+        if tail:
+            items.append(tail)
+    return items
+
+
+def _item(item: ET.Element | str, chroot: _Chroot,
+          visiting: frozenset[Path]) -> Term:
+    """The term an item stands for."""
+    if isinstance(item, str):
+        return _text_to_term(item)
+    return _expr(item, chroot, visiting)
+
 
 def _content(parent: ET.Element, chroot: _Chroot,
              visiting: frozenset[Path]) -> Term:
-    """Single value from element content: one child expression or bare text."""
-    val_children = [c for c in parent if c.tag != "param"]
-    if len(val_children) == 1:
-        return _expr(val_children[0], chroot, visiting)
-    if len(val_children) > 1:
-        raise PGSNError(f"Multiple value children in <{parent.tag}>")
-    text = (parent.text or "").strip()
-    if text:
-        return _text_to_term(text)
+    """The single value an element's content stands for."""
+    items = _items(parent)
+    if len(items) == 1:
+        return _item(items[0], chroot, visiting)
+    if items:
+        raise PGSNError(f"Multiple values in <{parent.tag}>")
     raise PGSNError(f"No value in <{parent.tag}>")
+
+
+def _split_params(parent: ET.Element) -> tuple[list[ET.Element],
+                                               list[ET.Element | str]]:
+    """The <param> elements a definition opens with, and the rest of it."""
+    items = _items(parent)
+    params: list[ET.Element] = []
+    while items and isinstance(items[0], ET.Element) and items[0].tag == "param":
+        params.append(items.pop(0))
+    return params, items
+
+
+def _block(items: list[ET.Element | str], chroot: _Chroot,
+           visiting: frozenset[Path], owner: str) -> Term:
+    """Any number of bindings, then the value they are in scope for.
+
+    `<PGSN>`, `<div>` and a template body are all this shape, and the value
+    is simply the last item -- a child element or a run of text.
+    """
+    if not items:
+        raise PGSNError(f"<{owner}> has no value")
+    return _thread_lets(_bindings(items[:-1], chroot, visiting, owner),
+                        _item(items[-1], chroot, visiting))
+
 
 
 def _expr(elem: ET.Element, chroot: _Chroot,
@@ -998,7 +1070,6 @@ def _expr(elem: ET.Element, chroot: _Chroot,
         "get":      _e_get,
         "send":     _e_send,
         "div":      _e_div,
-        "ul":       _e_list,
         "ol":       _e_list,
         "dl":       _e_dict,
         "Goal":     _e_goal,
@@ -1013,7 +1084,7 @@ def _expr(elem: ET.Element, chroot: _Chroot,
 
 
 def _e_var(elem: ET.Element, _ch: "_Chroot", _v: frozenset) -> Term:
-    return _resolve(elem.get("name"), elem.get("instanceOf"))
+    return _resolve(elem.get("name"), elem.get("typeOf"))
 
 
 def _e_num(elem: ET.Element, _ch: "_Chroot", _v: frozenset) -> Term:
@@ -1041,33 +1112,11 @@ def _e_str(elem: ET.Element, _ch: "_Chroot", _v: frozenset) -> Term:
 
 def _e_template(elem: ET.Element, chroot: _Chroot,
                 visiting: frozenset[Path]) -> Term:
-    params = [(c.get("name"), c) for c in elem if c.tag == "param"]
-    body_elems = [c for c in elem if c.tag != "param"]
+    param_elems, items = _split_params(elem)
+    params = [(p.get("name"), p) for p in param_elems]
 
-    # Split body into leading defs and the final value expression,
-    # mirroring the structure of <div> and <PGSN>.
-    if body_elems and body_elems[-1].tag != "def":
-        final_elem = body_elems[-1]
-        leading = body_elems[:-1]
-    elif elem.text and elem.text.strip():
-        final_elem = None
-        leading = []
-    else:
-        raise PGSNError("<template> has no body")
-
-    # Validate: everything before the final value must be a <def>
-    for c in leading:
-        if c.tag != "def":
-            raise PGSNError(
-                f"<{c.tag}> must come after all <def>s in <template>")
-
-    if final_elem is not None:
-        final = _expr(final_elem, chroot, visiting)
-    else:
-        final = _text_to_term(elem.text.strip())
-
-    bindings = _bindings(leading, chroot, visiting)
-    body = _thread_lets(bindings, final)
+    # The body is a block like <div> and <PGSN>: bindings, then one value.
+    body = _block(items, chroot, visiting, elem.tag)
 
     if not params:
         return body
@@ -1084,8 +1133,7 @@ def _e_template(elem: ET.Element, chroot: _Chroot,
                 raise PGSNError(
                     f"Positional param '{name}' must come before keyword params")
             # Positional params must not carry a default value
-            pchildren = [c for c in pelem if c.tag != "param"]
-            if pchildren or (pelem.text and pelem.text.strip()):
+            if _items(pelem):
                 raise PGSNError(
                     f"Positional param '{name}' must not have a default value")
             positional_params.append(name)
@@ -1096,11 +1144,8 @@ def _e_template(elem: ET.Element, chroot: _Chroot,
     # Build default values dict for keyword params
     defaults_dict = {}
     for name, pelem in keyword_params:
-        pchildren = [c for c in pelem if c.tag != "param"]
-        if pchildren:
-            defaults_dict[name] = _expr(pchildren[0], chroot, visiting)
-        elif pelem.text and pelem.text.strip():
-            defaults_dict[name] = _text_to_term(pelem.text.strip())
+        if _items(pelem):
+            defaults_dict[name] = _content(pelem, chroot, visiting)
 
     # Build the term: keyword layer first (innermost), then positional layer
     # wrapping it. This matches Term.__call__ which strips positional args
@@ -1125,23 +1170,44 @@ def _e_template(elem: ET.Element, chroot: _Chroot,
 
 def _e_apply(elem: ET.Element, chroot: _Chroot,
              visiting: frozenset[Path]) -> Term:
-    children = list(elem)
-    if not children:
+    """An application. The function is `template=`, or else the first child.
+
+    An empty argument list is not an error. Application is binary, so applying
+    a function to nothing is the function: `<apply template="f"/>` is `f`.
+    """
+    items = _items(elem)
+    template = elem.get("template")
+    if template is not None:
+        func = _resolve(template)
+    elif items:
+        func = _item(items[0], chroot, visiting)
+        items = items[1:]
+    else:
         raise PGSNError("<apply> needs a function")
-    func = _expr(children[0], chroot, visiting)
-    positional, keyword = _split_args(children[1:], chroot, visiting)
+    positional, keyword = _split_args(items, chroot, visiting, "apply")
     if not positional and not keyword:
-        raise PGSNError("<apply> needs at least one <arg>")
+        return func
     # Delegate to Term.__call__: it casts args and builds the keyword Record
     return func(*positional, **keyword)
 
 
 def _e_class(elem: ET.Element, chroot: _Chroot,
              visiting: frozenset[Path]) -> Term:
+    """A class definition.
+
+    `name` is what the class is called, not what it is bound to: a binding is
+    a name in a scope, while this name travels with the value and is what an
+    instance of the class is reported as. It is a label rather than an
+    identifier, so it is not subject to the reserved-name check, and it is not
+    inherited -- a subclass that wants a name of its own says so.
+    """
     inh = elem.find("inherit")
     kwargs: dict = {
         "inherit": _content(inh, chroot, visiting) if inh is not None else base_class
     }
+    class_name = elem.get("name")
+    if class_name is not None:
+        kwargs["name"] = string(class_name)
     attrs = [c.get("name") for c in elem if c.tag == "attribute"]
     defs = {c.get("name"): _content(c, chroot, visiting)
             for c in elem if c.tag == "attribute"
@@ -1175,32 +1241,60 @@ def _e_object(elem: ET.Element, chroot: _Chroot,
 
 def _e_get(elem: ET.Element, chroot: _Chroot,
            visiting: frozenset[Path]) -> Term:
-    return _content(elem, chroot, visiting)(string(elem.get("name")))
+    """Read a label off a record. The receiver is `of=`, or else the content.
+
+    A record label is not a name in the sense the reserved-name check means:
+    it is a string the record was built with, so it is spelled `key` -- as on
+    the `<dt>` that builds the entry this reads back -- and left out of the
+    check.
+    """
+    key = elem.get("key")
+    if key is None:
+        raise PGSNError(
+            "<get> needs a 'key' naming the field to read, as in "
+            '<get key="description" of="node"/>')
+    receiver = elem.get("of")
+    if receiver is None:
+        return _content(elem, chroot, visiting)(string(key))
+    if len(elem) or (elem.text and elem.text.strip()):
+        raise PGSNError(
+            "<get> has both an 'of' attribute and a receiver of its own; "
+            "the attribute is shorthand for the receiver.")
+    return _resolve(receiver)(string(key))
 
 
 def _e_send(elem: ET.Element, chroot: _Chroot,
             visiting: frozenset[Path]) -> Term:
-    children = list(elem)
-    if not children:
+    """Call a method. The receiver is `to=`, or else the first child.
+
+    receiver("methodName") triggers PGSNObject._apply_arg, which applies self
+    (the receiver) to the method value before returning it. A method called
+    without arguments is that value.
+    """
+    method = elem.get("method")
+    if method is None:
+        raise PGSNError(
+            "<send> needs a 'method' naming the method to call, as in "
+            '<send method="greet" to="obj"/>')
+    items = _items(elem)
+    receiver_name = elem.get("to")
+    if receiver_name is not None:
+        receiver = _resolve(receiver_name)
+    elif items:
+        receiver = _item(items[0], chroot, visiting)
+        items = items[1:]
+    else:
         raise PGSNError("<send> needs a receiver")
-    # receiver("methodName") triggers PGSNObject._apply_arg which automatically
-    # applies self (the receiver) to the method value before returning it.
-    method = _expr(children[0], chroot, visiting)(string(elem.get("name")))
-    positional, keyword = _split_args(children[1:], chroot, visiting)
+    bound = receiver(string(method))
+    positional, keyword = _split_args(items, chroot, visiting, "send")
     if not positional and not keyword:
-        return method
-    return method(*positional, **keyword)
+        return bound
+    return bound(*positional, **keyword)
 
 
 def _e_div(elem: ET.Element, chroot: _Chroot,
            visiting: frozenset[Path]) -> Term:
-    children = list(elem)
-    if not children:
-        raise PGSNError("<div> has no value")
-    # The final child is the div's value expression (use _expr, not _content)
-    final = _expr(children[-1], chroot, visiting)
-    bs = _bindings([c for c in children[:-1] if c.tag == "def"], chroot, visiting)
-    return _thread_lets(bs, final)
+    return _block(_items(elem), chroot, visiting, "div")
 
 
 def _e_list(elem: ET.Element, chroot: _Chroot,
@@ -1230,7 +1324,7 @@ def _e_dict(elem: ET.Element, chroot: _Chroot,
 # Tags that stand for a value, as opposed to the tags that give a GSN node its
 # structure. A lone value child of a GSN header is its description.
 _VALUE_TAGS = {"var", "num", "str", "builtin", "apply", "get", "send",
-               "div", "ul", "ol", "dl", "template", "class", "object"}
+               "div", "ol", "dl", "template", "class", "object"}
 
 
 def _header_description(elem: ET.Element, chroot: _Chroot,
@@ -1317,6 +1411,10 @@ def _e_annotation(elem: ET.Element, chroot: _Chroot, visiting: frozenset[Path],
                 f"it holds a single statement, so give it only one")
         desc = _content(desc_elem, chroot, visiting)
     elif other:
+        if elem.text and elem.text.strip():
+            raise PGSNError(
+                f"<{elem.tag}> carries both text and <{other[0].tag}>; "
+                f"it holds a single statement, so give it only one")
         if len(other) > 1:
             raise PGSNError(
                 f"<{elem.tag}> holds a single statement, but was given "
@@ -1355,7 +1453,8 @@ def _e_goal(elem: ET.Element, chroot: _Chroot,
 
 def _e_strategy(elem: ET.Element, chroot: _Chroot,
                 visiting: frozenset[Path]) -> Term:
-    desc, _, _, defeaters = _gsn_header(elem, chroot, visiting)
+    desc, contexts, assumptions, defeaters = _gsn_header(
+        elem, chroot, visiting)
     sub_goal_elems = [c for c in elem if c.tag == "Goal"]
     sub_goals_elem = elem.find("subGoals")
     if sub_goal_elems:
@@ -1367,6 +1466,8 @@ def _e_strategy(elem: ET.Element, chroot: _Chroot,
     else:
         raise PGSNError("<Strategy> requires sub-goals or <subGoals>")
     return strategy(description=desc, sub_goals=sub_goals,
+                    contexts=list_term(tuple(contexts)),
+                    assumptions=list_term(tuple(assumptions)),
                     defeaters=list_term(tuple(defeaters)))
 
 

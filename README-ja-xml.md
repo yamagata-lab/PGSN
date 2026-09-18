@@ -33,7 +33,7 @@ PGSN には2種類のルート要素があります。
 </PGSNModule>
 ```
 
-`import` と `def` は両形式とも混在して書くことができます。
+`<from>` と `<def>` は両形式とも混在して書くことができます。
 
 ---
 
@@ -69,7 +69,7 @@ PGSN では**すべてが値**です。コンテンツを受け取る要素は�
 | `<num>3</num>` | `Integer`。PGSN に浮動小数点数はありません |
 | `<str> a {b} </str>` | `String`。書いたとおりに解釈され、空白は保たれ `{...}` は補間されません |
 
-`<num>` が必要なのは、数字に見えても裸のテキストは文字列のままだからです。おかげでゴールに「2024年度の監査に合格」と書いても年が整数になりません。逆に算術の組み込みは整数しか受け取らないので、`<arg>3</arg>` は文字列を渡すことになり項が簡約されません。`<arg><num>3</num></arg>` と書いてください。
+`<num>` が必要なのは、数字に見えても裸のテキストは文字列のままだからです。おかげでゴールに「2024年度の監査に合格」と書いても年が整数になりません。逆に算術の組み込みは整数しか受け取らないので、`<arg>3</arg>` は文字列を渡すことになり、和は計算されません。`<arg><num>3</num></arg>` と書いてください。
 
 組み込みは最も外側のスコープにある普通の束縛です。したがって `<var name="plus"/>` は、より内側で `plus` を束縛するものがなければ組み込みに解決されます。
 
@@ -79,7 +79,7 @@ PGSN では**すべてが値**です。コンテンツを受け取る要素は�
 
 ```xml
 <def name="next"><expr>i + 1</expr></def>
-<def name="label"><expr>f"コンポーネント {i} / {total}"</expr></def>
+<def name="label"><expr>f"コンポーネント {i}（全 {total}）"</expr></def>
 ```
 
 `<expr>` は略記であって、それ以上のものではありません。コンパイルが始まる前に、対応する組み込みの適用へ展開されます。式を通してしか到達できない機能は存在しません。
@@ -110,19 +110,19 @@ XML では `<` をエスケープする必要があります。`i &lt; n` と書
 
 `//` が整数除算です。`7 // 2` は `3` になります。`/` は同義語として受け付けるのではなくエラーにしています。将来 PGSN に浮動小数点数を導入したとき、`/` を通常の除算に割り当てられるようにするためです。
 
-大小比較は整数のみです。`"a" < "b"` は簡約されません。等価比較はどんな値にも使えるので `"a" == "a"` は `True` です。
+大小比較は整数のみなので、`"a" < "b"` には値がありません。等価比較はデータだけを比べます。基本の値（文字列・整数・真偽値・`undefined`）と、それらから組んだリストとレコードです。だから `"a" == "a"` は `True` ですが、関数どうし・クラスどうし・GSN ノードどうしの比較には、`"a" < "b"` と同じく値がありません。リストが空かどうかは `is_empty` を適用して聞いてください。`empty` との比較で答えが出るのは、要素が基本の値のリストに限られます。
 
 **演算子は再定義できません。** `plus` という名前を束縛しているスコープの中でも `1 + 2` は加算のままです。
 
 ### 名前
 
-*名前*とは、`<def>` と `<param>` が導入し `<var>` が参照するものです。名前を保持する属性はすべて同じ規則に従います。`<def>`・`<param>`・`<var>` の `name` と `instanceOf`、`<from>`・`<import>` の `as`、`<apply>` の `template`、`<get>` の `of`、`<send>` の `to`、`<arg>` の `name`、そして略記の `var` 属性です。
+*名前*とは、`<def>` と `<param>` が導入し `<var>` が参照するものです。名前を保持する属性はすべて同じ規則に従います。`<def>`・`<param>`・`<var>` の `name`、`<def>`・`<var>` の `typeOf`、`<from>`・`<import>` の `as`、`<apply>` の `template`、`<get>` の `of`、`<send>` の `to`、`<arg>` の `name`、そして略記の `var` 属性です。
 
 名前は文字で始まり、以降は文字・数字・アンダースコアを続けられます。文字は ASCII に限りません。`ゴール` は名前として使えます。ただし先頭にアンダースコアは**使えません**。処理系が予約しています。
 
 この規則は Python の識別子と同じで、これは意図的なものです。[式](#式expr)は Python のパーサーで解析されるため、式に書けない名前を許すと、その名前は式から参照できなくなってしまいます。
 
-レコードのラベルは別の名前空間で、制限はありません。`<get>` と `<send>` の `name`、`<attribute>` の `name`、`<dt>` の `key` は任意の文字列です。
+レコードのラベルは別の名前空間で、制限はありません。`<get>` と `<dt>` の `key`、`<send>` の `method`、`<attribute>` の `name` は任意の文字列です。`<class>` の `name` も同じで、これはクラスが何と呼ばれるかであって、何かが参照する名前ではありません。
 
 ### 条件分岐（if・cases）
 
@@ -148,15 +148,15 @@ XML では `<` をエスケープする必要があります。`i &lt; n` と書
 </cases>
 ```
 
-ここでも `<else>` は必須です。無いと、どれにも当たらなかった `<cases>` は簡約が詰まった項になるだけで、間違いが起きた場所から遠く離れたところで表面化します。
+ここでも `<else>` は必須です。無いと、どれにも当たらなかった `<cases>` は与える値を持たないだけで、間違いが起きた場所から遠く離れたところで表面化します。
 
 `<cond>`・`<then>`・`<else>` はいずれも値を包むだけのラッパーなので、値の書き方はどれでも使えます。`var` と `expr` の略記も含みます。
 
-どちらの形式も略記で、コンパイル前に `if_then_else` 組み込みの適用へ展開されます。展開先は横取りできない経路を通るので、`if_then_else` という名前を束縛しているスコープでも `<if>` は条件分岐のままです。
+どちらの形式も `if_then_else` 組み込みの適用を表します。組み込みには横取りできない経路で届くので、`if_then_else` という名前を束縛しているスコープでも `<if>` は条件分岐のままです。
 
 ### 式の略記
 
-要素のコンテンツが式ひとつの場合、`expr` 属性は `<expr>` の子要素と同じことを表します。`var` と同様に前処理で展開されるので、2つの綴りは同じものの書き分けです。
+要素のコンテンツが式ひとつの場合、`expr` 属性は `<expr>` の子要素と同じことを表します。`var` と同様の略記で、2つの綴りは同じものの書き分けです。
 
 ```xml
 <!-- 完全形 -->
@@ -176,7 +176,7 @@ XML では `<` をエスケープする必要があります。`i &lt; n` と書
 ### 変数参照の略記
 
 要素のコンテンツが変数参照のみの場合、`var` 属性で略記できます。
-これは前処理により展開されます。
+2つの綴りは同じものの書き分けです。
 
 ```xml
 <!-- 完全形 -->
@@ -194,8 +194,7 @@ XML では `<` をエスケープする必要があります。`i &lt; n` と書
 `<param>` は `<PGSNModule>` 内のみ有効で、`<from>` や `<def>` より前に書きます。
 
 ```xml
-<!-- Assumption は assumption_class の組み込みエイリアス -->
-<param name="A1" instanceOf="Assumption"/>
+<param name="A1"/>
 
 <!-- デフォルト値付き -->
 <param name="threshold">100</param>
@@ -238,7 +237,7 @@ XML では `<` をエスケープする必要があります。`i &lt; n` と書
 
 ```xml
 <def name="lib"><from file="security.pgsn"/></def>
-<get label="secureGoal" of="lib"/>
+<get key="secureGoal" of="lib"/>
 ```
 
 import の時点で名前を選び出すのは上の形式の役目なので、2つの綴りは混ざりません。値として使う `<from>` は `import` を取らず、束縛として使う `<from>` は `import` を必要とします。
@@ -308,7 +307,7 @@ import が jail に入ると、その jail が import 先モジュールの封�
 ### `as` 属性（略記）
 
 `def` に `as` 属性を指定すると、値を包む外側のタグ名を省略できます。
-これも前処理により展開されます。
+`as` は「コンテンツを包む要素」の名前を指定するので、包む要素を書き出さずに済みます。
 
 ```xml
 <!-- 完全形 -->
@@ -318,7 +317,32 @@ import が jail に入ると、その jail が import 先モジュールの封�
 <def name="myGoal" as="Goal">...</def>
 ```
 
-`<def name="x" as="T">C</def>` は純粋に構文上の展開です。前処理が `<def name="x"><T>C</T></def>` に書き換えてからコンパイルします。その位置で有効なタグ名であれば何でも使えます——`object` を使ったユーザー定義クラスのインスタンス化タグも含みます。唯一の制限は、`var`・`get`・`send` のように要素自身が必須属性（`name`）を持つタグで、脱糖形が必須属性を欠いて不正になるため使えません。
+`<def name="x" as="T">C</def>` と `<def name="x"><T>C</T></def>` は同じ文書の書き分けです。この属性は `<def>` 専用ではありません。コンテンツを持つ要素であればどこでも、`as` はそのコンテンツを包む要素の名前になります。例外は `<from>` と `<import>` で、そこでの `as` は取り込む名前の別名を指定します。その位置で有効なタグ名であれば何でも指定できます（`object` でも `ol` でも `Goal` でも）。唯一の制限は、要素自身が属性を必要とするタグを指定できないことです——`var` は `name`、`get` は `key`、`send` は `method`、名前付きの `class` は `name` が要ります。`as` が動かすのはコンテンツだけで、属性は元の場所に残るからです。
+
+### `typeOf` 属性
+
+値を型と照合します。`<def>` と `<var>` のどちらにも書けます。属性値は
+クラスが束縛された**変数名**です。
+
+```xml
+<def name="g" typeOf="Goal">
+    <Goal><description>system is safe</description><undeveloped/></Goal>
+</def>
+
+<var name="g" typeOf="Goal"/>
+```
+
+**型付けは構造的です。** ある値が型を満たすのは、その値のクラスが、型の宣言する属性と
+メソッドを少なくとも全部宣言しているときです。クラスの出自は関係ありません。`description` と
+`defeaters` を持つ自作のクラスは、`Evidence` を継承していなくても `Evidence` を満たしますし、
+`Goal` もそれらのラベルを（さらに多く）宣言しているので `Evidence` を満たします。
+クラスの**同一性**を比べる場所がどこにもないので、どのコピーについて訊いても答えは同じです。
+
+検査に失敗しても例外にはなりません。値が通らないだけなので、文書は与える値を持たず、
+どこで止まったかがパスつきで報告されます。
+
+`<param>` は `typeOf` を取りません。パラメーターは呼ばれたときに決まるので、検査を本体の中に
+仕込むことになるからです。使う場所で検査してください。
 
 ### 局所定義
 
@@ -342,38 +366,6 @@ import が jail に入ると、その jail が import 先モジュールの封�
 </template>
 ```
 
-### `instanceOf` 属性
-
-実行時に型チェックを追加します。値が指定クラスのインスタンスでなければ評価が止まります。
-属性値は**変数名**（クラスが束縛されている変数）を指定します。
-複雑なクラス式を使いたい場合は、`instanceOf` 要素の子要素として式を書いてください。
-
-> **PGSN にクラス名という概念はありません。** クラスは変数に束縛された通常の値です。
-> `instanceOf="x"` は文字列のクラス名ではなく「変数 `x`」を意味します。
-
-```xml
-<!-- myClass はクラス定義が束縛された変数名 -->
-<def name="x" instanceOf="myClass">...</def>
-
-<!-- var 参照でも同様 -->
-<var name="x" instanceOf="myClass"/>
-
-<!-- 複雑なクラス式には子要素形式を使う -->
-<instanceOf><apply template="computeClass"><arg>...</arg></apply></instanceOf>
-```
-
-### 局所定義（div）
-
-スコープを限定した定義には `div` を使います。
-
-```xml
-<div>
-    <def name="x">expr1</def>
-    <def name="y">expr2</def>
-    expr   <!-- div の値 -->
-</div>
-```
-
 ---
 
 ## 変数（var）
@@ -383,24 +375,24 @@ import が jail に入ると、その jail が import 先モジュールの封�
 ```xml
 <var name="x"/>
 
-<!-- 型を明示する場合 -->
-<var name="x" instanceOf="MyClass"/>
+<!-- 型検査つき -->
+<var name="x" typeOf="MyClass"/>
 ```
 
 ### 組み込み（builtin）
 
 以下の名前はあらかじめ定義済みで、`<var name="..."/>` で参照し `apply` に適用できます。これは `pgsn` パッケージが公開する項値の名前とちょうど一致しており、Python から使えるものは同じ名前で XML からも使えます。
 
-- リスト操作: `cons`・`head`・`tail`・`index`・`concat`・`map_term`・`fold`・`foldr`・`list_all`・`empty`
+- リスト操作: `cons`・`head`・`tail`・`index`・`is_empty`・`concat`・`map_term`・`fold`・`foldr`・`list_all`・`empty`
 - 真偽値: `true`・`false`・`if_then_else`・`boolean_and`・`boolean_or`・`boolean_not`・`equal`・`less_than`・`guard`
 - 整数: `plus`・`minus`・`times`・`div`・`mod`・`integer_sum`
 - レコード: `has_label`・`list_labels`・`add_attribute`・`remove_attribute`・`overwrite_record`・`empty_record`
 - 文字列: `format_string`
-- クラス／オブジェクト: `define_class`・`instantiate`・`instance`・`is_instance`・`is_subclass`・`base_class`
+- クラス／オブジェクト: `define_class`・`instantiate`・`type_of`・`is_subtype`・`base_class`
 - その他: `fix`・`repeat`・`undefined`
 - GSN コンストラクタ: `goal`・`strategy`・`evidence`・`context`・`assumption`・`defeater`・`undeveloped`・`immediate`・`evidence_as_goal`
 - GSN クラス（長い名前）: `goal_class`・`strategy_class`・`evidence_class`・`context_class`・`assumption_class`・`defeater_class`・`gsn_class`・`support_class`・`undeveloped_class`
-- GSN クラス（短いエイリアス）: `Goal`・`Strategy`・`Evidence`・`Context`・`Assumption`・`GSN`・`Support`
+- GSN クラス（短いエイリアス）: `Goal`・`Strategy`・`Evidence`・`Context`・`Assumption`・`Defeater`・`GSN`・`Support`
 
 例（リストにテンプレートを写像する）:
 
@@ -482,6 +474,8 @@ import が jail に入ると、その jail が import 先モジュールの封�
 </apply>
 ```
 
+適用は2項なので、`<arg>` がひとつも無い `<apply>` は何も適用せず、関数そのものになります。`<apply template="f"/>` と `<var name="f"/>` は同じ式です。
+
 ---
 
 ## クラスとオブジェクト
@@ -489,7 +483,7 @@ import が jail に入ると、その jail が import 先モジュールの封�
 ### クラス定義（class）
 
 ```xml
-<class>
+<class name="ClassName">           <!-- クラスの名前（省略可） -->
     <!-- inherit には「クラスに評価される任意の式」を置く。
          var= はその最も一般的な省略形（変数参照）。 -->
     <inherit var="ParentClass"/>       <!-- 継承（省略可） -->
@@ -505,11 +499,28 @@ import が jail に入ると、その jail が import 先モジュールの封�
 </class>
 ```
 
-> **PGSN にクラス名という概念はありません。**
-> クラスは変数に束縛された通常の値です。`<inherit>`・`<instanceOf>`・`instanceOf` 属性は
-> いずれも**クラスに評価される式**を受け取ります（文字列のクラス名ではありません）。
-> `<inherit>SomeClass</inherit>` と書くとテキストが文字列 `"SomeClass"` として扱われ、
-> クラスとして扱われません。`<inherit var="someClass"/>` のように式を使ってください。
+> **クラスの名前はラベルであって、クラスを指す手段ではありません。**
+> クラスは変数に束縛された通常の値で、名前を引くための表はありません。`<inherit>` と
+> `<instanceOf>` はいずれも**クラスに評価される式**を受け取ります（文字列のクラス名では
+> ありません）。`<inherit>SomeClass</inherit>` と書くとテキストが文字列 `"SomeClass"`
+> として扱われ、クラスとして扱われません。`<inherit var="someClass"/>` のように式を
+> 使ってください。
+> `name=` が与えるのは「そのクラスが何と呼ばれるか」です。値と一緒に持ち運ばれ、
+> そのクラスのインスタンスが何として報告されるかを決めます。`<def>` が導入する名前が
+> スコープの中の名前であるのとは別物で、両者を突き合わせる仕組みはありませんし、
+> クラスどうしの名前を比べる仕組みもありません。名前を持たないクラスも書けますが、
+> そのインスタンスは値に変換できません（何として報告すればよいかが無いため）。
+> `as="class"` の略記は属性を持てないので、名前付きのクラスは完全形で書きます:
+> `<def name="C"><class name="C">…</class></def>`。
+
+> **型はクラスではありません。**
+> `is_subtype` が比べるのは、2つのクラスが宣言する属性名とメソッド名だけで、`inherit` は
+> 関与しません。だからクラスは、ラベルを覆っている型すべてを満たします（継承関係の有無は
+> 問いません）。逆に「この値はどのクラスに属するか」という問いには答えがなく、
+> 「何を持っているか」だけが答えられます。クラスを比べていた `is_instance` と `is_subclass` は
+> 削除しました。クラスの等価性が構造比較だったため、同一のクラスでも簡約の進み具合が違う
+> コピーどうしは一致しなかったからです。`<object>` の中の `<instanceOf>` はまた別物で、
+> 生成するクラスを指す要素です。
 
 ### オブジェクト生成（object）
 
@@ -522,18 +533,18 @@ import が jail に入ると、その jail が import 先モジュールの封�
 
 ### キーアクセス（get）
 
-`get` は `Record` と `PGSNObject` の両方に使えます。`label` 属性でキー名を指定し、`of` 属性で変数レシーバーを略記できます。内部ではレシーバーに文字列キーを位置適用するだけなので、`<apply>` に文字列 `<arg>` を渡す書き方と完全に等価です。
+`get` はレコードとオブジェクトの両方に使えます。`key` 属性でラベル名を指定し、`of` 属性で変数レシーバーを略記できます。ラベルを読むこととは、レシーバーにそのラベルを適用することなので、下の3つはまったく同じものです。
 
 ```xml
-<!-- 略記: label= でキー名、of= でレシーバー変数を指定 -->
-<get label="description" of="my_goal"/>
+<!-- 略記: key= でラベル名、of= でレシーバー変数を指定 -->
+<get key="description" of="my_goal"/>
 
 <!-- レシーバーが複雑な式の場合は子要素に書く -->
-<get label="description"><apply template="getGoal"/></get>
+<get key="description"><apply template="getGoal"><arg>G1</arg></apply></get>
 
 <!-- Record のキーアクセス（以下3つは等価） -->
-<get label="x" of="my_record"/>
-<get label="x"><var name="my_record"/></get>
+<get key="x" of="my_record"/>
+<get key="x"><var name="my_record"/></get>
 <apply><var name="my_record"/><arg>x</arg></apply>
 ```
 
@@ -559,37 +570,34 @@ import が jail に入ると、その jail が import 先モジュールの封�
 
 ## データ型
 
-### 集合（ul）・リスト（ol）
+### リスト（ol）
 
 ```xml
-<ul>
-    <li>expr1</li>
-    <li var="x"/>    <!-- 略記 -->
-</ul>
-
 <ol>
     <li>expr1</li>
-    <li>expr2</li>
+    <li var="x"/>    <!-- 略記 -->
 </ol>
 ```
 
-`ul` と `ol` は XML 構文上は同型ですが、順序を保ちたい場合（例: `map_term` に渡すリスト）は `ol` を使います。
+リストの要素は `ol` だけです。項目の順序は文書が述べていることの一部で、どの出力も書いた順で報告します。
+集合はありません——`ul` は `ol` と同じ値を作りながら順序を持たないものを表す名前だったので、いまは要素として存在しません。
 
 ### 辞書（dl）
 
-キーには値を直接置くか、`key` 属性で文字列キーを指定します。
+キーは文字列リテラルで、`<dt>` のテキストか `key` 属性で書きます。ラベルであって値ではないので、
+式は置けません。ラベルを計算して作るレコードは `add_attribute` で組みます。
 
 ```xml
 <dl>
-    <dt>key_expr</dt><dd>value_expr</dd>   <!-- 式をキーにする場合 -->
-    <dt key="name"/><dd>value_expr</dd>    <!-- 文字列キーの場合 -->
+    <dt>name</dt><dd>value_expr</dd>       <!-- テキストでキーを書く -->
+    <dt key="name"/><dd>value_expr</dd>    <!-- 同じキー -->
 </dl>
 ```
 
 ### テキスト内のフォーマット文字列
 
 テキストを置ける場所では、`{name}` という記法でスコープ内の変数を埋め込めます。
-前処理により `format_string` の適用へ展開されます。波括弧自体を書きたい場合は `{{` `}}` でエスケープします。
+`format_string` の適用になります。波括弧自体を書きたい場合は `{{` `}}` でエスケープします。
 
 ```xml
 <template>
@@ -600,7 +608,7 @@ import が jail に入ると、その jail が import 先モジュールの封�
 
 ### GSN の地テキストとして description を記述する
 
-GSN ヘッダー要素（`Goal`・`Strategy`・`Evidence`・`Context`・`Assumption`）では、先頭の地テキストが自動的に `description` として扱われます。子要素（`<Strategy>` など）と共存する場合、前処理により `<description>` 要素へ持ち上げられます。`{name}` 展開もここで使えます。
+GSN ヘッダー要素（`Goal`・`Strategy`・`Evidence`・`Context`・`Assumption`）では、先頭の地テキストが自動的に `description` として扱われます。子要素（`<Strategy>` など）と共存する場合も同じで、`<description>` 要素に書いても同じことを表します。`{name}` 展開もここで使えます。
 
 ```xml
 <!-- この2つは等価です -->
@@ -629,9 +637,10 @@ GSN ヘッダー要素（`Goal`・`Strategy`・`Evidence`・`Context`・`Assumpt
 
 GSN ノードは通常の値と同列に扱われます。クラスとして継承・拡張が可能です。
 
-### 共通ヘッダ（gsn_header）
+### 共通ヘッダ
 
-Goal・Strategy・Evidence はすべて共通のヘッダ構造を持ちます。
+GSN ノードはどれも説明（description）から始まり、どれも `Defeater` で異議を立てられます。
+`Goal` と `Strategy` はさらに `Context` と `Assumption` で注釈を付けられます。
 
 ```xml
 <!-- 説明（description要素 または テキスト直書き） -->
@@ -640,7 +649,7 @@ Goal・Strategy・Evidence はすべて共通のヘッダ構造を持ちます�
 <!-- Context: 議論が成立する文脈。値として任意の式を置ける -->
 <Context>テキストによる説明</Context>
 <Context var="someObject"/>          <!-- 変数参照 -->
-<Context><get label="version">expr</get></Context>  <!-- 式 -->
+<Context><get key="version" of="release"/></Context>  <!-- 式 -->
 
 <!-- Assumption: 議論が置く仮定。Context と同様、値として任意の式を置ける -->
 <Assumption>ゼロデイ攻撃はない</Assumption>
@@ -653,6 +662,11 @@ Goal・Strategy・Evidence はすべて共通のヘッダ構造を持ちます�
 
 - `Context` は議論が成立する文脈・前提となる状況や対象を表します。
 - `Assumption` は議論が置く仮定を表します。
+
+**どこに書けるか。** `Context` と `Assumption` が付くのは `Goal` と `Strategy` の2つで、
+規格が許しているのもこの2つです。戦略は、その推論が依拠する仮定を自分で持てます。
+`Evidence` はどちらも取りませんし、`Defeater` も取りません。そこに書いたものは `PGSN.rng` が弾きます。
+文書の側は何も言いません。
 
 ### Goal
 
@@ -672,7 +686,7 @@ Goal・Strategy・Evidence はすべて共通のヘッダ構造を持ちます�
 ```
 
 > **補足: サブゴールの並記は糖衣構文です**
-> Goal の直下に `<Goal>` を複数並べる書き方は、前処理により `immediate`（サブゴールを束ねる特殊な Strategy）でラップされます。
+> Goal の直下に `<Goal>` を複数並べる書き方は、`immediate`（サブゴールを束ねる特殊な Strategy）でラップされます。
 > PGSN のコアでは Goal の支持（support）は Strategy か Evidence のいずれかでなければなりません。
 > 実行時に計算したゴールのリストを支持にしたい場合は、`immediate` を明示的に適用して Strategy 化します。
 >
@@ -696,26 +710,28 @@ Goal・Strategy・Evidence はすべて共通のヘッダ構造を持ちます�
 </Strategy>
 ```
 
-`subGoals` に集合（`ul`）やリスト（`ol`）を渡すことでサブゴールを動的に指定できます。
+`subGoals` にリスト（`ol`）を渡すことでサブゴールを動的に指定できます。
 
 ```xml
 <Strategy>
     argument
     <subGoals>
-        <ul>
+        <ol>
             <li var="goal1"/>
             <li var="goal2"/>
-        </ul>
+        </ol>
     </subGoals>
 </Strategy>
 ```
 
 ### Evidence
 
+Evidence は説明を持ち、その妥当性に異議があれば Defeater を持ちます。
+
 ```xml
 <Evidence>
-    <description>テスト結果レポート</description>
-    <Context>テスト環境の説明</Context>
+    <description>テスト結果報告書</description>
+    <Defeater>報告書が最新のリリースより古い</Defeater>
 </Evidence>
 ```
 
@@ -731,7 +747,7 @@ GSN v3 で追加された dialectic extension では、*defeater* が議論の�
     <Defeater>テストスイートが仕様に追従していない
         <Defeater>改訂 7 で更新済みである</Defeater>
     </Defeater>
-    <Evidence>試験報告書</Evidence>
+    <Evidence>テスト報告書</Evidence>
 </Goal>
 ```
 
@@ -742,13 +758,13 @@ defeater はゴールだけでなく、戦略やエビデンスにも付きま�
 ```xml
 <Strategy>ハザードごとに議論する
     <Defeater>ハザード一覧が網羅的でない</Defeater>
-    <Goal>H1 は緩和されている<Evidence>試験報告書 H1</Evidence></Goal>
+    <Goal>H1 は緩和されている<Evidence>テスト報告書 H1</Evidence></Goal>
 </Strategy>
 ```
 
 対応する組み込みは `defeater`、クラス値は `defeater_class` です。図では破線の六角形で描かれ、challenge の辺も破線になります。SupportedBy と読み違えないためです。
 
-なお規格そのものには Defeater 要素はありません。規格上の defeater は、Challenges 関係で対象に繋がった普通の Goal または Solution であり、rebutting と undercutting の区別も記法ではなく議論の中身から読み取るものです。PGSN は項の言語で辺を持たないため、攻撃するという役割をクラスとして表現しています。区別は 1 クラスで足ります。
+なお規格そのものには Defeater 要素はありません。規格上の defeater は、Challenges 関係で対象に繋がった普通の Goal または Solution であり、rebutting と undercutting の区別も記法ではなく議論の中身から読み取るものです。PGSN は値の言語で辺を持たないため、攻撃するという役割をクラスとして表現しています。区別は 1 クラスで足ります。
 
 ---
 
@@ -757,17 +773,22 @@ defeater はゴールだけでなく、戦略やエビデンスにも付きま�
 GSN ノードはクラスとして継承・拡張できます。
 拡張したクラスは `<object>` でインスタンス化します（属性を明示します）。
 
+`as="class"` ではなく完全形で書いています。インスタンス化するクラスには自分の名前が要るのに、
+`as` は名前を運べないからです。
+
 ```xml
 <!-- Goal を継承し、属性 URL を追加したクラス -->
-<def name="GoalWithURL" as="class">
-    <inherit var="Goal"/>
-    <attribute name="URL"/>
+<def name="GoalWithURL">
+    <class name="GoalWithURL">
+        <inherit var="Goal"/>
+        <attribute name="URL"/>
+    </class>
 </def>
 
 <!-- インスタンス化（object 形） -->
 <object>
     <instanceOf var="GoalWithURL"/>
-    <attribute name="description">システムXはセキュア</attribute>
+    <attribute name="description">システムXはセキュアである</attribute>
     <attribute name="URL">https://example.com/evidence</attribute>
     <attribute name="support" var="undeveloped"/>
 </object>
@@ -788,16 +809,16 @@ GSN ノードはクラスとして継承・拡張できます。
     <from file="security.pgsn" import="secureGoal" as="G1"/>
 
     <def name="mainStrategy" as="Strategy">
-        テスト・レビューを行う
+        テストとレビューによる検証
         <subGoals>
-            <ul>
+            <ol>
                 <li var="G1"/>
-            </ul>
+            </ol>
         </subGoals>
     </def>
 
     <def name="main" as="Goal">
-        <description>システムはセキュア</description>
+        <description>システムはセキュアである</description>
         <Assumption>ゼロデイ攻撃はない</Assumption>
         <supportedBy var="mainStrategy"/>
     </def>
