@@ -1,0 +1,18 @@
+<PGSN>
+  <!--
+    The generator run against medical_ai.xml.
+
+    High-risk by Art. 6(1) - a safety component of a product covered by
+    Annex I - so the one route that is not an Annex III area carries the
+    classification, and the eight areas contribute dismissed objections.
+  -->
+
+  <from file="medical_ai.xml" import="system"/>
+
+  <from file="eu_ai_act_full.xml">
+    <import name="case"/>
+    <arg name="system" var="system"/>
+  </from>
+
+  <var name="case"/>
+</PGSN>

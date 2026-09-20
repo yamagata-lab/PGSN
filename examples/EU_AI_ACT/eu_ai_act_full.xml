@@ -1,4 +1,4 @@
-<PGSN>
+<PGSNModule>
   <!--
     A compliance case generator for the EU AI Act (Regulation 2024/1689).
 
@@ -79,66 +79,31 @@
     mandatory like any other. See `inventoryGoal`.
   -->
 
-  <from file="proctoring_system.xml" import="system"/>
+  <!-- The system record is a parameter, so the same generator runs against
+       any record that answers what it asks. `case_*.xml` supplies one, and
+       swapping records is what shows a case being regenerated rather than
+       edited. -->
+  <param name="system"/>
+
+  <from file="gsn_templates.xml">
+    <import name="any_true"/>
+    <import name="concat_all"/>
+    <import name="concat_map"/>
+    <import name="contestedGoal"/>
+    <import name="dismissedGuard"/>
+  </from>
+
+  <from file="act_templates.xml">
+    <import name="provision"/>
+    <import name="obligation"/>
+    <import name="prohibitedGuardOrStop"/>
+    <import name="routeGuardOrNothing"/>
+    <import name="routeGoalOrNothing"/>
+    <import name="routeApplies"/>
+    <import name="obligationGoal"/>
+  </from>
 
   <def name="systemName"><get key="name" of="system"/></def>
-
-  <!-- ================================================================
-       Helpers. Folding a list of conditions and flattening a list of
-       lists are both `foldr`, but naming them keeps `foldr` out of the
-       argument text below.
-  ================================================================ -->
-  <def name="all_true" as="template">
-    <param name="conditions" positional="true"/>
-    <apply template="foldr"><arg var="boolean_and"/><arg var="true"/><arg var="conditions"/></apply>
-  </def>
-
-  <def name="any_true" as="template">
-    <param name="conditions" positional="true"/>
-    <apply template="foldr"><arg var="boolean_or"/><arg var="false"/><arg var="conditions"/></apply>
-  </def>
-
-  <def name="concat_all" as="template">
-    <param name="lists" positional="true"/>
-    <apply template="foldr"><arg var="concat"/><arg var="empty"/><arg var="lists"/></apply>
-  </def>
-
-  <!-- A provision the Act enumerates: the reference it is enumerated under,
-       which is also the key its answer is filed under in the record, and the
-       text that names it. -->
-  <def name="provision" as="template">
-    <param name="ref" positional="true"/>
-    <param name="text" positional="true"/>
-    <dl>
-      <dt key="ref"/><dd var="ref"/>
-      <dt key="text"/><dd var="text"/>
-    </dl>
-  </def>
-
-  <!-- A guard that the argument stepped over.
-
-       The objection is raised but not argued for - it is the Act's own
-       structure that raises it - so it carries no support of its own. What
-       carries an argument is the defeater attached to it, which denies the
-       guard and supplies the evidence for the denial. -->
-  <def name="dismissedGuard" as="template">
-    <param name="objection" positional="true"/>
-    <param name="denial" positional="true"/>
-    <param name="argument" positional="true"/>
-    <apply template="defeater">
-      <arg name="description" var="objection"/>
-      <arg name="defeaters">
-        <ol>
-          <li>
-            <apply template="defeater">
-              <arg name="description" var="denial"/>
-              <arg name="support" var="argument"/>
-            </apply>
-          </li>
-        </ol>
-      </arg>
-    </apply>
-  </def>
 
   <!-- ================================================================
        Art. 5: prohibited practices (all eight).
@@ -189,15 +154,6 @@
        Note that obligations do not multiply with the number of routes. A
        function listed under three Annex III points owes Art. 9 once.
   ================================================================ -->
-  <def name="obligation" as="template">
-    <param name="claim" positional="true"/>
-    <param name="key" positional="true"/>
-    <dl>
-      <dt key="claim"/><dd var="claim"/>
-      <dt key="key"/><dd var="key"/>
-    </dl>
-  </def>
-
   <def name="highRiskObligations" as="ol">
     <li><apply template="obligation"><arg>Risk management system established and maintained (Art. 9)</arg><arg>risk_management</arg></apply></li>
     <li><apply template="obligation"><arg>Data and data governance requirements met (Art. 10)</arg><arg>data_governance</arg></apply></li>
@@ -242,143 +198,27 @@
     <def name="fname"><get key="name" of="f"/></def>
     <def name="purpose"><get key="intendedPurpose" of="f"/></def>
 
-    <!-- The record's answer for one provision: a fact plus its evidence. -->
-    <def name="prohibitedAnswer" as="template">
-      <param name="p" positional="true"/>
-      <apply><get key="prohibitedUse" of="f"/><arg><get key="ref" of="p"/></arg></apply>
-    </def>
-
-    <def name="routeAnswer" as="template">
-      <param name="p" positional="true"/>
-      <apply><get key="classification" of="f"/><arg><get key="ref" of="p"/></arg></apply>
-    </def>
-
-    <!-- Art. 5. A practice that does not apply is dismissed; a practice that
-         applies leaves nothing to write, so the term does not reduce. -->
-    <def name="prohibitedGuardOrStop" as="template">
-      <param name="p" positional="true"/>
-      <def name="ref"><get key="ref" of="p"/></def>
-      <def name="text"><get key="text" of="p"/></def>
-      <def name="a"><apply template="prohibitedAnswer"><arg var="p"/></apply></def>
-      <if>
-        <cond><get key="applies" of="a"/></cond>
-        <then var="undefined"/>
-        <else>
-          <ol>
-            <li>
-              <apply template="dismissedGuard">
-                <arg>{fname} may deploy {text} ({ref}), in which case Art. 5 forbids placing it on the market at all</arg>
-                <arg>{fname} does not deploy {text} ({ref})</arg>
-                <arg><get key="evidence" of="a"/></arg>
-              </apply>
-            </li>
-          </ol>
-        </else>
-      </if>
-    </def>
-
-    <!-- A high-risk route that does not apply is dismissed. -->
-    <def name="routeGuardOrNothing" as="template">
-      <param name="p" positional="true"/>
-      <def name="ref"><get key="ref" of="p"/></def>
-      <def name="text"><get key="text" of="p"/></def>
-      <def name="a"><apply template="routeAnswer"><arg var="p"/></apply></def>
-      <if>
-        <cond><get key="applies" of="a"/></cond>
-        <then><ol/></then>
-        <else>
-          <ol>
-            <li>
-              <apply template="dismissedGuard">
-                <arg>{fname} may be high-risk as {text} ({ref}), in which case Art. 8-17, 43, 48 and 49 apply</arg>
-                <arg>{fname} is not {text} ({ref})</arg>
-                <arg><get key="evidence" of="a"/></arg>
-              </apply>
-            </li>
-          </ol>
-        </else>
-      </if>
-    </def>
-
-    <!-- A high-risk route that does apply is claimed, with its evidence.
-         Several may apply at once; each contributes its own goal. -->
-    <def name="routeGoalOrNothing" as="template">
-      <param name="p" positional="true"/>
-      <def name="ref"><get key="ref" of="p"/></def>
-      <def name="text"><get key="text" of="p"/></def>
-      <def name="a"><apply template="routeAnswer"><arg var="p"/></apply></def>
-      <if>
-        <cond><get key="applies" of="a"/></cond>
-        <then>
-          <ol>
-            <li>
-              <Goal>
-                {fname} is high-risk as {text} ({ref})
-                <supportedBy><get key="evidence" of="a"/></supportedBy>
-              </Goal>
-            </li>
-          </ol>
-        </then>
-        <else><ol/></else>
-      </if>
-    </def>
-
-    <def name="routeApplies" as="template">
-      <param name="p" positional="true"/>
-      <get key="applies"><apply template="routeAnswer"><arg var="p"/></apply></get>
-    </def>
-
     <!-- The disjunction the Act states and GSN cannot draw: high-risk if any
          one of the nine routes applies. A fold, not a branch. -->
     <def name="isHighRisk">
       <apply template="any_true">
-        <arg><apply template="map_term"><arg var="routeApplies"/><arg var="highRiskRoutes"/></apply></arg>
-      </apply>
-    </def>
-
-    <def name="art5Defeaters">
-      <apply template="concat_all">
-        <arg><apply template="map_term"><arg var="prohibitedGuardOrStop"/><arg var="prohibitedPractices"/></apply></arg>
-      </apply>
-    </def>
-
-    <def name="routeDefeaters">
-      <apply template="concat_all">
-        <arg><apply template="map_term"><arg var="routeGuardOrNothing"/><arg var="highRiskRoutes"/></apply></arg>
-      </apply>
-    </def>
-
-    <def name="routeGoals">
-      <apply template="concat_all">
-        <arg><apply template="map_term"><arg var="routeGoalOrNothing"/><arg var="highRiskRoutes"/></apply></arg>
+        <arg>
+          <apply template="map_term">
+            <arg><apply template="routeApplies"><arg var="f"/></apply></arg>
+            <arg var="highRiskRoutes"/>
+          </apply>
+        </arg>
       </apply>
     </def>
 
     <!-- Obligations. The claim comes from the enumeration, the evidence from
          the function record, under the key the enumeration names. -->
-    <!-- Evidence the record does not carry leaves the obligation goal
-         undeveloped, which is how GSN says "claimed, not yet argued". Facts
-         are different: a classification the record does not answer halts the
-         evaluation, because there is no boolean to fold in its place. -->
-    <def name="obligationGoal" as="template">
-      <param name="o" positional="true"/>
-      <def name="claim"><get key="claim" of="o"/></def>
-      <def name="key"><get key="key" of="o"/></def>
-      <Goal>
-        {claim}
-        <supportedBy>
-          <if>
-            <cond><apply template="has_label"><arg var="f"/><arg var="key"/></apply></cond>
-            <then><apply><var name="f"/><arg var="key"/></apply></then>
-            <else var="undeveloped"/>
-          </if>
-        </supportedBy>
-      </Goal>
-    </def>
-
     <def name="obligationGoals" as="template">
       <param name="obligations" positional="true"/>
-      <apply template="map_term"><arg var="obligationGoal"/><arg var="obligations"/></apply>
+      <apply template="map_term">
+        <arg><apply template="obligationGoal"><arg var="f"/></apply></arg>
+        <arg var="obligations"/>
+      </apply>
     </def>
 
     <def name="gpaiObligations">
@@ -473,39 +313,30 @@
       </if>
     </def>
 
-    <apply template="goal">
+    <!-- The strategy is not `immediate`: the step from a classification to the
+         duties it brings is what the Act itself says, not an inference too
+         obvious to name. Obligations attach to classifications, and the
+         classifications this function did not reach are the defeaters. The
+         general-purpose model obligations are not part of that chain; they run
+         beside it, which is why the strategy names them separately. -->
+    <apply template="contestedGoal">
       <arg name="description">{fname} complies with the EU AI Act</arg>
       <arg name="contexts">
         <ol>
           <li><apply template="context"><arg name="description">Intended purpose: {purpose}</arg></apply></li>
         </ol>
       </arg>
-      <arg name="defeaters">
-        <apply template="concat_all">
-          <arg>
-            <ol>
-              <li var="art5Defeaters"/>
-              <li var="routeDefeaters"/>
-              <li var="gpaiDefeaters"/>
-            </ol>
-          </arg>
-        </apply>
-      </arg>
-      <arg name="support">
-        <apply template="immediate">
-          <arg>
-            <apply template="concat_all">
-              <arg>
-                <ol>
-                  <li var="routeGoals"/>
-                  <li var="tierGoals"/>
-                  <li var="gpaiGoals"/>
-                </ol>
-              </arg>
-            </apply>
-          </arg>
-        </apply>
-      </arg>
+      <arg name="strategy">Argument over the function's classification, the obligations the Act attaches to it, and the general-purpose model obligations that apply independently of it</arg>
+      <arg name="defeaters"><ol>
+        <li><apply template="concat_map"><arg><apply template="prohibitedGuardOrStop"><arg var="f"/></apply></arg><arg var="prohibitedPractices"/></apply></li>
+        <li><apply template="concat_map"><arg><apply template="routeGuardOrNothing"><arg var="f"/><arg>Art. 8-17, 43, 48 and 49 apply</arg></apply></arg><arg var="highRiskRoutes"/></apply></li>
+        <li var="gpaiDefeaters"/>
+      </ol></arg>
+      <arg name="subGoals"><ol>
+        <li><apply template="concat_map"><arg><apply template="routeGoalOrNothing"><arg var="f"/></apply></arg><arg var="highRiskRoutes"/></apply></li>
+        <li var="tierGoals"/>
+        <li var="gpaiGoals"/>
+      </ol></arg>
     </apply>
   </def>
 
@@ -532,7 +363,7 @@
     </apply>
   </def>
 
-  <Goal>
+  <def name="case" as="Goal">
     {systemName} complies with the EU AI Act
     <Context>EU AI Act (Regulation 2024/1689)</Context>
     <Strategy>
@@ -548,6 +379,6 @@
         </apply>
       </subGoals>
     </Strategy>
-  </Goal>
+  </def>
 
-</PGSN>
+</PGSNModule>

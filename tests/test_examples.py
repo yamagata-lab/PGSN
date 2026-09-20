@@ -26,7 +26,10 @@ EXAMPLES = Path(__file__).resolve().parent.parent / "examples"
 # Named rather than measured, because a threshold would have to run the
 # example to apply it. Paths are relative to `examples/`, which is also how
 # the tests are named.
-SLOW = {"EU_AI_ACT/eu_ai_act_full.xml"}
+SLOW = {"EU_AI_ACT/case_proctoring.xml",
+        "EU_AI_ACT/case_medical_ai.xml",
+        "EU_AI_ACT/case_gpai_system.xml",
+        "EU_AI_ACT/case_recruitment_ai.xml"}
 
 
 def _entry_points() -> list:
