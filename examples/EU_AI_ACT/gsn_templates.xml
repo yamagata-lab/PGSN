@@ -1,0 +1,142 @@
+<PGSNModule>
+  <!--
+    Patterns about GSN, not about any one regulation.
+
+    A case generated from a body of rules puts a claim together with what
+    stands against it, and turns each clause of a guarded chain into either a
+    supporting node or an objection already dismissed. Neither of those
+    mentions the EU AI Act, so they live here; `act_templates.xml` says what
+    the Act's own clauses become, and the generators say which clauses there
+    are.
+
+    The folds below are not patterns. They are here because the builtins have
+    no boolean `any` and `all` and no flatten, and `list_all` takes a
+    predicate and so cannot be applied to a list of booleans. If those were
+    added to the language this part would go away.
+  -->
+
+  <def name="any_true" as="template">
+    <param name="conditions" positional="true"/>
+    <apply template="foldr"><arg var="boolean_or"/><arg var="false"/><arg var="conditions"/></apply>
+  </def>
+
+  <def name="all_true" as="template">
+    <param name="conditions" positional="true"/>
+    <apply template="foldr"><arg var="boolean_and"/><arg var="true"/><arg var="conditions"/></apply>
+  </def>
+
+  <def name="concat_all" as="template">
+    <param name="lists" positional="true"/>
+    <apply template="foldr"><arg var="concat"/><arg var="empty"/><arg var="lists"/></apply>
+  </def>
+
+  <!-- Each item of an enumeration answers with a list - a node, or none - and
+       the answers are read as one list. -->
+  <def name="concat_map" as="template">
+    <param name="f" positional="true"/>
+    <param name="items" positional="true"/>
+    <apply template="concat_all">
+      <arg><apply template="map_term"><arg var="f"/><arg var="items"/></apply></arg>
+    </apply>
+  </def>
+
+  <!-- An objection, and the defeater that dismisses it. The objection carries
+       no support of its own: supporting it would mean asserting it, which is
+       the opposite of what the case claims. -->
+  <def name="dismissedGuard" as="template">
+    <param name="objection" positional="true"/>
+    <param name="denial" positional="true"/>
+    <param name="argument" positional="true"/>
+    <apply template="defeater">
+      <arg name="description" var="objection"/>
+      <arg name="defeaters">
+        <ol><li>
+          <apply template="defeater">
+            <arg name="description" var="denial"/>
+            <arg name="support" var="argument"/>
+          </apply>
+        </li></ol>
+      </arg>
+    </apply>
+  </def>
+
+  <!--
+    One guard of the chain, answered.
+
+    `answer` is what a record states about the guard: whether it holds, and
+    the evidence for that. If it holds, the caller says what the case gains -
+    nothing, a node, or `undefined` where no compliance argument exists. If it
+    does not, reaching the next clause is itself a claim about the subject,
+    and it stands as an objection already dismissed.
+
+    Both outcomes come from the one fact, so a caller can write neither both
+    nor neither, and a record that answers nothing leaves the term unreduced.
+  -->
+  <def name="guardOrDefeater" as="template">
+    <param name="answer" positional="true"/>
+    <param name="whenApplies" positional="true"/>
+    <param name="objection" positional="true"/>
+    <param name="denial" positional="true"/>
+    <if>
+      <cond><get key="applies" of="answer"/></cond>
+      <then var="whenApplies"/>
+      <else>
+        <ol><li>
+          <apply template="dismissedGuard">
+            <arg var="objection"/>
+            <arg var="denial"/>
+            <arg><get key="evidence" of="answer"/></arg>
+          </apply>
+        </li></ol>
+      </else>
+    </if>
+  </def>
+
+  <!-- The other way a guard can be read: when it holds, the claim it licenses
+       is made and the record's evidence supports it; when it does not, the
+       enumeration simply passes over it. Guards that select a duty use this,
+       guards that select a regime use `guardOrDefeater`. -->
+  <def name="goalIfApplies" as="template">
+    <param name="answer" positional="true"/>
+    <param name="claim" positional="true"/>
+    <if>
+      <cond><get key="applies" of="answer"/></cond>
+      <then>
+        <ol><li>
+          <Goal>
+            {claim}
+            <supportedBy><get key="evidence" of="answer"/></supportedBy>
+          </Goal>
+        </li></ol>
+      </then>
+      <else><ol/></else>
+    </if>
+  </def>
+
+  <!--
+    A claim with both of its sides computed.
+
+    `<Goal>` takes `<Defeater>` only as a literal child, so a goal whose
+    challenges are worked out from an enumeration has to be assembled by
+    applying the constructor. Both sides arrive as lists of lists, since each
+    enumeration contributes a list of its own and some contribute none.
+  -->
+  <def name="contestedGoal" as="template">
+    <param name="description"/>
+    <param name="strategy"/>
+    <param name="defeaters"/>
+    <param name="subGoals"/>
+    <param name="contexts"><ol/></param>
+    <apply template="goal">
+      <arg name="description" var="description"/>
+      <arg name="contexts" var="contexts"/>
+      <arg name="defeaters"><apply template="concat_all"><arg var="defeaters"/></apply></arg>
+      <arg name="support">
+        <Strategy>
+          {strategy}
+          <subGoals><apply template="concat_all"><arg var="subGoals"/></apply></subGoals>
+        </Strategy>
+      </arg>
+    </apply>
+  </def>
+</PGSNModule>

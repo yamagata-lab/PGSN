@@ -1,0 +1,18 @@
+<PGSN>
+  <!--
+    The simplified generator run against the two-function proctoring record.
+
+    A generator is a function from a record to a case; this file is the
+    application. Swapping the record is swapping one import, and nothing in
+    the generator changes.
+  -->
+
+  <from file="proctoring_simplified.xml" import="system"/>
+
+  <from file="eu_ai_act_simplified.xml">
+    <import name="case"/>
+    <arg name="system" var="system"/>
+  </from>
+
+  <var name="case"/>
+</PGSN>

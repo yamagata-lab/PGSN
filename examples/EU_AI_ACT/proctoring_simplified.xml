@@ -1,0 +1,73 @@
+<PGSNModule>
+  <!--
+    System record for eu_ai_act_simplified.xml: a remote examination
+    proctoring system with two AI functions.
+
+    The second function is listed under Annex III point 1 and point 3 at the
+    same time - under point 1 because it derives gaze and head pose from
+    biometric data, under point 3 because it monitors students for
+    prohibited behaviour during a test. An exclusive OR over the high-risk
+    routes cannot say that. Here both routes simply answer yes.
+  -->
+
+  <!-- An answer the generator asks for: a fact, and the evidence for it.
+       The record never says whether a goal or a defeater should be drawn. -->
+  <def name="doesApply" as="template">
+    <param name="evidence" positional="true"/>
+    <dl><dt key="applies"/><dd var="true"/><dt key="evidence"/><dd var="evidence"/></dl>
+  </def>
+
+  <def name="doesNotApply" as="template">
+    <param name="evidence" positional="true"/>
+    <dl><dt key="applies"/><dd var="false"/><dt key="evidence"/><dd var="evidence"/></dl>
+  </def>
+
+  <def name="art5Report" as="Evidence">Art. 5 prohibited-use self-assessment, Remote Proctoring Suite v4.2</def>
+
+  <def name="noEmotionInference" as="dl">
+    <dt key="Art. 5(1)(f)"/><dd><apply template="doesNotApply"><arg var="art5Report"/></apply></dd>
+  </def>
+
+  <!-- F1: one route applies, one does not. The same enumeration therefore
+       yields one classification goal and one dismissed defeater. -->
+  <def name="identityVerification" as="dl">
+    <dt key="name"/><dd>Identity Verification</dd>
+    <dt key="prohibitedUse"/><dd var="noEmotionInference"/>
+    <dt key="classification"/>
+    <dd>
+      <dl>
+        <dt key="Annex III, point 1"/>
+        <dd><apply template="doesApply"><arg><Evidence>Intended purpose statement: remote biometric verification of candidates</Evidence></arg></apply></dd>
+        <dt key="Annex III, point 3"/>
+        <dd><apply template="doesNotApply"><arg><Evidence>Function specification: identity is confirmed before the examination begins</Evidence></arg></apply></dd>
+      </dl>
+    </dd>
+    <dt key="risk_management"/><dd><Evidence>Risk management file: false accept and false reject analysis (Art. 9)</Evidence></dd>
+    <dt key="human_oversight"/><dd><Evidence>Proctor review procedure for every rejected verification (Art. 14)</Evidence></dd>
+  </def>
+
+  <!-- F2: two routes apply at once, and the obligation set is still one. -->
+  <def name="behaviourMonitoring" as="dl">
+    <dt key="name"/><dd>Examination Behaviour Monitoring</dd>
+    <dt key="prohibitedUse"/><dd var="noEmotionInference"/>
+    <dt key="classification"/>
+    <dd>
+      <dl>
+        <dt key="Annex III, point 1"/>
+        <dd><apply template="doesApply"><arg><Evidence>Data flow specification: gaze and head pose are derived from biometric data</Evidence></arg></apply></dd>
+        <dt key="Annex III, point 3"/>
+        <dd><apply template="doesApply"><arg><Evidence>Intended purpose statement: detecting prohibited behaviour of students during tests</Evidence></arg></apply></dd>
+      </dl>
+    </dd>
+    <dt key="risk_management"/><dd><Evidence>Risk management file: false accusation and disparate impact analysis (Art. 9)</Evidence></dd>
+    <dt key="human_oversight"/><dd><Evidence>Proctor adjudication: no flag results in a sanction without review (Art. 14)</Evidence></dd>
+  </def>
+
+  <def name="system" as="dl">
+    <dt key="name"/><dd>Remote Examination Proctoring System</dd>
+    <dt key="functionInventoryEvidence"/>
+    <dd><Evidence>Annex IV technical documentation and architecture review AR-2026-014</Evidence></dd>
+    <dt key="functions"/>
+    <dd><ol><li var="identityVerification"/><li var="behaviourMonitoring"/></ol></dd>
+  </def>
+</PGSNModule>

@@ -1,0 +1,18 @@
+<PGSN>
+  <!--
+    The generator run against proctoring_system.xml.
+
+    Two AI functions of one product. The second is listed under Annex III
+    point 1 and point 3 at once, which a fold over the routes takes in its
+    stride and an exclusive choice could not express.
+  -->
+
+  <from file="proctoring_system.xml" import="system"/>
+
+  <from file="eu_ai_act_full.xml">
+    <import name="case"/>
+    <arg name="system" var="system"/>
+  </from>
+
+  <var name="case"/>
+</PGSN>

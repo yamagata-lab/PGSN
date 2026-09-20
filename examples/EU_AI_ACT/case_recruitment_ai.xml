@@ -1,0 +1,18 @@
+<PGSN>
+  <!--
+    The generator run against recruitment_ai.xml.
+
+    High-risk by Annex III point 4, with the evidence for Art. 14 missing
+    from the record on purpose. The goal is left undeveloped, which is how the
+    gap reaches the document instead of halting the evaluation.
+  -->
+
+  <from file="recruitment_ai.xml" import="system"/>
+
+  <from file="eu_ai_act_full.xml">
+    <import name="case"/>
+    <arg name="system" var="system"/>
+  </from>
+
+  <var name="case"/>
+</PGSN>

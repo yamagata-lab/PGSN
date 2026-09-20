@@ -1,0 +1,18 @@
+<PGSN>
+  <!--
+    The generator run against gpai_system.xml.
+
+    None of the nine routes applies. The function lands in the limited-risk
+    tier and is a general-purpose model as well, so both sets of obligations
+    stand: the tiers are a chain, the GPAI duties run beside it.
+  -->
+
+  <from file="gpai_system.xml" import="system"/>
+
+  <from file="eu_ai_act_full.xml">
+    <import name="case"/>
+    <arg name="system" var="system"/>
+  </from>
+
+  <var name="case"/>
+</PGSN>

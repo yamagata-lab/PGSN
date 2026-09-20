@@ -1,0 +1,124 @@
+<PGSNModule>
+  <!--
+    What one enumerated item of the EU AI Act becomes.
+
+    Between `gsn_templates.xml`, which knows nothing of the Act, and the
+    generators, which say which practices, routes and obligations the Act
+    enumerates. What is here is the shape each kind of item takes once chosen:
+    where its answer is looked up in the record, and the sentence it turns
+    into. Anything that differs between the two generators - which provisions
+    a classification brings into force, say - is an argument rather than a
+    constant, so that choosing it stays with the enumeration.
+
+    Every template takes the function first and the item second, so a
+    generator applies the function once and hands the result to `concat_map`.
+  -->
+
+  <from file="gsn_templates.xml">
+    <import name="guardOrDefeater"/>
+    <import name="goalIfApplies"/>
+  </from>
+
+  <!-- A provision: the reference it is enumerated under, which is also the
+       key its answer is filed under in the record, and the text naming it. -->
+  <def name="provision" as="template">
+    <param name="ref" positional="true"/>
+    <param name="text" positional="true"/>
+    <dl><dt key="ref"/><dd var="ref"/><dt key="text"/><dd var="text"/></dl>
+  </def>
+
+  <!-- An obligation: what is claimed of the provider, and the key under which
+       the record files the evidence for it. -->
+  <def name="obligation" as="template">
+    <param name="claim" positional="true"/>
+    <param name="key" positional="true"/>
+    <dl><dt key="claim"/><dd var="claim"/><dt key="key"/><dd var="key"/></dl>
+  </def>
+
+  <!-- The record's answer for one provision: a fact plus its evidence. -->
+  <def name="prohibitedAnswer" as="template">
+    <param name="f" positional="true"/>
+    <param name="p" positional="true"/>
+    <apply><get key="prohibitedUse" of="f"/><arg><get key="ref" of="p"/></arg></apply>
+  </def>
+
+  <def name="routeAnswer" as="template">
+    <param name="f" positional="true"/>
+    <param name="p" positional="true"/>
+    <apply><get key="classification" of="f"/><arg><get key="ref" of="p"/></arg></apply>
+  </def>
+
+  <!-- Art. 5 admits no compliance argument. What a function that deploys a
+       prohibited practice gains is `undefined`, and the evaluation stops where
+       the case would have gone. Every other guard gains a list. -->
+  <def name="prohibitedGuardOrStop" as="template">
+    <param name="f" positional="true"/>
+    <param name="p" positional="true"/>
+    <def name="fname"><get key="name" of="f"/></def>
+    <def name="ref"><get key="ref" of="p"/></def>
+    <def name="text"><get key="text" of="p"/></def>
+    <apply template="guardOrDefeater">
+      <arg><apply template="prohibitedAnswer"><arg var="f"/><arg var="p"/></apply></arg>
+      <arg var="undefined"/>
+      <arg>{fname} may deploy {text} ({ref}), in which case Art. 5 forbids placing it on the market at all</arg>
+      <arg>{fname} does not deploy {text} ({ref})</arg>
+    </apply>
+  </def>
+
+  <!-- Which provisions a high-risk classification brings into force is read
+       from the Act, so the generator states it and this only frames it. -->
+  <def name="routeGuardOrNothing" as="template">
+    <param name="f" positional="true"/>
+    <param name="consequence" positional="true"/>
+    <param name="p" positional="true"/>
+    <def name="fname"><get key="name" of="f"/></def>
+    <def name="ref"><get key="ref" of="p"/></def>
+    <def name="text"><get key="text" of="p"/></def>
+    <apply template="guardOrDefeater">
+      <arg><apply template="routeAnswer"><arg var="f"/><arg var="p"/></apply></arg>
+      <arg><ol/></arg>
+      <arg>{fname} may be high-risk as {text} ({ref}), in which case {consequence}</arg>
+      <arg>{fname} is not {text} ({ref})</arg>
+    </apply>
+  </def>
+
+  <!-- Several routes may apply at once; each contributes its own goal. -->
+  <def name="routeGoalOrNothing" as="template">
+    <param name="f" positional="true"/>
+    <param name="p" positional="true"/>
+    <def name="fname"><get key="name" of="f"/></def>
+    <def name="ref"><get key="ref" of="p"/></def>
+    <def name="text"><get key="text" of="p"/></def>
+    <apply template="goalIfApplies">
+      <arg><apply template="routeAnswer"><arg var="f"/><arg var="p"/></apply></arg>
+      <arg>{fname} is high-risk as {text} ({ref})</arg>
+    </apply>
+  </def>
+
+  <def name="routeApplies" as="template">
+    <param name="f" positional="true"/>
+    <param name="p" positional="true"/>
+    <get key="applies"><apply template="routeAnswer"><arg var="f"/><arg var="p"/></apply></get>
+  </def>
+
+  <!-- Evidence the record does not carry leaves the obligation goal
+       undeveloped, which is how GSN says "claimed, not yet argued". Facts are
+       different: a classification the record does not answer halts the
+       evaluation, because there is no boolean to fold in its place. -->
+  <def name="obligationGoal" as="template">
+    <param name="f" positional="true"/>
+    <param name="o" positional="true"/>
+    <def name="claim"><get key="claim" of="o"/></def>
+    <def name="key"><get key="key" of="o"/></def>
+    <Goal>
+      {claim}
+      <supportedBy>
+        <if>
+          <cond><apply template="has_label"><arg var="f"/><arg var="key"/></apply></cond>
+          <then><apply><var name="f"/><arg var="key"/></apply></then>
+          <else var="undeveloped"/>
+        </if>
+      </supportedBy>
+    </Goal>
+  </def>
+</PGSNModule>
