@@ -317,9 +317,6 @@ class Abs(Term):
     def _check_t(self, _, value):
         assert value.is_named == self.is_named
 
-    def __attr_post_init__(self):
-        assert self.v.is_named == self.t.is_named
-
     def _evolve(self, t: Term, v: Variable | None = None):
         if v is None and not t.is_named:
             return evolve(self, v=v, t=t, is_named=False)
@@ -387,7 +384,7 @@ class App(Term):
         else:
             assert False
 
-    def __attr_post_init__(self):
+    def __attrs_post_init__(self):
         assert self.t1.is_named == self.t2.is_named
 
     def _evolve(self, t1: Term | None = None, t2: Term | None = None):
@@ -526,9 +523,9 @@ class Boolean(ConstMixin, ZeroAry):
 class List(Unary):
     terms: tuple[Term, ...] = field(validator=helpers.not_none)
 
-    def __attr_post_init__(self):
+    def __attrs_post_init__(self):
         assert all(isinstance(t, Term) for t in self.terms)
-        assert len(self.terms) == 0 or all((t == self.is_named for t in self.terms))
+        assert all(t.is_named == self.is_named for t in self.terms)
 
     def _eval_or_none(self):
         evaluated = [term.eval_or_none() for term in self.terms]
@@ -574,7 +571,7 @@ class Record(Unary):
     _attributes: dict[str, Term] = \
         field(validator=helpers.not_none)
 
-    def __attr_post_init__(self):
+    def __attrs_post_init__(self):
         assert all(isinstance(k, str) for k in self.attributes().keys())
         assert all(isinstance(t, Term) for t in self.attributes().values())
 
@@ -645,10 +642,10 @@ class PGSNClass(Unary):
     _attributes: set[str, ...] = field(default=set(), validator=helpers.not_none)
     _methods: dict[str, Term] = field(default={}, validator=helpers.not_none)
 
-    def __attr_post_init__(self):
+    def __attrs_post_init__(self):
         assert all(k in self._attributes for k in self._defaults.keys())
         assert all(name not in self._attributes for name in self._methods.keys())
-        assert not "name" in self._method
+        assert not "name" in self._methods
         assert not "name" in self._attributes
 
     @classmethod
