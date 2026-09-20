@@ -43,6 +43,17 @@ def test_subtype():
     assert is_subtype(base_class)(base_class).fully_eval().value
 
 
+def test_a_subclass_may_default_an_inherited_attribute():
+    """The invariants `DefineClass` checks are about what a definition adds.
+    Giving an attribute declared by the parent a new default adds no
+    attribute name of its own, and is allowed.
+    """
+    sub = define_class(inherit=cls, defaults=record({'a': false}))
+    assert isinstance(sub.fully_eval(), PGSNClass)
+    assert sub.fully_eval().attributes() == {'a'}
+    assert not sub({}).fully_eval().attributes()['a'].value
+
+
 def test_subtype_ignores_inheritance():
     """A class that inherits nothing from `cls` is still a subtype of it as
     long as it declares the same labels. That is the whole point of the

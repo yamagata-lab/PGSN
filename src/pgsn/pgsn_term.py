@@ -658,7 +658,7 @@ class PGSNClass(Unary):
         methods = helpers.default(methods, {})
         if inherit is not None:
             defaults = inherit.defaults() | defaults
-            attributes = set(inherit.defaults()) | set(attributes)
+            attributes = set(inherit.attributes()) | set(attributes)
             methods = inherit.methods() | methods
         return super().build(is_named=is_named, name=name, inherit=inherit, defaults=defaults.copy(), attributes=attributes, methods=methods.copy())
 
@@ -782,26 +782,30 @@ class DefineClass(ConstMixin, Unary):
                 return None
             if "name" in (t for t in params["methods"].attributes().keys()):
                 return None
-        inherit: PGSNClass = arg.attributes()["inherit"]
-        if "name" in arg.attributes():
-            name = arg.attributes()["name"].value
+        inherit: PGSNClass = params["inherit"]
+        added_defaults = params["defaults"].attributes() if "defaults" in params else {}
+        added_attributes = ({a.value for a in params["attributes"].terms}
+                            if "attributes" in params else set())
+        added_methods = params["methods"].attributes() if "methods" in params else {}
+        # The invariants of PGSNClass: every default names an attribute, and no name
+        # is both an attribute and a method. The parent holds them by induction over
+        # the construction paths, so only what this definition adds is examined.
+        if not set(added_defaults.keys()) <= set(inherit.attributes()) | added_attributes:
+            return None
+        if not added_attributes.isdisjoint(inherit.methods().keys()):
+            return None
+        if not added_attributes.isdisjoint(added_methods.keys()):
+            return None
+        if not set(added_methods.keys()).isdisjoint(inherit.attributes()):
+            return None
+        if "name" in params:
+            name = params["name"].value
         else:
             name = None
-        if "defaults" in arg.attributes():
-            defaults = inherit.defaults()| arg.attributes()["defaults"].attributes()
-        else:
-            defaults = inherit.defaults()
-        if "attributes" in arg.attributes():
-            attributes = (set(inherit.attributes()) |
-                          set((a.value for a in arg.attributes()["attributes"].terms)))
-        else:
-            attributes = inherit.attributes()
-        if "methods" in arg.attributes():
-            methods = inherit.methods() | arg.attributes()["methods"].attributes()
-        else:
-            methods= inherit.methods()
-        return PGSNClass.nameless(inherit=inherit, name=name, defaults=defaults, attributes=set(attributes),
-                                          methods=methods)
+        return PGSNClass.nameless(inherit=inherit, name=name,
+                                  defaults=inherit.defaults() | added_defaults,
+                                  attributes=set(inherit.attributes()) | added_attributes,
+                                  methods=inherit.methods() | added_methods)
 
 
 def _inherit_chain(cls: PGSNClass):
