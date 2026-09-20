@@ -915,13 +915,12 @@ class PGSNObject(Unary):
         if not isinstance(arg, String):
             return None
         k = arg.value
-        if not (k in self.attributes().keys() or self.methods().keys()):
+        if not (k in self.attributes().keys() or k in self.methods().keys()):
             return None
         if k in self.attributes().keys():
             return self.attributes()[k]
-        elif k in self.methods().keys():
+        else:
             return (self.methods()[k])(self)
-        assert False
 
     def _remove_name_with_context(self, context: list[str]) -> Term:
         reduced = self._traverse(lambda t: t.remove_name_with_context(context=context))
@@ -1092,8 +1091,10 @@ class Div(ConstMixin, Builtin):
     def build(cls, is_named: bool, **kwarg) -> Term:
         return super().build(arity=2, is_named=is_named, **kwarg)
 
+    # A zero divisor leaves the application stuck.
     def _apply_args(self, args: tuple[Term, ...]) -> Term | None:
-        if not (len(args) >= 2 and isinstance(args[0], Integer) and isinstance(args[1], Integer)):
+        if not (len(args) >= 2 and isinstance(args[0], Integer) and isinstance(args[1], Integer)
+                and args[1].value != 0):
             return None
         i1 = args[0].value
         i2 = args[1].value
@@ -1107,8 +1108,10 @@ class Mod(ConstMixin, Builtin):
     def build(cls, is_named: bool, **kwarg) -> Term:
         return super().build(arity=2, is_named=is_named, **kwarg)
 
+    # A zero divisor leaves the application stuck.
     def _apply_args(self, args: tuple[Term, ...]) -> Term | None:
-        if not (len(args) >= 2 and isinstance(args[0], Integer) and isinstance(args[1], Integer)):
+        if not (len(args) >= 2 and isinstance(args[0], Integer) and isinstance(args[1], Integer)
+                and args[1].value != 0):
             return None
         i1 = args[0].value
         i2 = args[1].value
