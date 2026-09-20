@@ -3,10 +3,15 @@
     System record: Recruitment Screening AI. One AI function.
 
     High-risk through Annex III point 4. One obligation key is deliberately
-    missing: `human_oversight` (Art. 14). The generator looks it up like any
-    other, the lookup does not reduce, and `pgsn doc` stops instead of
-    emitting a case with a hole in it. The gap surfaces while the case is
-    being generated rather than in review.
+    missing: `human_oversight` (Art. 14). The generator asks whether the
+    record carries the key, finds that it does not, and leaves that goal
+    undeveloped, so the gap appears in the case in the notation GSN already
+    has for it rather than as a halted evaluation.
+
+    Facts are not treated this way. A classification the record fails to
+    answer still halts the evaluation, since there is no answer to fold in
+    its place, and the evidence for the completeness of the function list is
+    a mandatory key for the same reason.
   -->
 
   <from file="record_helpers.xml">

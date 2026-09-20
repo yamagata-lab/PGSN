@@ -356,12 +356,23 @@
 
     <!-- Obligations. The claim comes from the enumeration, the evidence from
          the function record, under the key the enumeration names. -->
+    <!-- Evidence the record does not carry leaves the obligation goal
+         undeveloped, which is how GSN says "claimed, not yet argued". Facts
+         are different: a classification the record does not answer halts the
+         evaluation, because there is no boolean to fold in its place. -->
     <def name="obligationGoal" as="template">
       <param name="o" positional="true"/>
       <def name="claim"><get key="claim" of="o"/></def>
+      <def name="key"><get key="key" of="o"/></def>
       <Goal>
         {claim}
-        <supportedBy><apply><var name="f"/><arg><get key="key" of="o"/></arg></apply></supportedBy>
+        <supportedBy>
+          <if>
+            <cond><apply template="has_label"><arg var="f"/><arg var="key"/></apply></cond>
+            <then><apply><var name="f"/><arg var="key"/></apply></then>
+            <else var="undeveloped"/>
+          </if>
+        </supportedBy>
       </Goal>
     </def>
 
