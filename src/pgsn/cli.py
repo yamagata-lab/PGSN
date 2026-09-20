@@ -4,13 +4,6 @@ import importlib.util
 import sys
 from pathlib import Path
 
-default_layout = {
-    "rankdir": "TB",
-    "splines": "spline",
-    "nodesep": "0.6",
-    "ranksep": "1.2",
-}
-
 try:
     from pgsn import dsl
     from pgsn import gsn
@@ -165,8 +158,10 @@ def doc(input_file, term_name, doc_type, output, steps, jail_specs):
 @click.option('--format', '-f', 'image_format', type=click.Choice(['svg', 'png', 'pdf']), default='svg',
               help='The output image format.')
 @click.option('--steps', '-s', help='maximum number of evaluation steps', type=int, default=DEFAULT_STEPS)
+@click.option('--label-width', type=int, default=gsn.LABEL_WIDTH, show_default=True,
+              help='Wrap node labels at this many columns. 0 leaves them on one line.')
 @jail_option
-def render(input_file, term_name, output, image_format, steps, jail_specs):
+def render(input_file, term_name, output, image_format, steps, label_width, jail_specs):
     """Evaluates a PGSN term and renders it as a graph."""
 
     click.echo(f"Processing '{input_file}' to render a graph...", err=True)
@@ -176,7 +171,7 @@ def render(input_file, term_name, output, image_format, steps, jail_specs):
         click.echo(f"Evaluating term '{term_name}'...", err=True)
         evaluated_gsn = term.fully_eval(steps=steps)
 
-        dot = gsn.gsn_dot(evaluated_gsn)
+        dot = gsn.gsn_dot(evaluated_gsn, label_width=label_width)
 
         if output and output != '-':
             click.echo(f"Saving graph to '{output}.{image_format}'...", err=True)

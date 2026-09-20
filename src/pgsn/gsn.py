@@ -1,3 +1,4 @@
+import textwrap
 import uuid
 from treelib import Tree
 import treelib
@@ -216,8 +217,31 @@ GSN_SHAPES = {
     }
 
 
+# Graphviz sets a label on one line unless the label says otherwise, so a node
+# is as wide as the longest sentence in it. A generated case states a whole
+# provision in a description, which is how a drawing ends up several times
+# wider than it is tall.
+LABEL_WIDTH = 40
+
+
+def _wrap(label: str, width: int) -> str:
+    """Wrap each line of a label to `width` columns; 0 leaves it alone.
+
+    The lines are wrapped one at a time because the breaks already there carry
+    meaning: the type heading, the description, and the attributes folded into
+    the box are separate things.
+    """
+    if width <= 0:
+        return label
+    lines = []
+    for line in label.split("\n"):
+        lines.extend(textwrap.wrap(line, width) or [""])
+    return "\n".join(lines)
+
+
 def gsn_dot(gsn: pgsn.pgsn_term.Term,
-            layout_attrs: dict[str, str] | None = None) -> graphviz.Digraph:
+            layout_attrs: dict[str, str] | None = None,
+            label_width: int = LABEL_WIDTH) -> graphviz.Digraph:
     """
     treelib.Treeオブジェクトを受け取り、GSNのルールに基づいて
     ノードの形をカスタマイズしたdotファイルを生成する。
@@ -226,7 +250,9 @@ def gsn_dot(gsn: pgsn.pgsn_term.Term,
 
     default_layout = {
         "rankdir": "TB",
-        "splines": "line",
+        # Straight lines are drawn through whatever stands between two nodes;
+        # splines are routed around it.
+        "splines": "spline",
         "nodesep": "0.6",
         "ranksep": "1.2"
     }
@@ -260,6 +286,16 @@ def gsn_dot(gsn: pgsn.pgsn_term.Term,
             if parts[0] in GSN_TYPES:
                 node_type = parts[0]
                 node_label = parts[1]
+
+        # A defeater that carries no support is an objection put without
+        # grounds, and the absence of anything beneath it says so. Drawing the
+        # marker as well puts a diamond under every challenging defeater a
+        # generator emits, which crowds out the undeveloped goals -- the ones a
+        # reader is looking for. A goal keeps its marker.
+        if node_type == 'Undeveloped' and node_obj.is_leaf() and not node_obj.is_root():
+            parent_tag = tree.get_node(node_obj.predecessor(tree.identifier)).tag
+            if parent_tag.split(': ', 1)[0] in GSN_DEFEATER_TYPES:
+                continue
 
         # --- 子ノードを覗き込んで、単なる属性なら親の箱の中に吸収する ---
         children = tree.children(node)
@@ -300,7 +336,7 @@ def gsn_dot(gsn: pgsn.pgsn_term.Term,
 
         dot.node(
             name=node_obj.identifier,
-            label=final_label,
+            label=_wrap(final_label, label_width),
             shape=shape,
             style=style,
             **node_attrs
@@ -320,9 +356,15 @@ def gsn_dot(gsn: pgsn.pgsn_term.Term,
             if node_type in GSN_DEFEATER_TYPES:
                 # Challenges point at what they attack, and are dashed so the
                 # relation is not mistaken for SupportedBy.
+                #
+                # Unlike a Context or an Assumption, a defeater is not an
+                # annotation placed beside its target: it is an argument in its
+                # own right, with a support and defeaters of its own beneath
+                # it. Pinning it to its target's rank leaves it nowhere to grow
+                # but sideways, and a node with many defeaters then spreads its
+                # rank across the whole drawing.
                 edge_attrs['dir'] = 'back'
                 edge_attrs['style'] = 'dashed'
-                horizontal_pairs.append((parent_id, node_obj.identifier))
 
             if parent_node_type == 'Goal' and node_type == 'Evidence':
                 edge_attrs['tailport'] = 's'
@@ -341,7 +383,8 @@ def save_gsn(gsn: pgsn.pgsn_term.Term,
              filename: str,
              image_format: str = "png",
              view=False,
-             cleanup=True):
+             cleanup=True,
+             label_width: int = LABEL_WIDTH):
 
-    dot = gsn_dot(gsn)
+    dot = gsn_dot(gsn, label_width=label_width)
     dot.render(filename, view=view, format=image_format, cleanup=cleanup)
