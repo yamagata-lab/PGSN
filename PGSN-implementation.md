@@ -148,10 +148,12 @@ things:
   (§1.3), so a machine that evaluates every argument evaluates neither branch,
   and needs no special form for `if`. The price is a closure and an application
   per conditional.
-- **Terms that cannot proceed.** PGSN returns them rather than failing. A
-  machine may instead report an error at the point where a builtin cannot
-  proceed, which is more informative, but it is a change of language, not of
-  implementation.
+- **Terms that cannot proceed.** PGSN returns them rather than failing, and a
+  machine does the same. Reporting an error where a builtin cannot proceed
+  would be a change of language, not of implementation. The error belongs to
+  readback: `python_value`, and the conversion to GSN built on it, are where a
+  value is required, and they report the path at which they met something that
+  is not one. `tests/test_stuck.py` states the rule.
 
 Either machine needs a readback layer: what a machine returns is a weak head
 normal form, while `python_value` requires the inside of lists, records and
@@ -159,7 +161,9 @@ objects to be values as well.
 
 Builtins are best given their arguments unevaluated and left to force what
 they inspect — that is where the knowledge of which argument is needed already
-lives, in `_applicable_args`. Builtins that build a term containing
+lives, in the preconditions each `_apply_args` checks before it computes
+anything, and answers `None` to when they fail. The arity is checked once,
+before any builtin is called. Builtins that build a term containing
 applications (`Map`, a method call on an object) can return that term for the
 machine to continue with, which is what `_apply_args` already does.
 
