@@ -46,6 +46,19 @@ STUCK = {
     "modulo by zero": mod(integer(1))(integer(0)),
     "missing attribute": _attributes_only({})(string('b')),
     "missing key on an object with methods": _with_a_method({})(string('b')),
+    # A class definition that would break the invariants of PGSNClass: a
+    # default that names no attribute, or a name that is both an attribute
+    # and a method.
+    "a default that names no attribute": define_class(inherit=base_class,
+                                                      defaults=record({'a': true}),
+                                                      attributes=[], methods={}),
+    "an attribute that is also a method": define_class(inherit=base_class,
+                                                       attributes=['m'],
+                                                       methods={'m': _identity}),
+    "a method already inherited as an attribute": define_class(inherit=_attributes_only,
+                                                               methods={'a': _identity}),
+    "an attribute already inherited as a method": define_class(inherit=_with_a_method,
+                                                               attributes=['m']),
 }
 
 

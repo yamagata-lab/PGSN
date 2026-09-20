@@ -317,9 +317,6 @@ class Abs(Term):
     def _check_t(self, _, value):
         assert value.is_named == self.is_named
 
-    def __attr_post_init__(self):
-        assert self.v.is_named == self.t.is_named
-
     def _evolve(self, t: Term, v: Variable | None = None):
         if v is None and not t.is_named:
             return evolve(self, v=v, t=t, is_named=False)
@@ -387,7 +384,7 @@ class App(Term):
         else:
             assert False
 
-    def __attr_post_init__(self):
+    def __attrs_post_init__(self):
         assert self.t1.is_named == self.t2.is_named
 
     def _evolve(self, t1: Term | None = None, t2: Term | None = None):
@@ -526,9 +523,9 @@ class Boolean(ConstMixin, ZeroAry):
 class List(Unary):
     terms: tuple[Term, ...] = field(validator=helpers.not_none)
 
-    def __attr_post_init__(self):
+    def __attrs_post_init__(self):
         assert all(isinstance(t, Term) for t in self.terms)
-        assert len(self.terms) == 0 or all((t == self.is_named for t in self.terms))
+        assert all(t.is_named == self.is_named for t in self.terms)
 
     def _eval_or_none(self):
         evaluated = [term.eval_or_none() for term in self.terms]
@@ -574,7 +571,7 @@ class Record(Unary):
     _attributes: dict[str, Term] = \
         field(validator=helpers.not_none)
 
-    def __attr_post_init__(self):
+    def __attrs_post_init__(self):
         assert all(isinstance(k, str) for k in self.attributes().keys())
         assert all(isinstance(t, Term) for t in self.attributes().values())
 
@@ -645,10 +642,10 @@ class PGSNClass(Unary):
     _attributes: set[str, ...] = field(default=set(), validator=helpers.not_none)
     _methods: dict[str, Term] = field(default={}, validator=helpers.not_none)
 
-    def __attr_post_init__(self):
+    def __attrs_post_init__(self):
         assert all(k in self._attributes for k in self._defaults.keys())
         assert all(name not in self._attributes for name in self._methods.keys())
-        assert not "name" in self._method
+        assert not "name" in self._methods
         assert not "name" in self._attributes
 
     @classmethod
@@ -661,7 +658,7 @@ class PGSNClass(Unary):
         methods = helpers.default(methods, {})
         if inherit is not None:
             defaults = inherit.defaults() | defaults
-            attributes = set(inherit.defaults()) | set(attributes)
+            attributes = set(inherit.attributes()) | set(attributes)
             methods = inherit.methods() | methods
         return super().build(is_named=is_named, name=name, inherit=inherit, defaults=defaults.copy(), attributes=attributes, methods=methods.copy())
 
@@ -785,26 +782,30 @@ class DefineClass(ConstMixin, Unary):
                 return None
             if "name" in (t for t in params["methods"].attributes().keys()):
                 return None
-        inherit: PGSNClass = arg.attributes()["inherit"]
-        if "name" in arg.attributes():
-            name = arg.attributes()["name"].value
+        inherit: PGSNClass = params["inherit"]
+        added_defaults = params["defaults"].attributes() if "defaults" in params else {}
+        added_attributes = ({a.value for a in params["attributes"].terms}
+                            if "attributes" in params else set())
+        added_methods = params["methods"].attributes() if "methods" in params else {}
+        # The invariants of PGSNClass: every default names an attribute, and no name
+        # is both an attribute and a method. The parent holds them by induction over
+        # the construction paths, so only what this definition adds is examined.
+        if not set(added_defaults.keys()) <= set(inherit.attributes()) | added_attributes:
+            return None
+        if not added_attributes.isdisjoint(inherit.methods().keys()):
+            return None
+        if not added_attributes.isdisjoint(added_methods.keys()):
+            return None
+        if not set(added_methods.keys()).isdisjoint(inherit.attributes()):
+            return None
+        if "name" in params:
+            name = params["name"].value
         else:
             name = None
-        if "defaults" in arg.attributes():
-            defaults = inherit.defaults()| arg.attributes()["defaults"].attributes()
-        else:
-            defaults = inherit.defaults()
-        if "attributes" in arg.attributes():
-            attributes = (set(inherit.attributes()) |
-                          set((a.value for a in arg.attributes()["attributes"].terms)))
-        else:
-            attributes = inherit.attributes()
-        if "methods" in arg.attributes():
-            methods = inherit.methods() | arg.attributes()["methods"].attributes()
-        else:
-            methods= inherit.methods()
-        return PGSNClass.nameless(inherit=inherit, name=name, defaults=defaults, attributes=set(attributes),
-                                          methods=methods)
+        return PGSNClass.nameless(inherit=inherit, name=name,
+                                  defaults=inherit.defaults() | added_defaults,
+                                  attributes=set(inherit.attributes()) | added_attributes,
+                                  methods=inherit.methods() | added_methods)
 
 
 def _inherit_chain(cls: PGSNClass):
