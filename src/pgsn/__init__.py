@@ -135,6 +135,7 @@ from pgsn.gsn import (
     gsn_tree,
     gsn_dot,
     save_gsn,
+    LABEL_WIDTH,
 )
 
 from pgsn.pgsn_xml import PGSNError, load_xml, load_xml_string
@@ -240,4 +241,5 @@ __all__ = [
     "gsn_tree",
     "gsn_dot",
     "save_gsn",
+    "LABEL_WIDTH",
 ]
