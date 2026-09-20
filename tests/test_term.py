@@ -48,9 +48,6 @@ def test_pgsn_term_higher_order():
 
 class Id(ConstMixin, Unary):
 
-    def _applicable(self, args):
-        return True
-
     def _apply_arg(self, arg):
         return arg
 
@@ -58,8 +55,8 @@ class Id(ConstMixin, Unary):
 def test_builtin():
     id_f = Id.named().fully_eval()
     c = constant('c').fully_eval()
-    assert id_f.applicable_args((c,))
-    assert id_f.apply_args((c,)) == (c, tuple())
+    assert id_f.apply_args_or_none((c,)) == (c, tuple())
+    assert id_f.apply_args_or_none(()) is None
     assert id_f(c).fully_eval() == c
 
 

@@ -161,7 +161,9 @@ objects to be values as well.
 
 Builtins are best given their arguments unevaluated and left to force what
 they inspect — that is where the knowledge of which argument is needed already
-lives, in `_applicable_args`. Builtins that build a term containing
+lives, in the preconditions each `_apply_args` checks before it computes
+anything, and answers `None` to when they fail. The arity is checked once,
+before any builtin is called. Builtins that build a term containing
 applications (`Map`, a method call on an object) can return that term for the
 machine to continue with, which is what `_apply_args` already does.
 

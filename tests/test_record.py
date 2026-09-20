@@ -61,7 +61,7 @@ The root cause is two cooperating bugs in pgsn_term.py:
 Together they corrupt the t2 (argument) slot of an App node during the
 shift(-1, 0) step that follows beta reduction, replacing the String key
 with the Record itself.  The subsequent field lookup then fails because
-Record._applicable checks isinstance(term, String).
+Record._apply_arg declines anything but a String.
 """
 
 import pytest

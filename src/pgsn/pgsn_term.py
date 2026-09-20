@@ -455,21 +455,22 @@ class Builtin(Term, ABC):
     # hack.  the default is an invalid value
     arity: int = field(validator=[helpers.not_none, helpers.non_negative])
 
+    # The result of applying the builtin, or None when the arguments do not
+    # meet its preconditions, which leaves the application stuck. Each builtin
+    # checks its preconditions first. `args` holds every pending argument, so
+    # it may be longer than the arity, but never shorter.
     @abstractmethod
-    def _applicable_args(self, args: tuple[Term, ...]) -> bool:
+    def _apply_args(self, args: tuple[Term, ...]) -> Term | None:
         pass
 
-    def applicable_args(self, args: tuple[Term, ...]) -> bool:
+    def apply_args_or_none(self, args: tuple[Term, ...]) -> tuple[Term, tuple[Term, ...]] | None:
         assert (not self.is_named and all(not arg.is_named for arg in args))
-        return len(args) >= self.arity and self._applicable_args(args)
-
-    @abstractmethod
-    def _apply_args(self, args: tuple[Term, ...]) -> Term:
-        pass
-
-    def apply_args(self, args: tuple[Term, ...]) -> tuple[Term, tuple[Term, ...]]:
-        assert self.applicable_args(args)
+        # The arity is checked before anything else is: it costs nothing.
+        if len(args) < self.arity:
+            return None
         reduced = self._apply_args(args)
+        if reduced is None:
+            return None
         assert not reduced.is_named
         return reduced, args[self.arity:]
 
@@ -482,17 +483,10 @@ class Unary(Builtin, ABC):
         return super().build(arity=1, is_named=is_named, **kwarg)
 
     @abstractmethod
-    def _applicable(self, arg: Term):
+    def _apply_arg(self, arg: Term) -> Term | None:
         pass
 
-    @abstractmethod
-    def _apply_arg(self, arg: Term):
-        pass
-
-    def _applicable_args(self, args: tuple[Term, ...]):
-        return len(args) >= 1 and self._applicable(args[0])
-
-    def _apply_args(self, args: tuple[Term, ...]):
+    def _apply_args(self, args: tuple[Term, ...]) -> Term | None:
         return self._apply_arg(args[0])
 
 
@@ -503,11 +497,9 @@ class ZeroAry(Builtin, ABC):
     def build(cls, is_named: bool, **kwargs) -> Term:
         return super().build(arity=0, is_named=is_named, **kwargs)
 
-    def _applicable_args(self, _):
-        return False
-
-    def _apply_args(self, _):
-        assert False
+    # A constant takes no argument.
+    def _apply_args(self, _) -> None:
+        return None
 
 
 @frozen
@@ -571,10 +563,9 @@ class List(Unary):
         return List.nameless(meta_info=self.meta_info,
                              terms=tuple(t.remove_name_with_context(context) for t in self.terms))
 
-    def _applicable(self, term: Term):
-        return isinstance(term, Integer) and 0 <= term.value < len(self.terms)
-
-    def _apply_arg(self, term: Integer):
+    def _apply_arg(self, term: Term) -> Term | None:
+        if not (isinstance(term, Integer) and 0 <= term.value < len(self.terms)):
+            return None
         return self.terms[term.value]
 
 
@@ -639,10 +630,9 @@ class Record(Unary):
                             in self.attributes().items()),
             is_named=False)
 
-    def _applicable(self, term: Term):
-        return isinstance(term, String) and term.value in self.attributes()
-
-    def _apply_arg(self, term: String):
+    def _apply_arg(self, term: Term) -> Term | None:
+        if not (isinstance(term, String) and term.value in self.attributes()):
+            return None
         return self.attributes()[term.value]
 
 
@@ -748,17 +738,12 @@ class PGSNClass(Unary):
         vars_methods = set(t.free_variables() for t in self.methods().values())
         return vars_inherit | vars_defaults | vars_methods
 
-    def _applicable(self, arg: Term):
+    def _apply_arg(self, arg: Term) -> Term | None:
         if not isinstance(arg, Record):
-            return False
+            return None
         attr = arg.attributes()
-        if set(self.defaults().keys()) | set(attr.keys()) ==  set(self.attributes()):
-            return True
-        else:
-            return False
-
-    def _apply_arg(self, arg: Record):
-        attr = arg.attributes()
+        if not set(self.defaults().keys()) | set(attr.keys()) ==  set(self.attributes()):
+            return None
         for k in self._defaults:
             if not k in attr.keys():
                 attr[k] = self.defaults()[k]
@@ -774,35 +759,32 @@ class PGSNClass(Unary):
 @frozen
 class DefineClass(ConstMixin, Unary):
 
-    def _applicable(self, arg: Term) -> bool:
+    def _apply_arg(self, arg: Term) -> Term | None:
         if not isinstance(arg, Record):
-            return False
+            return None
         params = arg.attributes()
         if not "inherit" in params:
-            return False
+            return None
         if not isinstance(params["inherit"], PGSNClass):
-            return False
+            return None
         if "name" in params and not isinstance(params["name"], String):
-            return False
+            return None
         if not set(params.keys()) <= {"inherit", "name", "defaults", "attributes", "methods"}:
-            return False
+            return None
         if "defaults" in params and not isinstance(params["defaults"], Record):
-            return False
+            return None
         if "attributes" in params and not isinstance(params["attributes"], List):
-            return False
+            return None
         if "attributes" in params:
             if not all(isinstance(k, String) for k in params["attributes"].terms):
-                return False
+                return None
             if "name" in (t.value for t in params["attributes"].terms):
-                return False
+                return None
         if "methods" in params:
             if not isinstance(params["methods"], Record):
-                return False
+                return None
             if "name" in (t for t in params["methods"].attributes().keys()):
-                return False
-        return True
-
-    def _apply_arg(self, arg: Record) -> Term:
+                return None
         inherit: PGSNClass = arg.attributes()["inherit"]
         if "name" in arg.attributes():
             name = arg.attributes()["name"].value
@@ -848,18 +830,13 @@ class IsSubtype(ConstMixin, Builtin):
     def build(cls, is_named: bool, **kwarg) -> Term:
         return super().build(arity=2, is_named=is_named, **kwarg)
 
-    def _applicable_args(self, args: tuple[Term, ...]) -> bool:
+    # `apply_args_or_none` hands over every pending argument, not just the ones
+    # this builtin consumes, so the tuple is variadic.
+    def _apply_args(self, args: tuple[Term, ...]) -> Term | None:
         if not len(args) == 2:
-            return False
-        if isinstance(args[0], PGSNClass) and isinstance(args[1], PGSNClass):
-            return True
-        else:
-            return False
-
-    # `apply_args` hands over every pending argument, not just the ones this
-    # builtin consumes, so the tuple is variadic. `_applicable_args` is what
-    # checks that args[0] and args[1] are classes.
-    def _apply_args(self, args: tuple[Term, ...]) -> Term:
+            return None
+        if not (isinstance(args[0], PGSNClass) and isinstance(args[1], PGSNClass)):
+            return None
         sub = args[0]
         sup = args[1]
         covered = (set(sup.attributes()) <= set(sub.attributes())
@@ -934,22 +911,16 @@ class PGSNObject(Unary):
         vars_methods = set(t.free_variables() for t in self.methods().values())
         return vars_instance | vars_attributes | vars_methods
 
-    def _applicable(self, arg: Term):
+    def _apply_arg(self, arg: Term) -> Term | None:
         if not isinstance(arg, String):
-            return False
+            return None
         k = arg.value
-        if k in self.attributes().keys() or k in self.methods().keys():
-            return True
-        else:
-            return False
-
-    def _apply_arg(self, arg: String):
-        k = arg.value
+        if not (k in self.attributes().keys() or k in self.methods().keys()):
+            return None
         if k in self.attributes().keys():
             return self.attributes()[k]
-        elif k in self.methods().keys():
+        else:
             return (self.methods()[k])(self)
-        assert False
 
     def _remove_name_with_context(self, context: list[str]) -> Term:
         reduced = self._traverse(lambda t: t.remove_name_with_context(context=context))
@@ -961,13 +932,9 @@ class PGSNObject(Unary):
 @frozen
 class Instance(ConstMixin, Unary):
 
-    def _applicable(self, arg: Term) -> bool:
-        if isinstance(arg, PGSNObject):
-            return True
-        else:
-            return False
-
-    def _apply_arg(self, arg: PGSNObject) -> Term:
+    def _apply_arg(self, arg: Term) -> Term | None:
+        if not isinstance(arg, PGSNObject):
+            return None
         return arg.instance
 
 
@@ -982,30 +949,26 @@ class Cons(ConstMixin, Builtin):
     def build(cls, is_named: bool, **kwarg) -> Term:
         return super().build(arity=2, is_named=is_named, **kwarg)
 
-    def _applicable_args(self, args: tuple[Term,...]):
-        return isinstance(args[1], List)
-
-    # Variadic for the same reason as IsSubclass._apply_args above; that args[1]
-    # is a List has already been established by _applicable_args.
-    def _apply_args(self, args: tuple[Term, ...]):
+    # Variadic for the same reason as IsSubtype._apply_args above.
+    def _apply_args(self, args: tuple[Term, ...]) -> Term | None:
+        if not isinstance(args[1], List):
+            return None
         return evolve(args[1], terms=(args[0],) + args[1].terms)
 
 @frozen
 class Head(ConstMixin, Unary):
 
-    def _applicable(self, arg: Term):
-        return isinstance(arg, List) and len(arg.terms) >= 1
-
-    def _apply_arg(self, arg: List) -> Term:
+    def _apply_arg(self, arg: Term) -> Term | None:
+        if not (isinstance(arg, List) and len(arg.terms) >= 1):
+            return None
         return arg.terms[0]
 
 @frozen
 class Tail(ConstMixin, Unary):
 
-    def _applicable(self, arg: Term):
-        return isinstance(arg, List) and len(arg.terms) >= 1
-
-    def _apply_arg(self, arg: List) -> Term:
+    def _apply_arg(self, arg: Term) -> Term | None:
+        if not (isinstance(arg, List) and len(arg.terms) >= 1):
+            return None
         return List.build(terms=arg.terms[1:], is_named=self.is_named)
 
 
@@ -1015,10 +978,9 @@ class Tail(ConstMixin, Unary):
 @frozen
 class IsEmpty(ConstMixin, Unary):
 
-    def _applicable(self, arg: Term):
-        return isinstance(arg, List)
-
-    def _apply_arg(self, arg: List) -> Term:
+    def _apply_arg(self, arg: Term) -> Term | None:
+        if not isinstance(arg, List):
+            return None
         return Boolean.build(is_named=self.is_named, value=len(arg.terms) == 0)
 
 
@@ -1029,10 +991,9 @@ class Index(ConstMixin, Builtin):
     def build(cls, is_named: bool, **kwarg) -> Term:
         return super().build(arity=2, is_named=is_named, **kwarg)
 
-    def _applicable_args(self, args: tuple[Term,...]):
-        return isinstance(args[0], List) and isinstance(args[1], Integer)
-
-    def _apply_args(self, args: tuple[Term,...]) -> Term:
+    def _apply_args(self, args: tuple[Term,...]) -> Term | None:
+        if not (isinstance(args[0], List) and isinstance(args[1], Integer)):
+            return None
         return args[0].terms[args[1].value]
 
 
@@ -1043,13 +1004,11 @@ class Fold(ConstMixin, Builtin):
     def build(cls, is_named: bool, **kwarg) -> Term:
         return super().build(arity=3, is_named=is_named, **kwarg)
 
-    def _applicable_args(self, args: tuple[Term,...]):
+    def _apply_args(self, args: tuple[Term,...]) -> Term | None:
         if not len(args) >= 3:
-            return False
+            return None
         if not isinstance(args[2], List):
-            return False
-        return True
-    def _apply_args(self, args: tuple[Term,...]) -> Term:
+            return None
         fun = args[0]
         init = args[1]
         arg_list = args[2].terms
@@ -1068,12 +1027,9 @@ class Map(ConstMixin, Builtin):
     def build(cls, is_named: bool, **kwarg) -> Term:
         return super().build(arity=2, is_named=is_named, **kwarg)
 
-    def _applicable_args(self, args: tuple[Term,...]):
+    def _apply_args(self, args: tuple[Term,...]) -> Term | None:
         if not isinstance(args[1], List):
-            return False
-        return True
-
-    def _apply_args(self, args: tuple[Term,...]) -> Term:
+            return None
         fun = args[0]
         arg = args[1]
         arg_list = arg.terms
@@ -1090,10 +1046,9 @@ class Plus(ConstMixin, Builtin):
     def build(cls, is_named: bool, **kwarg) -> Term:
         return super().build(arity=2, is_named=is_named, **kwarg)
 
-    def _applicable_args(self, args: tuple[Term, ...]):
-        return len(args) >= 2 and isinstance(args[0], Integer) and isinstance(args[1], Integer)
-
-    def _apply_args(self, args: tuple[Term, ...]):
+    def _apply_args(self, args: tuple[Term, ...]) -> Term | None:
+        if not (len(args) >= 2 and isinstance(args[0], Integer) and isinstance(args[1], Integer)):
+            return None
         i1 = args[0].value
         i2 = args[1].value
         return Integer.nameless(value=i1 + i2)
@@ -1106,10 +1061,9 @@ class Minus(ConstMixin, Builtin):
     def build(cls, is_named: bool, **kwarg) -> Term:
         return super().build(arity=2, is_named=is_named, **kwarg)
 
-    def _applicable_args(self, args: tuple[Term, ...]):
-        return len(args) >= 2 and isinstance(args[0], Integer) and isinstance(args[1], Integer)
-
-    def _apply_args(self, args: tuple[Term, ...]):
+    def _apply_args(self, args: tuple[Term, ...]) -> Term | None:
+        if not (len(args) >= 2 and isinstance(args[0], Integer) and isinstance(args[1], Integer)):
+            return None
         i1 = args[0].value
         i2 = args[1].value
         return Integer.nameless(value=i1 - i2)
@@ -1122,10 +1076,9 @@ class Times(ConstMixin, Builtin):
     def build(cls, is_named: bool, **kwarg) -> Term:
         return super().build(arity=2, is_named=is_named, **kwarg)
 
-    def _applicable_args(self, args: tuple[Term, ...]):
-        return len(args) >= 2 and isinstance(args[0], Integer) and isinstance(args[1], Integer)
-
-    def _apply_args(self, args: tuple[Term, ...]):
+    def _apply_args(self, args: tuple[Term, ...]) -> Term | None:
+        if not (len(args) >= 2 and isinstance(args[0], Integer) and isinstance(args[1], Integer)):
+            return None
         i1 = args[0].value
         i2 = args[1].value
         return Integer.nameless(value=i1 * i2)
@@ -1139,11 +1092,10 @@ class Div(ConstMixin, Builtin):
         return super().build(arity=2, is_named=is_named, **kwarg)
 
     # A zero divisor leaves the application stuck.
-    def _applicable_args(self, args: tuple[Term, ...]):
-        return (len(args) >= 2 and isinstance(args[0], Integer) and isinstance(args[1], Integer)
-                and args[1].value != 0)
-
-    def _apply_args(self, args: tuple[Term, ...]):
+    def _apply_args(self, args: tuple[Term, ...]) -> Term | None:
+        if not (len(args) >= 2 and isinstance(args[0], Integer) and isinstance(args[1], Integer)
+                and args[1].value != 0):
+            return None
         i1 = args[0].value
         i2 = args[1].value
         return Integer.nameless(value=i1 // i2)
@@ -1157,11 +1109,10 @@ class Mod(ConstMixin, Builtin):
         return super().build(arity=2, is_named=is_named, **kwarg)
 
     # A zero divisor leaves the application stuck.
-    def _applicable_args(self, args: tuple[Term, ...]):
-        return (len(args) >= 2 and isinstance(args[0], Integer) and isinstance(args[1], Integer)
-                and args[1].value != 0)
-
-    def _apply_args(self, args: tuple[Term, ...]):
+    def _apply_args(self, args: tuple[Term, ...]) -> Term | None:
+        if not (len(args) >= 2 and isinstance(args[0], Integer) and isinstance(args[1], Integer)
+                and args[1].value != 0):
+            return None
         i1 = args[0].value
         i2 = args[1].value
         return Integer.nameless(value=i1 % i2)
@@ -1175,10 +1126,9 @@ class IfThenElse(ConstMixin, Builtin):
     def build(cls, is_named: bool, **kwarg) -> Term:
         return super().build(arity=3, is_named=is_named, **kwarg)
 
-    def _applicable_args(self, terms: tuple[Term,...]):
-        return isinstance(terms[0], Boolean) or isinstance(terms[0], Integer)
-
-    def _apply_args(self, terms: tuple[Term,...]):
+    def _apply_args(self, terms: tuple[Term,...]) -> Term | None:
+        if not (isinstance(terms[0], Boolean) or isinstance(terms[0], Integer)):
+            return None
         b = terms[0].value
         if isinstance(b, bool):
             return terms[1] if b else terms[2]
@@ -1194,10 +1144,9 @@ class Guard(ConstMixin, Builtin):
     def build(cls, is_named: bool, **kwarg) -> Term:
         return super().build(arity=2, is_named=is_named, **kwarg)
 
-    def _applicable_args(self, terms: tuple[Term,...]):
-        return isinstance(terms[0], Boolean) and terms[0].value
-
-    def _apply_args(self, terms: tuple[Term,...]):
+    def _apply_args(self, terms: tuple[Term,...]) -> Term | None:
+        if not (isinstance(terms[0], Boolean) and terms[0].value):
+            return None
         return terms[1]
 
 
@@ -1210,11 +1159,10 @@ class LessThan(ConstMixin, Builtin):
     def build(cls, is_named: bool, **kwarg) -> Term:
         return super().build(arity=2, is_named=is_named, **kwarg)
 
-    def _applicable_args(self, args: tuple[Term, ...]):
-        return (len(args) >= 2
-                and isinstance(args[0], Integer) and isinstance(args[1], Integer))
-
-    def _apply_args(self, args: tuple[Term, ...]):
+    def _apply_args(self, args: tuple[Term, ...]) -> Term | None:
+        if not (len(args) >= 2
+                and isinstance(args[0], Integer) and isinstance(args[1], Integer)):
+            return None
         return Boolean.build(is_named=self.is_named,
                              value=args[0].value < args[1].value)
 
@@ -1246,11 +1194,11 @@ class Equal(ConstMixin, Builtin):
         return super().build(arity=2, is_named=is_named, **kwarg)
 
     # Only the two arguments being compared are inspected; anything further
-    # along the spine is passed on by `apply_args` and is none of our business.
-    def _applicable_args(self, args: tuple[Term,...]):
-        return len(args) >= 2 and all(_comparable(arg) for arg in args[:2])
-
-    def _apply_args(self, args: tuple[Term,...]):
+    # along the spine is passed on by `apply_args_or_none` and is none of our
+    # business.
+    def _apply_args(self, args: tuple[Term,...]) -> Term | None:
+        if not (len(args) >= 2 and all(_comparable(arg) for arg in args[:2])):
+            return None
         return Boolean.build(is_named=self.is_named, value=args[0] == args[1])
 
 
@@ -1261,12 +1209,10 @@ class HasLabel(ConstMixin, Builtin):
     def build(cls, is_named: bool, **kwarg) -> Term:
         return super().build(arity=2, is_named=is_named, **kwarg)
 
-    def _applicable_args(self, terms: tuple[Term,...]):
-        return isinstance(terms[0], Record) and isinstance(terms[1], String)
-
-    # Variadic: see IsSubclass._apply_args. _applicable_args has already
-    # established that terms[0] is a Record and terms[1] a String.
-    def _apply_args(self, terms: tuple[Term, ...]):
+    # Variadic: see IsSubtype._apply_args.
+    def _apply_args(self, terms: tuple[Term, ...]) -> Term | None:
+        if not (isinstance(terms[0], Record) and isinstance(terms[1], String)):
+            return None
         k = terms[1].value
         b = k in terms[0].attributes()
         return Boolean.build(is_named=self.is_named, value=b)
@@ -1279,10 +1225,9 @@ class AddAttribute(ConstMixin, Builtin):
     def build(cls, is_named: bool, **kwarg) -> Term:
         return super().build(arity=3, is_named=is_named, **kwarg)
 
-    def _applicable_args(self, terms: tuple[Term,...]):
-        return isinstance(terms[0], Record) and isinstance(terms[1], String)
-
-    def _apply_args(self, terms: tuple[Term,...]):
+    def _apply_args(self, terms: tuple[Term,...]) -> Term | None:
+        if not (isinstance(terms[0], Record) and isinstance(terms[1], String)):
+            return None
         attrs = terms[0].attributes()
         attrs[terms[1].value] = terms[2]
         return Record.build(is_named=self.is_named, attributes=attrs)
@@ -1295,10 +1240,9 @@ class RemoveAttribute(ConstMixin, Builtin):
     def build(cls, is_named: bool, **kwarg) -> Term:
         return super().build(arity=2, is_named=is_named, **kwarg)
 
-    def _applicable_args(self, terms: tuple[Term,...]):
-        return isinstance(terms[0], Record) and isinstance(terms[1], String)
-
-    def _apply_args(self, terms: tuple[Term,...]):
+    def _apply_args(self, terms: tuple[Term,...]) -> Term | None:
+        if not (isinstance(terms[0], Record) and isinstance(terms[1], String)):
+            return None
         attrs = terms[0].attributes()
         del attrs[terms[1].value]
         return Record.build(is_named=self.is_named, attributes=attrs)
@@ -1307,10 +1251,9 @@ class RemoveAttribute(ConstMixin, Builtin):
 @frozen
 class ListLabels(ConstMixin, Unary):
 
-    def _applicable(self, term: Term):
-        return isinstance(term, Record)
-
-    def _apply_arg(self, term: Term):
+    def _apply_arg(self, term: Term) -> Term | None:
+        if not isinstance(term, Record):
+            return None
         labels = map(lambda l: String.build(is_named=self.is_named, value=l), term.attributes())
         return List.build(is_named=self.is_named, terms=tuple(labels))
 
@@ -1322,10 +1265,9 @@ class OverwriteRecord(ConstMixin, Builtin):
     def build(cls, is_named: bool, **kwarg) -> Term:
         return super().build(arity=2, is_named=is_named, **kwarg)
 
-    def _applicable_args(self, terms: tuple[Term,...]):
-        return isinstance(terms[0], Record) and isinstance(terms[1], Record)
-
-    def _apply_args(self, terms: tuple[Term,...]):
+    def _apply_args(self, terms: tuple[Term,...]) -> Term | None:
+        if not (isinstance(terms[0], Record) and isinstance(terms[1], Record)):
+            return None
         r1 = terms[0].attributes()
         r2 = terms[1].attributes()
         r = r1
@@ -1341,23 +1283,19 @@ class Formatter(ConstMixin, Builtin):
     def build(cls, is_named: bool, **kwarg) -> Term:
         return super().build(arity=2, is_named=is_named, **kwarg)
 
-    def _applicable_args(self, terms: tuple[Term,...]):
+    def _apply_args(self, terms: tuple[Term,...]) -> Term | None:
         if not len(terms) == 2:
-            return False
+            return None
         if not isinstance(terms[0], String):
-            return False
+            return None
         if not isinstance(terms[1], Record):
-            return False
+            return None
         try:
             python_vals = to_python(terms[1])
-            _ = terms[0].value.format(**python_vals)
-            return True
+            formatted = terms[0].value.format(**python_vals)
         except (KeyError, TypeError, ValueError):
-            return False
-
-    def _apply_args(self, terms: tuple[Term,...]):
-        python_vals = to_python(terms[1])
-        return String.build(is_named=self.is_named, value=terms[0].value.format(**python_vals))
+            return None
+        return String.build(is_named=self.is_named, value=formatted)
 
 
 
@@ -1514,9 +1452,11 @@ class Context:
             head_substituted = (self.head.t.subst(0, self.args[0].shift(1, 0))
                                 .shift(-1, 0))
             return self.evolve(head=head_substituted, args=self.args[1:])
-        if isinstance(self.head, Builtin) and self.head.applicable_args(self.args):
-            reduced, rest = self.head.apply_args(self.args)
-            return self.evolve(head=reduced, args=rest)
+        if isinstance(self.head, Builtin):
+            applied = self.head.apply_args_or_none(self.args)
+            if applied is not None:
+                reduced, rest = applied
+                return self.evolve(head=reduced, args=rest)
         head_reduced = self.head.eval_or_none()
         if head_reduced is not None:
             return self.evolve(head=head_reduced)
