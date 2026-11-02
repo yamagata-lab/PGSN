@@ -621,10 +621,20 @@ class List(Unary):
         return self.terms[term.value]
 
 
+# The dicts and sets inside a term are plain, for ease of writing, and are
+# never changed once the term is built: each is copied when the term is made,
+# every accessor hands out a copy, and a changed term is a new one, made with
+# evolve. That is what lets a term be compared and hashed by them. Equality
+# and the hash read a dict through this key, so the order of the entries plays
+# no part, as it plays none in `==`.
+def _entries(d: dict) -> frozenset:
+    return frozenset(d.items())
+
+
 @frozen
 class Record(Unary):
     _attributes: dict[str, Term] = \
-        field(validator=helpers.not_none)
+        field(converter=dict, eq=_entries, validator=helpers.not_none)
 
     def __attrs_post_init__(self):
         assert all(isinstance(k, str) for k in self.attributes().keys())
@@ -695,9 +705,12 @@ class PGSNClass(Unary):
 
     inherit: PGSNClass | None = field()
     name: str | None = field()
-    _defaults: dict[str, Term] = field(default={}, validator=helpers.not_none)
-    _attributes: set[str, ...] = field(default=set(), validator=helpers.not_none)
-    _methods: dict[str, Term] = field(default={}, validator=helpers.not_none)
+    _defaults: dict[str, Term] = field(default={}, converter=dict, eq=_entries,
+                                       validator=helpers.not_none)
+    _attributes: set[str, ...] = field(default=set(), converter=set, eq=frozenset,
+                                       validator=helpers.not_none)
+    _methods: dict[str, Term] = field(default={}, converter=dict, eq=_entries,
+                                      validator=helpers.not_none)
 
     def __attrs_post_init__(self):
         assert all(k in self._attributes for k in self._defaults.keys())
@@ -717,13 +730,13 @@ class PGSNClass(Unary):
             defaults = inherit.defaults() | defaults
             attributes = set(inherit.attributes()) | set(attributes)
             methods = inherit.methods() | methods
-        return super().build(is_named=is_named, name=name, inherit=inherit, defaults=defaults.copy(), attributes=attributes, methods=methods.copy())
+        return super().build(is_named=is_named, name=name, inherit=inherit, defaults=defaults.copy(), attributes=set(attributes), methods=methods.copy())
 
     def defaults(self):
         return self._defaults.copy()
 
     def attributes(self):
-        return self._attributes
+        return self._attributes.copy()
 
     def methods(self):
         return self._methods.copy()
@@ -908,8 +921,8 @@ class IsSubtype(ConstMixin, Builtin):
 @frozen
 class PGSNObject(Unary):
     instance: PGSNClass = field(validator=helpers.not_none)
-    _attributes: dict[str, Term] = field(validator=helpers.not_none)
-    _methods: dict[str, Term] = field()
+    _attributes: dict[str, Term] = field(converter=dict, eq=_entries, validator=helpers.not_none)
+    _methods: dict[str, Term] = field(converter=dict, eq=_entries)
 
     def attributes(self):
         return self._attributes.copy()
