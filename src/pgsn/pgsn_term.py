@@ -1356,12 +1356,15 @@ class Formatter(ConstMixin, Builtin):
                 pieces.append(piece)
         return String.build(is_named=self.is_named, value="".join(pieces))
 
-    # Only a string, an integer or a boolean is shown.
+    # Only a string, an integer or a boolean is shown, and a boolean as PGSN
+    # writes it.
     def _show(self, label: str, fields: dict[str, Term]) -> str:
         if label not in fields:
             raise PGSNKeyError(f"Formatter: there is no field {label!r}")
         value = fields[label]
-        if not isinstance(value, (String, Integer, Boolean)):
+        if isinstance(value, Boolean):
+            return "true" if value.value else "false"
+        if not isinstance(value, (String, Integer)):
             raise self._type_error(f"the field {label!r}",
                                    "a string, an integer or a boolean", value)
         return str(value.value)
