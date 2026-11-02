@@ -118,7 +118,6 @@ class ConstMixin(ABC):
 
 @frozen(kw_only=True, cache_hash=True)
 class Term(ABC):
-    # meta_info is always not empty
     meta_info: dict = field(default={}, eq=False)
     is_named: bool = field(validator=helpers.not_none)
     # Cache for free_bound(). Terms are immutable, so it is computed at most once.
@@ -144,11 +143,6 @@ class Term(ABC):
         if self.meta_info.get(k) != v:
             object.__setattr__(self, "meta_info", self.meta_info | {k: v})
 
-    def def_metainfo(self, k):
-        meta_info = dict(self.meta_info)
-        del meta_info[k]
-        object.__setattr__(self, "meta_info", meta_info)
-
     # Keeps the reason evaluation stopped at this term, under "error". Being
     # stuck is not progress, so the term is annotated in place rather than
     # evolved.
@@ -162,7 +156,6 @@ class Term(ABC):
     def _evolve(self, **kwarg):
         return evolve(self, **kwarg)
 
-    # Only application becomes closure, otherwise None
     @abstractmethod
     def _eval_or_none(self):
         pass
@@ -377,9 +370,8 @@ class Abs(Term):
             assert False
 
     # Evaluation stops at an abstraction and leaves its body as written, so a
-    # term evaluates to a weak normal form. Every term the evaluator reduces is
-    # then closed, which keeps builtin reductions stable under substitution,
-    # and recursion through `fix` cannot unfold under a binder.
+    # term evaluates to a weak normal form, and recursion through `fix` cannot
+    # unfold under a binder.
     def _eval_or_none(self) -> Term | None:
         return None
 
@@ -450,17 +442,9 @@ class App(Term):
         else:
             assert False
 
-    def to_context(self) -> Context:
-        if isinstance(self.t1, App):
-            return self.t1.to_context().stack(self.t2)
-        else:
-            return Context.build(head=self.t1, args=(self.t2,))
-
     def _eval_or_none(self):
-        if isinstance(self.t1, App):
-            c = self.t1.to_context().stack(self.t2)
-        else:
-            c = Context.build(head=self.t1, args=(self.t2,))
+        # Context.build unwinds the applications on the left into the spine.
+        c = Context.build(head=self.t1, args=(self.t2,))
         c_reduced = c.reduce_or_declined()
         if isinstance(c_reduced, PGSNRuntimeError):
             self.mark_stuck(c_reduced)
@@ -503,7 +487,6 @@ class App(Term):
 @frozen
 class Builtin(Term, ABC):
 
-    # hack.  the default is an invalid value
     arity: int = field(validator=[helpers.not_none, helpers.non_negative])
 
     # The result of applying the builtin. When the arguments do not meet its
@@ -982,9 +965,6 @@ class PGSNObject(Unary):
     def _compute_free_bound(self) -> int:
         children = [self.instance, *self._attributes.values(), *self._methods.values()]
         return max(t.free_bound() for t in children)
-
-    def _shift(self, num: int, cutoff: int) -> Term:
-        return self._traverse(lambda t: helpers.default(t.shift(num, cutoff), t))
 
     def _subst_or_none(self, variable: int, term: Term) -> Term | None:
         return self._traverse(lambda t: t.subst_or_none(variable, term))

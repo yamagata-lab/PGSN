@@ -47,9 +47,7 @@ variable included, so `equal x "a"` reduced to `false` under a binder. That is
 not a rewrite rule: it does not survive the substitution of `"a"` for `x`.
 Evaluating `map_term (λx. if (equal x "a") "yes" "no")` over `["a"]` could
 therefore reach `["yes"]` or `["no"]` depending on the order of reduction.
-With evaluation stopping at abstractions, every term the evaluator reduces is
-closed, and the question does not arise. Equality has since been narrowed to
-data (§1.5), which refuses a variable for a second reason.
+Equality has since been narrowed to data (§1.5), which refuses a variable.
 
 **A function held in data has no normal form.** Lists and records may hold
 functions — a module is a record of templates, a class is a record of methods —
@@ -60,8 +58,7 @@ terminating on it.
 The invariant worth keeping in mind: **a builtin reduction must be stable
 under substitution**, which is to say it must not inspect a part of a term
 that substitution could change. The shape of a list literal and the keys of a
-record literal are such parts; a variable is not. In a weak evaluator this
-holds for free, because every term reduced is closed.
+record literal are such parts; a variable is not.
 
 ### 1.2 Substitution carries a free-variable bound
 
