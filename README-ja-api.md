@@ -39,12 +39,16 @@ pgsn.goal(description=..., support=...)       # キーワードのレコード
 ### 評価
 
 ```python
-term.eval()                  # 1 ステップだけ簡約
-term.fully_eval()            # 弱正規形まで簡約、既定は steps=1000000
-term.fully_eval(steps=5000)  # 上限を明示
+term.fully_eval()            # 項全体を評価する。上限は既定の steps=1000000
+term.fully_eval(steps=5000)  # 上限を自分で決める
+term.eval()                  # 1 ステップだけ。評価を手で追うとき用
 ```
 
-すでに弱正規形なら `fully_eval` はそのまま返します。関数の本体の中までは簡約しません（関数は値です）。リストの要素・レコードのフィールド・オブジェクトの属性は中まで簡約されるので、`python_value` が必要とする形にはなります。`steps` は簡約回数の上限であって時間の上限ではありません。簡約するたびに項が膨らむ形だと、上限に達する前にこちらの忍耐が尽きます。自由変数が残った項や、型の合わない引数に適用された項はエラーにならず、単に「詰まった」状態のまま返ってきます。理由は [PGSN-implementation.md](PGSN-implementation.md) にあります。
+項は全部組み立ててから、1 回だけ評価します。評価が返すのは読み出すための結果で、`python_value` や `gsn_tree`、描画に渡します。別の項を組み立てる材料にはなりません。結果を何かに適用したり、引数として渡したりする使いかたはサポートしておらず、動きません。
+
+`steps` は安全のための上限です。`eval()` 1 回が 1 ステップで、上限に達すると評価はエラーで止まります。普通のドキュメントなら既定の上限で足ります。大きなドキュメントが上限に達したときだけ増やしてください。ステップの数えかたは今後の版で変わることがあります。
+
+項の中の誤り（レコードに無いラベル、種類の合わない引数、定義されていない名前）があっても、評価はエラーで止まりません。その部分はそのまま残り、エラーになるのは結果を読み出すときです。`python_value` が、評価が先へ進めなかった位置を示します。理由は [PGSN-implementation.md](PGSN-implementation.md) にあります。
 
 ---
 
@@ -91,7 +95,7 @@ pgsn.python_value(double(pgsn.integer(21)).fully_eval())   # 42
 
 **整数** — `plus`・`minus`・`times`・`div`・`mod`・`integer_sum`・`repeat`
 
-**レコード** — `has_label`・`list_labels`・`add_attribute`・`remove_attribute`・`overwrite_record`・`empty_record`
+**レコード** — `has_label`・`add_attribute`・`remove_attribute`・`overwrite_record`・`empty_record`
 
 **文字列** — `format_string`
 
@@ -254,7 +258,7 @@ term = pgsn.load_xml("main.xml")
 term = pgsn.load_xml_string(source)
 ```
 
-どちらもコンパイルと評価まで行い、弱正規形を返します。ドキュメントの構文は [README-ja-xml.md](README-ja-xml.md) を参照してください。
+どちらもコンパイルと評価まで行うので、返ってくるのは[評価](#評価)で述べた結果です。読み出すのに使い、組み立ての材料にはしません。ドキュメントの構文は [README-ja-xml.md](README-ja-xml.md) を参照してください。
 
 どちらも `steps` を取ります。意味は `fully_eval` と同じで、省けば既定の上限が使われます。既定はひとつしかなく、`pgsn` コマンドが使うのと同じ数なので、コマンドで評価できるドキュメントはプログラムからも評価できます。上限を使い切るほど大きいドキュメントが間違っているわけではないので、事情を知っている呼び出し側はこう書きます。
 

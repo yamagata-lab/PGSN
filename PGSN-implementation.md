@@ -31,7 +31,7 @@ Three things go wrong if evaluation reduces under an abstraction instead.
 **Leftmost-outermost is not a normalising strategy here.** The normalisation
 theorem holds for the pure lambda calculus, and for rewrite rules whose
 patterns are left-normal. The builtins are neither: `Map` inspects its second
-argument, `Cons` its second, `Fold` its third. In
+argument, and so does `Cons`. In
 
     map_term (λx. …) (record "items")
 

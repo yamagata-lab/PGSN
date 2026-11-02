@@ -62,6 +62,16 @@ STUCK = {
                                                                methods={'a': _identity}),
     "an attribute already inherited as a method": define_class(inherit=_with_a_method,
                                                                attributes=['m']),
+    # Between the braces is a label, not Python: no attribute, index,
+    # conversion or format specification is read out of it.
+    "an attribute of a field in a format string":
+        format_string('{b.upper}')(record({'b': string('x')})),
+    "a conversion in a format string": format_string('{b!r}')(record({'b': string('x')})),
+    "a format specification in a format string":
+        format_string('{n:>3}')(record({'n': integer(1)})),
+    "a list shown by a format string":
+        format_string('{l}')(record({'l': list_term((integer(1),))})),
+    "an unmatched brace in a format string": format_string('{b')(record({'b': string('x')})),
 }
 
 

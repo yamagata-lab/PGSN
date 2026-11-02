@@ -109,7 +109,7 @@ PGSN では**すべてが値**です。コンテンツを受け取る要素は�
 | 算術 | `+`、`-`、`*`、`//`、`%`、単項の `-` |
 | 比較 | `==`、`!=`、`<`、`<=`、`>`、`>=` |
 | 論理 | `and`、`or`、`not` |
-| f-string | `f"コンポーネント {i} / {total}"`。`{i:>3}` のような書式指定も使えます |
+| f-string | `f"コンポーネント {i} / {total}"` |
 
 これ以外は、何が見つかったかを示すエラーで拒否されます。関数呼び出し・属性アクセス・添字はありません。`<apply>`・`<get>`・リスト要素を使ってください。そちらのほうが何をしているか明確です。
 
@@ -405,7 +405,7 @@ import が jail に入ると、その jail が import 先モジュールの封�
 - リスト操作: `cons`・`head`・`tail`・`index`・`is_empty`・`concat`・`map_term`・`fold`・`foldr`・`list_all`・`empty`
 - 真偽値: `true`・`false`・`if_then_else`・`boolean_and`・`boolean_or`・`boolean_not`・`equal`・`less_than`・`guard`
 - 整数: `plus`・`minus`・`times`・`div`・`mod`・`integer_sum`
-- レコード: `has_label`・`list_labels`・`add_attribute`・`remove_attribute`・`overwrite_record`・`empty_record`
+- レコード: `has_label`・`add_attribute`・`remove_attribute`・`overwrite_record`・`empty_record`
 - 文字列: `format_string`
 - クラス／オブジェクト: `define_class`・`instantiate`・`type_of`・`is_subtype`・`base_class`
 - その他: `fix`・`repeat`・`undefined`

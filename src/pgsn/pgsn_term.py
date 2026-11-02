@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import functools
+import re
 from abc import ABC, abstractmethod
 from typing import Any
 from typing import TypeAlias
@@ -159,7 +160,9 @@ class Term(ABC):
     def _eval_or_none(self):
         pass
 
-    # If None is returned, the reduction is terminated.
+    # If None is returned, the reduction is terminated. A term returned is a
+    # reduction, even when it equals the term reduced: (λx. x x)(λx. x x)
+    # reduces to itself.
     def eval_or_none(self):
         if self.is_named:
             t = self.remove_name()
@@ -167,7 +170,6 @@ class Term(ABC):
             t = self
         evaluated = t._eval_or_none()
         assert (evaluated is None) or (not evaluated.is_named)
-        assert (evaluated is None) or (evaluated != t)  # should progress
         return evaluated
 
     def eval(self) -> Term:
@@ -179,9 +181,9 @@ class Term(ABC):
     # FIXME: Use contexts in intermediate steps, not terms
     def fully_eval(self, steps=DEFAULT_STEPS) -> Term:
         t = self if not self.is_named else self.remove_name()
-        for _ in range(steps):
+        # `steps` steps that reduce, and one more that finds nothing to reduce.
+        for _ in range(steps + 1):
             t_reduced = t.eval_or_none()
-            assert t_reduced is None or t_reduced != t  # should progress
             if t_reduced is None:
                 return t
             t = t_reduced
@@ -785,8 +787,8 @@ class PGSNClass(Unary):
 
     def _free_variables(self) -> set[str]:
         vars_inherit = self.inherit.free_variables() if self.inherit is not None else set()
-        vars_defaults = set(t.free_variables() for t in self.defaults().values())
-        vars_methods = set(t.free_variables() for t in self.methods().values())
+        vars_defaults = set().union(*(t.free_variables() for t in self.defaults().values()))
+        vars_methods = set().union(*(t.free_variables() for t in self.methods().values()))
         return vars_inherit | vars_defaults | vars_methods
 
     def _apply_arg(self, arg: Term) -> Term:
@@ -966,8 +968,8 @@ class PGSNObject(Unary):
 
     def _free_variables(self) -> set[str]:
         vars_instance = self.instance.free_variables()
-        vars_attributes = set(t.free_variables() for t in self.attributes().values())
-        vars_methods = set(t.free_variables() for t in self.methods().values())
+        vars_attributes = set().union(*(t.free_variables() for t in self.attributes().values()))
+        vars_methods = set().union(*(t.free_variables() for t in self.methods().values()))
         return vars_instance | vars_attributes | vars_methods
 
     def _apply_arg(self, arg: Term) -> Term:
@@ -1065,27 +1067,6 @@ class Index(ConstMixin, Builtin):
             raise PGSNIndexError(f"Index: index {args[1].value} is out of range "
                                  f"for a list of length {len(terms)}")
         return terms[args[1].value]
-
-
-@frozen
-class Fold(ConstMixin, Builtin):
-
-    @classmethod
-    def build(cls, is_named: bool, **kwarg) -> Term:
-        return super().build(arity=3, is_named=is_named, **kwarg)
-
-    def _apply_args(self, args: tuple[Term,...]) -> Term:
-        if not isinstance(args[2], List):
-            raise self._type_error("the third argument", "a list", args[2])
-        fun = args[0]
-        init = args[1]
-        arg_list = args[2].terms
-        if len(arg_list) == 0:
-            return init
-        list_head = arg_list[0]
-        list_rest = arg_list[1:]
-        rest = List(terms=list_rest, is_named=self.is_named)
-        return fun(list_head)(self(fun)(init)(rest))
 
 
 @frozen
@@ -1320,16 +1301,6 @@ class RemoveAttribute(ConstMixin, Builtin):
 
 
 @frozen
-class ListLabels(ConstMixin, Unary):
-
-    def _apply_arg(self, term: Term) -> Term:
-        if not isinstance(term, Record):
-            raise self._type_error("the argument", "a record", term)
-        labels = map(lambda l: String.build(is_named=self.is_named, value=l), term.attributes())
-        return List.build(is_named=self.is_named, terms=tuple(labels))
-
-
-@frozen
 class OverwriteRecord(ConstMixin, Builtin):
 
     @classmethod
@@ -1348,6 +1319,15 @@ class OverwriteRecord(ConstMixin, Builtin):
         return Record.build(is_named=self.is_named, attributes=r)
 
 
+# A format string is text with fields: `{label}` is replaced by the field of
+# that label, and `{{` and `}}` stand for the braces themselves. Nothing else
+# happens between the braces -- what is written there is a label, looked up as
+# it stands -- so the format string is never handed to Python's own
+# formatting, which would read attribute and index references, conversions
+# and format specifications out of it.
+_FORMAT_PIECE = re.compile(r"\{\{|\}\}|\{([^{}]*)\}|[{}]|[^{}]+")
+
+
 @frozen
 class Formatter(ConstMixin, Builtin):
 
@@ -1362,19 +1342,29 @@ class Formatter(ConstMixin, Builtin):
             raise self._type_error("the format string", "a string", terms[0])
         if not isinstance(terms[1], Record):
             raise self._type_error("the fields", "a record", terms[1])
-        # to_python raises ValueError, and only it, on a field that is not a value.
-        try:
-            python_vals = to_python(terms[1])
-        except ValueError:
-            raise PGSNTypeError("Formatter: every field must be a value")
-        # The format string comes from the document, so whatever it does wrong
-        # is a mistake in the document.
-        try:
-            formatted = terms[0].value.format(**python_vals)
-        except (KeyError, IndexError, AttributeError, TypeError, ValueError) as e:
-            raise PGSNValueError(f"Formatter: the format string cannot be filled in "
-                                 f"({type(e).__name__}: {e})")
-        return String.build(is_named=self.is_named, value=formatted)
+        fields = terms[1].attributes()
+        pieces = []
+        for m in _FORMAT_PIECE.finditer(terms[0].value):
+            piece = m.group()
+            if piece == "{{" or piece == "}}":
+                pieces.append(piece[0])
+            elif m.group(1) is not None:
+                pieces.append(self._show(m.group(1), fields))
+            elif piece in "{}":
+                raise PGSNValueError(f"Formatter: an unmatched {piece!r} in the format string")
+            else:
+                pieces.append(piece)
+        return String.build(is_named=self.is_named, value="".join(pieces))
+
+    # Only a string, an integer or a boolean is shown.
+    def _show(self, label: str, fields: dict[str, Term]) -> str:
+        if label not in fields:
+            raise PGSNKeyError(f"Formatter: there is no field {label!r}")
+        value = fields[label]
+        if not isinstance(value, (String, Integer, Boolean)):
+            raise self._type_error(f"the field {label!r}",
+                                   "a string, an integer or a boolean", value)
+        return str(value.value)
 
 
 

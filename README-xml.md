@@ -111,7 +111,7 @@ Writing arithmetic with `<apply>` is heavy, so `<expr>` accepts the usual infix 
 | arithmetic | `+`, `-`, `*`, `//`, `%`, and unary `-` |
 | comparison | `==`, `!=`, `<`, `<=`, `>`, `>=` |
 | boolean | `and`, `or`, `not` |
-| f-strings | `f"component {i} of {total}"`, including format specifications such as `{i:>3}` |
+| f-strings | `f"component {i} of {total}"` |
 
 Everything else is rejected with an error naming what was found. There are no function calls, no attribute access and no subscripting: use `<apply>`, `<get>` and the list elements, which state plainly what they do.
 
@@ -415,7 +415,7 @@ The following names are predefined; reference them with `<var name="..."/>` and 
 - List operations: `cons`, `head`, `tail`, `index`, `is_empty`, `concat`, `map_term`, `fold`, `foldr`, `list_all`, `empty`
 - Booleans: `true`, `false`, `if_then_else`, `boolean_and`, `boolean_or`, `boolean_not`, `equal`, `less_than`, `guard`
 - Integers: `plus`, `minus`, `times`, `div`, `mod`, `integer_sum`
-- Records: `has_label`, `list_labels`, `add_attribute`, `remove_attribute`, `overwrite_record`, `empty_record`
+- Records: `has_label`, `add_attribute`, `remove_attribute`, `overwrite_record`, `empty_record`
 - Strings: `format_string`
 - Classes / objects: `define_class`, `instantiate`, `type_of`, `is_subtype`, `base_class`
 - Misc: `fix`, `repeat`, `undefined`

@@ -165,7 +165,6 @@ def test_record():
     assert not has_label(r)(c).fully_eval().value
     assert has_label(remove_attribute(r)(b))(a).fully_eval().value
     assert not has_label(remove_attribute(r)(b))(b).fully_eval().value
-    assert list_labels(r).fully_eval() == pgsn_term.List.named(terms=(a, b)).fully_eval()
     r1 = record({'c': two})
     assert overwrite_record(r)(r1)(a).fully_eval().value == 0
     assert overwrite_record(r)(r1)(c).fully_eval().value == 2
@@ -257,8 +256,8 @@ def test_value_of():
 
 
 def test_format():
-    f_string = string('{x}, {y}, {z}')
-    assert pgsn_term.value_of(format_string(f_string, {'x':1, 'y': 'hoge', 'z': [1, 2]})) == '1, hoge, [1, 2]'
+    f_string = string('{x}, {y}, {{z}}')
+    assert pgsn_term.value_of(format_string(f_string, {'x':1, 'y': 'hoge'})) == '1, hoge, {z}'
 
 
 
@@ -301,3 +300,21 @@ def test_diverging_term_really_diverges():
     # Guards the tests above: they would pass trivially if `_diverging` stopped.
     with pytest.raises(pgsn_term.LambdaInterpreterError):
         _diverging.fully_eval(steps=1000)
+
+
+def test_a_term_that_reduces_to_itself_runs_into_the_step_limit():
+    x = variable('x')
+    omega = lambda_abs(x, x(x))
+    with pytest.raises(pgsn_term.LambdaInterpreterError):
+        omega(omega).fully_eval(steps=100)
+    with pytest.raises(pgsn_term.LambdaInterpreterError):
+        list_term((omega(omega),)).fully_eval(steps=100)
+
+
+def test_the_step_limit_counts_steps():
+    # One step, so a limit of one is enough and a limit of none is not.
+    assert plus(1)(1).fully_eval(steps=1).value == 2
+    with pytest.raises(pgsn_term.LambdaInterpreterError):
+        plus(1)(1).fully_eval(steps=0)
+    # A value needs no step at all.
+    assert integer(1).fully_eval(steps=0).value == 1

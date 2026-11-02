@@ -39,12 +39,16 @@ Python values are cast automatically where a term is expected, so `pgsn.string("
 ### Evaluation
 
 ```python
-term.eval()                  # one reduction step
-term.fully_eval()            # reduce to a weak normal form, default steps=1000000
-term.fully_eval(steps=5000)  # with an explicit budget
+term.fully_eval()            # evaluate the whole term, with the default limit steps=1000000
+term.fully_eval(steps=5000)  # with a limit of your own
+term.eval()                  # one step only, for following an evaluation by hand
 ```
 
-`fully_eval` returns the term unchanged if it is already a weak normal form. Evaluation does not enter the body of a function — a function is a value — while the elements of a list, the fields of a record and the attributes of an object are reduced throughout, which is what `python_value` needs. The `steps` budget bounds the number of reductions, not wall-clock time: a term that grows as it reduces can exhaust your patience well before it exhausts the budget. A term with unbound variables, or one applied to the wrong kind of argument, does not fail — it simply gets stuck, and the stuck term is what you get back. [PGSN-implementation.md](PGSN-implementation.md) explains the choice.
+Build the whole term first, then evaluate it once. What evaluation returns is a result to read: pass it to `python_value`, `gsn_tree` or a renderer. It is not material for building another term — applying it to something, or passing it as an argument, is not supported and does not work.
+
+`steps` is a safety limit. One step is one call of `eval()`, and evaluation stops with an error when the limit is reached. The default is enough for ordinary documents; raise it only when a large one reaches it. How steps are counted may change in a future version.
+
+A mistake in the term — a label the record does not have, an argument of the wrong kind, a name that is not defined — does not stop evaluation with an error. That part of the term is left as it is, and the error comes when you read the result: `python_value` reports where evaluation could not go on. [PGSN-implementation.md](PGSN-implementation.md) explains why.
 
 ---
 
@@ -91,7 +95,7 @@ These are terms, not Python functions: they are values you apply. XML exposes ex
 
 **Integers** — `plus`, `minus`, `times`, `div`, `mod`, `integer_sum`, `repeat`
 
-**Records** — `has_label`, `list_labels`, `add_attribute`, `remove_attribute`, `overwrite_record`, `empty_record`
+**Records** — `has_label`, `add_attribute`, `remove_attribute`, `overwrite_record`, `empty_record`
 
 **Strings** — `format_string`
 
@@ -258,7 +262,7 @@ term = pgsn.load_xml("main.xml")
 term = pgsn.load_xml_string(source)
 ```
 
-Both compile *and* evaluate, returning a weak normal form. The document syntax is described in [README-xml.md](README-xml.md).
+Both compile *and* evaluate, so what they return is a result, as described under [Evaluation](#evaluation): read it, do not build on it. The document syntax is described in [README-xml.md](README-xml.md).
 
 Both also take `steps`, which bounds the evaluation exactly as it does in `fully_eval`. Omitting it leaves the default budget in place, and there is one such budget: the same number the `pgsn` command starts from, so a document the command evaluates is one a program evaluates too. A document large enough to exhaust it is not thereby wrong, so a caller who knows better says so:
 
