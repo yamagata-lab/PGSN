@@ -253,6 +253,18 @@ def test_value_of():
     assert pgsn_term.value_of(string('hoge')) == 'hoge'
     assert pgsn_term.value_of(id_f(['gaga', 'piyo'])) == ['gaga', 'piyo']
     assert pgsn_term.value_of(id_f({'gaga':1, 'piyo':2})) == {'gaga':1, 'piyo':2}
+    assert pgsn_term.value_of(id_f(('gaga', 'piyo'))) == ['gaga', 'piyo']
+
+
+@pytest.mark.parametrize("value", (1.5, None, {1, 2}), ids=("float", "None", "set"))
+def test_a_python_value_with_no_term_is_refused(value):
+    with pytest.raises(TypeError, match="cannot be made into a PGSN term"):
+        id_f(value)
+
+
+def test_record_labels_must_be_strings():
+    with pytest.raises(TypeError, match="record labels must be strings"):
+        id_f({1: 'one'})
 
 
 def test_format():

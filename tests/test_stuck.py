@@ -13,6 +13,8 @@ evaluated as far as it goes, and it separates "no answer" from a wrong answer
 or a crash.
 """
 
+import re
+
 import pytest
 
 from pgsn import pgsn_term
@@ -123,6 +125,22 @@ def test_conversion_to_gsn_reports_a_stuck_term():
                           support=undeveloped))
     with pytest.raises(ValueError, match=r"at path '<root>\.description'"):
         gsn_tree(node)
+
+
+# Readback says why it found no value, in the terms the document was written in.
+READBACK_REASONS = {
+    "a builtin declined": (STUCK["missing record key"],
+                           "evaluation stopped here: PGSNKeyError: Record: there is no label 'b'"),
+    "an undefined name applied": (variable('f')(integer(1)), "name 'f' is not defined"),
+    "an undefined name": (variable('q'), "name 'q' is not defined"),
+    "a function": (_identity, "a function is not a value"),
+}
+
+
+@pytest.mark.parametrize("term, reason", READBACK_REASONS.values(), ids=READBACK_REASONS.keys())
+def test_readback_says_why(term, reason):
+    with pytest.raises(ValueError, match=re.escape(reason)):
+        python_value(_evaluate(term))
 
 
 # ---------------------------------------------------------------------------

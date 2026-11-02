@@ -65,9 +65,12 @@ class PGSNValueError(PGSNRuntimeError):
 DEFAULT_STEPS = 1_000_000
 
 
-Castable: TypeAlias = "Term | int | str | bool | list | dict"
+Castable: TypeAlias = "Term | int | str | bool | list | tuple | dict"
 
 
+# A Python value passed where a term is expected. A tuple is a list, as it is
+# for `list_term`. Anything else is a mistake in the calling program, and is
+# reported as one.
 def cast(x: Castable, is_named: bool) -> Term:
     match x:
         case Term():
@@ -78,14 +81,18 @@ def cast(x: Castable, is_named: bool) -> Term:
             return Boolean.build(is_named=is_named, value=x)
         case int():
             return Integer.build(is_named=is_named, value=x)
-        case list():
-            y = [cast(z, is_named=is_named) for z in x]
+        case list() | tuple():
+            y = tuple(cast(z, is_named=is_named) for z in x)
             return List.build(is_named=is_named, terms=y)
         case dict():
+            for k in x:
+                if not isinstance(k, str):
+                    raise TypeError(f"record labels must be strings, got {type(k).__name__}")
             y = {k: cast(z, is_named=is_named) for k, z in x.items()}
             return Record.build(is_named=is_named, attributes=y)
         case _:
-            assert False
+            raise TypeError(f"a Python {type(x).__name__} cannot be made into a PGSN term: "
+                            f"use str, int, bool, list, tuple, dict or a term")
 
 
 class ConstMixin(ABC):
@@ -336,9 +343,13 @@ class Variable(Term):
         else:
             return None
 
+    # The name is kept in meta_info, so that a variable left unbound can still
+    # be reported by name once the term has been evaluated.
     def _remove_name_with_context(self, context: list[str]) -> Term:
         num = context.index(self.name)
-        return self.evolve(num=num)
+        nameless = self.evolve(num=num)
+        nameless.add_metainfo("name", self.name)
+        return nameless
 
 
 @frozen
@@ -1381,55 +1392,8 @@ class Formatter(ConstMixin, Builtin):
 
 
 
-def _find_open_variables(t: Term) -> list[int]:
-    """Return de Bruijn indices of free (unbound) Variables remaining in a nameless term.
-
-    A nameless Variable with num >= 0 that survived full_eval is an open term —
-    it was never substituted, which means some lambda abstraction is still unapplied.
-    """
-    match t:
-        case Variable():
-            return [t.num]
-        case App():
-            return _find_open_variables(t.t1) + _find_open_variables(t.t2)
-        case Abs():
-            # Variables with num == 0 are bound by this Abs; shift index for callers.
-            return [i - 1 for i in _find_open_variables(t.t) if i > 0]
-        case List():
-            result = []
-            for item in t.terms:
-                result.extend(_find_open_variables(item))
-            return result
-        case Record():
-            result = []
-            for _, v in t.attributes().items():
-                result.extend(_find_open_variables(v))
-            return result
-        case PGSNObject():
-            result = []
-            for _, v in t.attributes().items():
-                result.extend(_find_open_variables(v))
-            return result
-        case _:
-            return []
-
-
 def value_of(term: Term, steps=DEFAULT_STEPS, with_inherit_chain=False) -> Any:
-    t = term.fully_eval(steps)
-
-    # Detect open terms (unapplied lambdas / unsubstituted variables) before
-    # attempting conversion, so we can emit a meaningful diagnostic instead of
-    # a cryptic "does not normalizes" error later.
-    open_indices = _find_open_variables(t)
-    if open_indices:
-        raise ValueError(
-            f"PGSN term did not fully evaluate: open (unbound) de Bruijn "
-            f"indices {sorted(set(open_indices))} remain in the normalised term. "
-            f"This usually means a lambda is still waiting for an argument. "
-            f"Partial term (first 300 chars): {repr(t)[:300]}"
-        )
-
-    return to_python(t, with_inherit_chain=with_inherit_chain)
+    return to_python(term.fully_eval(steps), with_inherit_chain=with_inherit_chain)
 
 
 def to_python(t: Term, with_inherit_chain=False, _path: str = "<root>") -> Any:
@@ -1492,9 +1456,24 @@ def to_python(t: Term, with_inherit_chain=False, _path: str = "<root>") -> Any:
             # stuck node without having to inspect the entire term tree manually.
             raise ValueError(
                 f"PGSN term cannot be converted to a Python value at path '{_path}': "
-                f"unexpected term type {type(t).__name__}. "
+                f"{_why_not_a_value(t)}. "
                 f"Term (first 200 chars): {repr(t)[:200]}"
             )
+
+
+# What readback tells the user about a term it met in place of a value.
+def _why_not_a_value(t: Term) -> str:
+    if "error" in t.meta_info:
+        return f"evaluation stopped here: {t.meta_info['error']}"
+    head = t
+    while isinstance(head, App):
+        head = head.t1
+    if isinstance(head, Variable):
+        name = head.meta_info.get("name")
+        return f"name {name!r} is not defined" if name is not None else "a name is not defined"
+    if isinstance(t, Abs):
+        return "a function is not a value; an argument may be missing"
+    return f"unexpected term type {type(t).__name__}"
 
 
 # Evaluation Context
