@@ -137,7 +137,6 @@ head = Head.named()
 tail = Tail.named()
 index = Index.named()
 is_empty = IsEmpty.named()
-#fold = Fold.named()
 map_term = Map.named()
 
 _elem = variable('elem')
@@ -189,7 +188,6 @@ def record(d: dict[str, Term]):
 
 empty_record = record({})
 has_label = HasLabel.named()
-list_labels = ListLabels.named()
 add_attribute = AddAttribute.named()
 remove_attribute = RemoveAttribute.named()
 overwrite_record = OverwriteRecord.named()

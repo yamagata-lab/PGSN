@@ -16,8 +16,6 @@ def test_metainfo_belongs_to_one_term():
     assert a.meta_info == {'k': 'v'}
     assert b.meta_info == {}
     assert a == b
-    a.def_metainfo('k')
-    assert a.meta_info == {}
 
 
 def test_pgsn_term_id():

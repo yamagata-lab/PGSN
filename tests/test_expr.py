@@ -166,8 +166,16 @@ def test_fstring_interpolates_expressions():
     assert expr('f"{n} + 1 = {n + 1}"', DEFS) == "3 + 1 = 4"
 
 
-def test_fstring_keeps_format_specs():
-    assert expr('f"[{n:>4}]"', DEFS) == "[   3]"
+def test_fstring_refuses_format_specs():
+    with pytest.raises(PGSNError, match="format specification"):
+        expr('f"[{n:>4}]"', DEFS)
+
+
+def test_fstring_refuses_conversions():
+    with pytest.raises(PGSNError, match="conversion"):
+        expr('f"{who!r}"', DEFS)
+    with pytest.raises(PGSNError, match="conversion"):
+        expr('f"{who=}"', DEFS)
 
 
 def test_fstring_without_fields_is_a_plain_string():
@@ -177,11 +185,6 @@ def test_fstring_without_fields_is_a_plain_string():
 
 def test_fstring_escapes_literal_braces():
     assert expr('f"{{literal}} {n}"', DEFS) == "{literal} 3"
-
-
-def test_computed_format_spec_is_rejected():
-    with pytest.raises(PGSNError, match="computed format specification"):
-        expr('f"{n:{n}}"', DEFS)
 
 
 # ------------------------------------------------------------------ #

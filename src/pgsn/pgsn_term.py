@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import functools
+import re
 from abc import ABC, abstractmethod
 from typing import Any
 from typing import TypeAlias
@@ -64,9 +65,12 @@ class PGSNValueError(PGSNRuntimeError):
 DEFAULT_STEPS = 1_000_000
 
 
-Castable: TypeAlias = "Term | int | str | bool | list | dict"
+Castable: TypeAlias = "Term | int | str | bool | list | tuple | dict"
 
 
+# A Python value passed where a term is expected. A tuple is a list, as it is
+# for `list_term`. Anything else is a mistake in the calling program, and is
+# reported as one.
 def cast(x: Castable, is_named: bool) -> Term:
     match x:
         case Term():
@@ -77,14 +81,18 @@ def cast(x: Castable, is_named: bool) -> Term:
             return Boolean.build(is_named=is_named, value=x)
         case int():
             return Integer.build(is_named=is_named, value=x)
-        case list():
-            y = [cast(z, is_named=is_named) for z in x]
+        case list() | tuple():
+            y = tuple(cast(z, is_named=is_named) for z in x)
             return List.build(is_named=is_named, terms=y)
         case dict():
+            for k in x:
+                if not isinstance(k, str):
+                    raise TypeError(f"record labels must be strings, got {type(k).__name__}")
             y = {k: cast(z, is_named=is_named) for k, z in x.items()}
             return Record.build(is_named=is_named, attributes=y)
         case _:
-            assert False
+            raise TypeError(f"a Python {type(x).__name__} cannot be made into a PGSN term: "
+                            f"use str, int, bool, list, tuple, dict or a term")
 
 
 class ConstMixin(ABC):
@@ -110,7 +118,6 @@ class ConstMixin(ABC):
 
 @frozen(kw_only=True, cache_hash=True)
 class Term(ABC):
-    # meta_info is always not empty
     meta_info: dict = field(default={}, eq=False)
     is_named: bool = field(validator=helpers.not_none)
     # Cache for free_bound(). Terms are immutable, so it is computed at most once.
@@ -136,11 +143,6 @@ class Term(ABC):
         if self.meta_info.get(k) != v:
             object.__setattr__(self, "meta_info", self.meta_info | {k: v})
 
-    def def_metainfo(self, k):
-        meta_info = dict(self.meta_info)
-        del meta_info[k]
-        object.__setattr__(self, "meta_info", meta_info)
-
     # Keeps the reason evaluation stopped at this term, under "error". Being
     # stuck is not progress, so the term is annotated in place rather than
     # evolved.
@@ -148,18 +150,18 @@ class Term(ABC):
         self.add_metainfo("error", f"{type(e).__name__}: {e}")
 
     def evolve(self, **kwarg):
-        evolved = self._evolve(**kwarg)
-        return evolve(evolved)
+        return self._evolve(**kwarg)
 
     def _evolve(self, **kwarg):
         return evolve(self, **kwarg)
 
-    # Only application becomes closure, otherwise None
     @abstractmethod
     def _eval_or_none(self):
         pass
 
-    # If None is returned, the reduction is terminated.
+    # If None is returned, the reduction is terminated. A term returned is a
+    # reduction, even when it equals the term reduced: (λx. x x)(λx. x x)
+    # reduces to itself.
     def eval_or_none(self):
         if self.is_named:
             t = self.remove_name()
@@ -167,7 +169,6 @@ class Term(ABC):
             t = self
         evaluated = t._eval_or_none()
         assert (evaluated is None) or (not evaluated.is_named)
-        assert (evaluated is None) or (evaluated != t)  # should progress
         return evaluated
 
     def eval(self) -> Term:
@@ -179,9 +180,9 @@ class Term(ABC):
     # FIXME: Use contexts in intermediate steps, not terms
     def fully_eval(self, steps=DEFAULT_STEPS) -> Term:
         t = self if not self.is_named else self.remove_name()
-        for _ in range(steps):
+        # `steps` steps that reduce, and one more that finds nothing to reduce.
+        for _ in range(steps + 1):
             t_reduced = t.eval_or_none()
-            assert t_reduced is None or t_reduced != t  # should progress
             if t_reduced is None:
                 return t
             t = t_reduced
@@ -334,9 +335,13 @@ class Variable(Term):
         else:
             return None
 
+    # The name is kept in meta_info, so that a variable left unbound can still
+    # be reported by name once the term has been evaluated.
     def _remove_name_with_context(self, context: list[str]) -> Term:
         num = context.index(self.name)
-        return self.evolve(num=num)
+        nameless = self.evolve(num=num)
+        nameless.add_metainfo("name", self.name)
+        return nameless
 
 
 @frozen
@@ -364,9 +369,8 @@ class Abs(Term):
             assert False
 
     # Evaluation stops at an abstraction and leaves its body as written, so a
-    # term evaluates to a weak normal form. Every term the evaluator reduces is
-    # then closed, which keeps builtin reductions stable under substitution,
-    # and recursion through `fix` cannot unfold under a binder.
+    # term evaluates to a weak normal form, and recursion through `fix` cannot
+    # unfold under a binder.
     def _eval_or_none(self) -> Term | None:
         return None
 
@@ -437,17 +441,9 @@ class App(Term):
         else:
             assert False
 
-    def to_context(self) -> Context:
-        if isinstance(self.t1, App):
-            return self.t1.to_context().stack(self.t2)
-        else:
-            return Context.build(head=self.t1, args=(self.t2,))
-
     def _eval_or_none(self):
-        if isinstance(self.t1, App):
-            c = self.t1.to_context().stack(self.t2)
-        else:
-            c = Context.build(head=self.t1, args=(self.t2,))
+        # Context.build unwinds the applications on the left into the spine.
+        c = Context.build(head=self.t1, args=(self.t2,))
         c_reduced = c.reduce_or_declined()
         if isinstance(c_reduced, PGSNRuntimeError):
             self.mark_stuck(c_reduced)
@@ -490,7 +486,6 @@ class App(Term):
 @frozen
 class Builtin(Term, ABC):
 
-    # hack.  the default is an invalid value
     arity: int = field(validator=[helpers.not_none, helpers.non_negative])
 
     # The result of applying the builtin. When the arguments do not meet its
@@ -609,19 +604,30 @@ class List(Unary):
         return List.nameless(meta_info=self.meta_info,
                              terms=tuple(t.remove_name_with_context(context) for t in self.terms))
 
+    # A negative index counts from the end, as in Python and as `Index` does.
     def _apply_arg(self, term: Term) -> Term:
         if not isinstance(term, Integer):
             raise self._type_error("the index", "an integer", term)
-        if not 0 <= term.value < len(self.terms):
+        if not -len(self.terms) <= term.value < len(self.terms):
             raise PGSNIndexError(f"List: index {term.value} is out of range "
                                  f"for a list of length {len(self.terms)}")
         return self.terms[term.value]
 
 
+# The dicts and sets inside a term are plain, for ease of writing, and are
+# never changed once the term is built: each is copied when the term is made,
+# every accessor hands out a copy, and a changed term is a new one, made with
+# evolve. That is what lets a term be compared and hashed by them. Equality
+# and the hash read a dict through this key, so the order of the entries plays
+# no part, as it plays none in `==`.
+def _entries(d: dict) -> frozenset:
+    return frozenset(d.items())
+
+
 @frozen
 class Record(Unary):
     _attributes: dict[str, Term] = \
-        field(validator=helpers.not_none)
+        field(converter=dict, eq=_entries, validator=helpers.not_none)
 
     def __attrs_post_init__(self):
         assert all(isinstance(k, str) for k in self.attributes().keys())
@@ -692,9 +698,12 @@ class PGSNClass(Unary):
 
     inherit: PGSNClass | None = field()
     name: str | None = field()
-    _defaults: dict[str, Term] = field(default={}, validator=helpers.not_none)
-    _attributes: set[str, ...] = field(default=set(), validator=helpers.not_none)
-    _methods: dict[str, Term] = field(default={}, validator=helpers.not_none)
+    _defaults: dict[str, Term] = field(default={}, converter=dict, eq=_entries,
+                                       validator=helpers.not_none)
+    _attributes: set[str, ...] = field(default=set(), converter=set, eq=frozenset,
+                                       validator=helpers.not_none)
+    _methods: dict[str, Term] = field(default={}, converter=dict, eq=_entries,
+                                      validator=helpers.not_none)
 
     def __attrs_post_init__(self):
         assert all(k in self._attributes for k in self._defaults.keys())
@@ -714,13 +723,13 @@ class PGSNClass(Unary):
             defaults = inherit.defaults() | defaults
             attributes = set(inherit.attributes()) | set(attributes)
             methods = inherit.methods() | methods
-        return super().build(is_named=is_named, name=name, inherit=inherit, defaults=defaults.copy(), attributes=attributes, methods=methods.copy())
+        return super().build(is_named=is_named, name=name, inherit=inherit, defaults=defaults.copy(), attributes=set(attributes), methods=methods.copy())
 
     def defaults(self):
         return self._defaults.copy()
 
     def attributes(self):
-        return self._attributes
+        return self._attributes.copy()
 
     def methods(self):
         return self._methods.copy()
@@ -785,8 +794,8 @@ class PGSNClass(Unary):
 
     def _free_variables(self) -> set[str]:
         vars_inherit = self.inherit.free_variables() if self.inherit is not None else set()
-        vars_defaults = set(t.free_variables() for t in self.defaults().values())
-        vars_methods = set(t.free_variables() for t in self.methods().values())
+        vars_defaults = set().union(*(t.free_variables() for t in self.defaults().values()))
+        vars_methods = set().union(*(t.free_variables() for t in self.methods().values()))
         return vars_inherit | vars_defaults | vars_methods
 
     def _apply_arg(self, arg: Term) -> Term:
@@ -891,9 +900,7 @@ class IsSubtype(ConstMixin, Builtin):
     # `apply_args_or_none` hands over every pending argument, not just the ones
     # this builtin consumes, so the tuple is variadic.
     def _apply_args(self, args: tuple[Term, ...]) -> Term:
-        if not len(args) == 2:
-            raise PGSNTypeError(f"IsSubtype: there must be exactly 2 arguments, got {len(args)}")
-        for arg in args:
+        for arg in args[:2]:
             if not isinstance(arg, PGSNClass):
                 raise self._type_error("both arguments", "classes", arg)
         sub = args[0]
@@ -907,8 +914,8 @@ class IsSubtype(ConstMixin, Builtin):
 @frozen
 class PGSNObject(Unary):
     instance: PGSNClass = field(validator=helpers.not_none)
-    _attributes: dict[str, Term] = field(validator=helpers.not_none)
-    _methods: dict[str, Term] = field()
+    _attributes: dict[str, Term] = field(converter=dict, eq=_entries, validator=helpers.not_none)
+    _methods: dict[str, Term] = field(converter=dict, eq=_entries)
 
     def attributes(self):
         return self._attributes.copy()
@@ -958,16 +965,13 @@ class PGSNObject(Unary):
         children = [self.instance, *self._attributes.values(), *self._methods.values()]
         return max(t.free_bound() for t in children)
 
-    def _shift(self, num: int, cutoff: int) -> Term:
-        return self._traverse(lambda t: helpers.default(t.shift(num, cutoff), t))
-
     def _subst_or_none(self, variable: int, term: Term) -> Term | None:
         return self._traverse(lambda t: t.subst_or_none(variable, term))
 
     def _free_variables(self) -> set[str]:
         vars_instance = self.instance.free_variables()
-        vars_attributes = set(t.free_variables() for t in self.attributes().values())
-        vars_methods = set(t.free_variables() for t in self.methods().values())
+        vars_attributes = set().union(*(t.free_variables() for t in self.attributes().values()))
+        vars_methods = set().union(*(t.free_variables() for t in self.methods().values()))
         return vars_instance | vars_attributes | vars_methods
 
     def _apply_arg(self, arg: Term) -> Term:
@@ -1065,27 +1069,6 @@ class Index(ConstMixin, Builtin):
             raise PGSNIndexError(f"Index: index {args[1].value} is out of range "
                                  f"for a list of length {len(terms)}")
         return terms[args[1].value]
-
-
-@frozen
-class Fold(ConstMixin, Builtin):
-
-    @classmethod
-    def build(cls, is_named: bool, **kwarg) -> Term:
-        return super().build(arity=3, is_named=is_named, **kwarg)
-
-    def _apply_args(self, args: tuple[Term,...]) -> Term:
-        if not isinstance(args[2], List):
-            raise self._type_error("the third argument", "a list", args[2])
-        fun = args[0]
-        init = args[1]
-        arg_list = args[2].terms
-        if len(arg_list) == 0:
-            return init
-        list_head = arg_list[0]
-        list_rest = arg_list[1:]
-        rest = List(terms=list_rest, is_named=self.is_named)
-        return fun(list_head)(self(fun)(init)(rest))
 
 
 @frozen
@@ -1320,16 +1303,6 @@ class RemoveAttribute(ConstMixin, Builtin):
 
 
 @frozen
-class ListLabels(ConstMixin, Unary):
-
-    def _apply_arg(self, term: Term) -> Term:
-        if not isinstance(term, Record):
-            raise self._type_error("the argument", "a record", term)
-        labels = map(lambda l: String.build(is_named=self.is_named, value=l), term.attributes())
-        return List.build(is_named=self.is_named, terms=tuple(labels))
-
-
-@frozen
 class OverwriteRecord(ConstMixin, Builtin):
 
     @classmethod
@@ -1348,6 +1321,15 @@ class OverwriteRecord(ConstMixin, Builtin):
         return Record.build(is_named=self.is_named, attributes=r)
 
 
+# A format string is text with fields: `{label}` is replaced by the field of
+# that label, and `{{` and `}}` stand for the braces themselves. Nothing else
+# happens between the braces -- what is written there is a label, looked up as
+# it stands -- so the format string is never handed to Python's own
+# formatting, which would read attribute and index references, conversions
+# and format specifications out of it.
+_FORMAT_PIECE = re.compile(r"\{\{|\}\}|\{([^{}]*)\}|[{}]|[^{}]+")
+
+
 @frozen
 class Formatter(ConstMixin, Builtin):
 
@@ -1356,77 +1338,41 @@ class Formatter(ConstMixin, Builtin):
         return super().build(arity=2, is_named=is_named, **kwarg)
 
     def _apply_args(self, terms: tuple[Term,...]) -> Term:
-        if not len(terms) == 2:
-            raise PGSNTypeError(f"Formatter: there must be exactly 2 arguments, got {len(terms)}")
         if not isinstance(terms[0], String):
             raise self._type_error("the format string", "a string", terms[0])
         if not isinstance(terms[1], Record):
             raise self._type_error("the fields", "a record", terms[1])
-        # to_python raises ValueError, and only it, on a field that is not a value.
-        try:
-            python_vals = to_python(terms[1])
-        except ValueError:
-            raise PGSNTypeError("Formatter: every field must be a value")
-        # The format string comes from the document, so whatever it does wrong
-        # is a mistake in the document.
-        try:
-            formatted = terms[0].value.format(**python_vals)
-        except (KeyError, IndexError, AttributeError, TypeError, ValueError) as e:
-            raise PGSNValueError(f"Formatter: the format string cannot be filled in "
-                                 f"({type(e).__name__}: {e})")
-        return String.build(is_named=self.is_named, value=formatted)
+        fields = terms[1].attributes()
+        pieces = []
+        for m in _FORMAT_PIECE.finditer(terms[0].value):
+            piece = m.group()
+            if piece == "{{" or piece == "}}":
+                pieces.append(piece[0])
+            elif m.group(1) is not None:
+                pieces.append(self._show(m.group(1), fields))
+            elif piece in "{}":
+                raise PGSNValueError(f"Formatter: an unmatched {piece!r} in the format string")
+            else:
+                pieces.append(piece)
+        return String.build(is_named=self.is_named, value="".join(pieces))
 
+    # Only a string, an integer or a boolean is shown, and a boolean as PGSN
+    # writes it.
+    def _show(self, label: str, fields: dict[str, Term]) -> str:
+        if label not in fields:
+            raise PGSNKeyError(f"Formatter: there is no field {label!r}")
+        value = fields[label]
+        if isinstance(value, Boolean):
+            return "true" if value.value else "false"
+        if not isinstance(value, (String, Integer)):
+            raise self._type_error(f"the field {label!r}",
+                                   "a string, an integer or a boolean", value)
+        return str(value.value)
 
-
-def _find_open_variables(t: Term) -> list[int]:
-    """Return de Bruijn indices of free (unbound) Variables remaining in a nameless term.
-
-    A nameless Variable with num >= 0 that survived full_eval is an open term —
-    it was never substituted, which means some lambda abstraction is still unapplied.
-    """
-    match t:
-        case Variable():
-            return [t.num]
-        case App():
-            return _find_open_variables(t.t1) + _find_open_variables(t.t2)
-        case Abs():
-            # Variables with num == 0 are bound by this Abs; shift index for callers.
-            return [i - 1 for i in _find_open_variables(t.t) if i > 0]
-        case List():
-            result = []
-            for item in t.terms:
-                result.extend(_find_open_variables(item))
-            return result
-        case Record():
-            result = []
-            for _, v in t.attributes().items():
-                result.extend(_find_open_variables(v))
-            return result
-        case PGSNObject():
-            result = []
-            for _, v in t.attributes().items():
-                result.extend(_find_open_variables(v))
-            return result
-        case _:
-            return []
 
 
 def value_of(term: Term, steps=DEFAULT_STEPS, with_inherit_chain=False) -> Any:
-    t = term.fully_eval(steps)
-
-    # Detect open terms (unapplied lambdas / unsubstituted variables) before
-    # attempting conversion, so we can emit a meaningful diagnostic instead of
-    # a cryptic "does not normalizes" error later.
-    open_indices = _find_open_variables(t)
-    if open_indices:
-        raise ValueError(
-            f"PGSN term did not fully evaluate: open (unbound) de Bruijn "
-            f"indices {sorted(set(open_indices))} remain in the normalised term. "
-            f"This usually means a lambda is still waiting for an argument. "
-            f"Partial term (first 300 chars): {repr(t)[:300]}"
-        )
-
-    return to_python(t, with_inherit_chain=with_inherit_chain)
+    return to_python(term.fully_eval(steps), with_inherit_chain=with_inherit_chain)
 
 
 def to_python(t: Term, with_inherit_chain=False, _path: str = "<root>") -> Any:
@@ -1489,9 +1435,24 @@ def to_python(t: Term, with_inherit_chain=False, _path: str = "<root>") -> Any:
             # stuck node without having to inspect the entire term tree manually.
             raise ValueError(
                 f"PGSN term cannot be converted to a Python value at path '{_path}': "
-                f"unexpected term type {type(t).__name__}. "
+                f"{_why_not_a_value(t)}. "
                 f"Term (first 200 chars): {repr(t)[:200]}"
             )
+
+
+# What readback tells the user about a term it met in place of a value.
+def _why_not_a_value(t: Term) -> str:
+    if "error" in t.meta_info:
+        return f"evaluation stopped here: {t.meta_info['error']}"
+    head = t
+    while isinstance(head, App):
+        head = head.t1
+    if isinstance(head, Variable):
+        name = head.meta_info.get("name")
+        return f"name {name!r} is not defined" if name is not None else "a name is not defined"
+    if isinstance(t, Abs):
+        return "a function is not a value; an argument may be missing"
+    return f"unexpected term type {type(t).__name__}"
 
 
 # Evaluation Context

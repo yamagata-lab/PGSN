@@ -116,3 +116,13 @@ def test_obj_methods():
     assert obj6('v').fully_eval().value == 2
     assert obj5.v.fully_eval().value == 1
     assert obj6.v.fully_eval().value == 2
+
+
+def test_a_class_written_out_with_defaults_and_methods_evaluates():
+    # A class built directly rather than by define_class.
+    written = pgsn.pgsn_term.PGSNClass.named(
+        name="Written", attributes={'a'}, defaults={'a': integer(1)},
+        methods={'m': lambda_abs(self, self('a'))})
+    obj = written({})
+    assert obj('m').fully_eval().value == 1
+    assert python_value(obj.fully_eval()) == {'a': 1, '__Written__': True}

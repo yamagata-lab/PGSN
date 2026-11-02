@@ -95,7 +95,6 @@ from pgsn.dsl import (
     list_all,
     # Records
     has_label,
-    list_labels,
     add_attribute,
     remove_attribute,
     overwrite_record,
@@ -205,7 +204,6 @@ __all__ = [
     "list_all",
     # Records
     "has_label",
-    "list_labels",
     "add_attribute",
     "remove_attribute",
     "overwrite_record",

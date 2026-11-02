@@ -23,7 +23,7 @@ from pgsn.dsl import (
     define_class, instantiate, type_of, is_subtype,
     base_class, undefined, empty,
     boolean_and, boolean_or, boolean_not,
-    has_label, list_labels, add_attribute, remove_attribute, overwrite_record,
+    has_label, add_attribute, remove_attribute, overwrite_record,
     format_string,
     Term,
 )
@@ -413,8 +413,10 @@ def _translate_fstring(node: ast.JoinedStr) -> ET.Element:
     """Expand an f-string into an application of `format_string`.
 
     Each interpolated expression is bound to a generated name in a record, and
-    the template refers to that name, so `str.format` never sees an expression.
-    Literal text is escaped, since the template is a format string.
+    the template refers to that name, so the template holds labels and nothing
+    else. Literal text is escaped, since the template is a format string.
+    Python's conversions and format specifications have no counterpart in a
+    format string, so they are refused here.
     """
     template: list[str] = []
     fields: list[tuple[str, ET.Element]] = []
@@ -424,15 +426,15 @@ def _translate_fstring(node: ast.JoinedStr) -> ET.Element:
             case ast.Constant(value=str() as text):
                 template.append(text.replace("{", "{{").replace("}", "}}"))
             case ast.FormattedValue():
+                if part.conversion != -1:
+                    raise PGSNError("a conversion (!r, !s, !a) is not allowed "
+                                    "in an f-string in <expr>")
+                if part.format_spec is not None:
+                    raise PGSNError("a format specification is not allowed "
+                                    "in an f-string in <expr>")
                 name = f"_e{len(fields)}"
                 fields.append((name, _translate(part.value)))
-                spec = ""
-                if part.format_spec is not None:
-                    spec = _constant_format_spec(part.format_spec)
-                conversion = ""
-                if part.conversion != -1:
-                    conversion = "!" + chr(part.conversion)
-                template.append("{" + name + conversion + spec + "}")
+                template.append("{" + name + "}")
             case _:
                 raise _expr_error(part)
 
@@ -448,17 +450,6 @@ def _translate_fstring(node: ast.JoinedStr) -> ET.Element:
         dd = ET.SubElement(record_elem, "dd")
         dd.append(value)
     return _call_builtin("format_string", text_elem, record_elem)
-
-
-def _constant_format_spec(spec: ast.JoinedStr) -> str:
-    """Accept `{x:>3}` but not a spec that is itself computed."""
-    parts = []
-    for piece in spec.values:
-        if not isinstance(piece, ast.Constant) or not isinstance(piece.value, str):
-            raise PGSNError(
-                "a computed format specification is not allowed in <expr>")
-        parts.append(piece.value)
-    return ":" + "".join(parts)
 
 
 def _replace_with(elem: ET.Element, replacement: ET.Element) -> None:
@@ -661,7 +652,7 @@ _BUILTINS: dict[str, Term] = {
     "plus": plus, "minus": minus, "times": times, "div": div, "mod": mod,
     "boolean_and": boolean_and, "boolean_or": boolean_or,
     "boolean_not": boolean_not, "true": true, "false": false,
-    "has_label": has_label, "list_labels": list_labels,
+    "has_label": has_label,
     "add_attribute": add_attribute, "remove_attribute": remove_attribute,
     "overwrite_record": overwrite_record, "format_string": format_string,
     "empty_record": empty_record, "undefined": undefined,

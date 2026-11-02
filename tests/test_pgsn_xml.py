@@ -291,7 +291,7 @@ def test_type_of_stalls_when_a_label_is_missing(tmp_path):
     """An evidence node carries no `support`, so it does not satisfy Goal. A
     failed check leaves the document unreduced, and the readback says where.
     """
-    with pytest.raises(ValueError, match="unexpected term type"):
+    with pytest.raises(ValueError, match="Guard: the condition is false"):
         run("""
         <PGSN>
             <def name="e" typeOf="Goal">
