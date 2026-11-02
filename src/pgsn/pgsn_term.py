@@ -611,10 +611,11 @@ class List(Unary):
         return List.nameless(meta_info=self.meta_info,
                              terms=tuple(t.remove_name_with_context(context) for t in self.terms))
 
+    # A negative index counts from the end, as in Python and as `Index` does.
     def _apply_arg(self, term: Term) -> Term:
         if not isinstance(term, Integer):
             raise self._type_error("the index", "an integer", term)
-        if not 0 <= term.value < len(self.terms):
+        if not -len(self.terms) <= term.value < len(self.terms):
             raise PGSNIndexError(f"List: index {term.value} is out of range "
                                  f"for a list of length {len(self.terms)}")
         return self.terms[term.value]
@@ -893,9 +894,7 @@ class IsSubtype(ConstMixin, Builtin):
     # `apply_args_or_none` hands over every pending argument, not just the ones
     # this builtin consumes, so the tuple is variadic.
     def _apply_args(self, args: tuple[Term, ...]) -> Term:
-        if not len(args) == 2:
-            raise PGSNTypeError(f"IsSubtype: there must be exactly 2 arguments, got {len(args)}")
-        for arg in args:
+        for arg in args[:2]:
             if not isinstance(arg, PGSNClass):
                 raise self._type_error("both arguments", "classes", arg)
         sub = args[0]
@@ -1336,8 +1335,6 @@ class Formatter(ConstMixin, Builtin):
         return super().build(arity=2, is_named=is_named, **kwarg)
 
     def _apply_args(self, terms: tuple[Term,...]) -> Term:
-        if not len(terms) == 2:
-            raise PGSNTypeError(f"Formatter: there must be exactly 2 arguments, got {len(terms)}")
         if not isinstance(terms[0], String):
             raise self._type_error("the format string", "a string", terms[0])
         if not isinstance(terms[1], Record):

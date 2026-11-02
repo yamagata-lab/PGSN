@@ -267,23 +267,19 @@ def test_a_list_applied_out_of_range_is_stuck(i):
     assert _evaluate(_one_two(i)) == _one_two(i).remove_name()
 
 
-@pytest.mark.xfail(strict=True, reason="a list applied to a negative integer is stuck")
 @pytest.mark.parametrize("i, expected", ((-1, 2), (-2, 1)))
 def test_a_list_applied_to_a_negative_integer_counts_from_the_end(i, expected):
     assert _evaluate(_one_two(i)) == integer(expected).remove_name()
 
 
 # A builtin is handed every pending argument and consumes as many as its arity;
-# the rest are applied to its result. These two wait for exactly their arity
-# instead, so they stop one application early. The result cannot be applied
-# either, so only the place where evaluation stops differs.
-@pytest.mark.xfail(strict=True, reason="Formatter declines arguments beyond its arity")
+# the rest are applied to its result. The result of these two cannot be
+# applied, so what is checked is where evaluation stops.
 def test_formatter_applies_with_arguments_beyond_its_arity():
     term = format_string('{a}')(_a_is_one)(plus(1)(1))
     assert _evaluate(term) == string('1')(2).remove_name()
 
 
-@pytest.mark.xfail(strict=True, reason="IsSubtype declines arguments beyond its arity")
 def test_is_subtype_applies_with_arguments_beyond_its_arity():
     term = is_subtype(_attributes_only)(base_class)(plus(1)(1))
     assert _evaluate(term) == true(2).remove_name()
