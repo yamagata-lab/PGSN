@@ -5,7 +5,7 @@ from pathlib import Path
 import pgsn
 from pgsn.dsl import python_value
 from pgsn.pgsn_term import LambdaInterpreterError
-from pgsn.pgsn_xml import compile_pgsn, PGSNError, load_string
+from pgsn.pgsn_xml import compile_pgsn, PGSNError, load_xml_string
 from pgsn.gsn import gsn_tree
 
 
@@ -606,14 +606,14 @@ class TestPositionalParams:
     keyword args as one trailing Record.
 
     Pipeline under test (mirrors examples/map_term.py):
-        load_string(xml) -> fully-evaluated Term
+        load_xml_string(xml) -> fully-evaluated Term
         pgsn.gsn.gsn_tree(term) -> GSN tree (where a leftover App used to surface
                                    the "does not normalize a Python value" error)
     """
 
     def _to_tree(self, xml: str):
         """Compile + fully_eval, then build the GSN tree. Errors propagate."""
-        term = load_string(xml)
+        term = load_xml_string(xml)
         tree = gsn_tree(term)
         tree.show()
         return tree
@@ -677,7 +677,7 @@ class TestPositionalParams:
         </PGSN>
         """
         with pytest.raises(PGSNError):
-            load_string(xml)
+            load_xml_string(xml)
 
     def test_positional_with_default_rejected(self):
         xml = """
@@ -690,7 +690,7 @@ class TestPositionalParams:
         </PGSN>
         """
         with pytest.raises(PGSNError):
-            load_string(xml)
+            load_xml_string(xml)
 
 
 # ------------------------------------------------------------------ #
