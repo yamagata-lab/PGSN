@@ -150,8 +150,7 @@ class Term(ABC):
         self.add_metainfo("error", f"{type(e).__name__}: {e}")
 
     def evolve(self, **kwarg):
-        evolved = self._evolve(**kwarg)
-        return evolve(evolved)
+        return self._evolve(**kwarg)
 
     def _evolve(self, **kwarg):
         return evolve(self, **kwarg)
