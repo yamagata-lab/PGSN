@@ -131,6 +131,14 @@ it is found during readback rather than where it arose: `python_value` reports
 the path at which it met something that is not a value, which is where the term
 came to rest, not where the key was missing.
 
+What the builtin had to say is kept. A builtin that cannot proceed raises a
+`PGSNRuntimeError`; the evaluator catches it where it applies the builtin and,
+if nothing else in the application can be reduced either, records the message
+under `error` in the `meta_info` of the application it leaves behind. Only
+these are caught. Any other exception is a fault of the interpreter and
+escapes, and so do the step budget and Python's recursion limit, which would
+stop bounding anything if they turned into stuck terms.
+
 ### 1.5 Notes for a virtual machine
 
 A machine with environments and closures removes substitution, and with it the
@@ -162,7 +170,7 @@ objects to be values as well.
 Builtins are best given their arguments unevaluated and left to force what
 they inspect — that is where the knowledge of which argument is needed already
 lives, in the preconditions each `_apply_args` checks before it computes
-anything, and answers `None` to when they fail. The arity is checked once,
+anything, and raises a `PGSNRuntimeError` when they fail. The arity is checked once,
 before any builtin is called. Builtins that build a term containing
 applications (`Map`, a method call on an object) can return that term for the
 machine to continue with, which is what `_apply_args` already does.
