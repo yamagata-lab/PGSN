@@ -182,12 +182,12 @@ def test_evaluation_comes_to_rest_on(term, expected):
     assert _evaluate(term) == expected.remove_name()
 
 
-# A builtin that lets a Python exception escape instead of leaving the
-# application as it stands. Each should come to rest on the term itself.
+# Where Python raises an exception of its own, the builtin declines instead,
+# and evaluation comes to rest on the term itself.
 _one_two = list_term((integer(1), integer(2)))
 _a_is_one = record({'a': integer(1)})
 
-NOT_YET_STUCK = {
+DECLINED_INSTEAD_OF_FAILING = {
     "index out of range": index(_one_two)(5),
     "negative index out of range": index(_one_two)(-3),
     "removing an absent label": remove_attribute(_a_is_one)('b'),
@@ -196,10 +196,58 @@ NOT_YET_STUCK = {
 }
 
 
-@pytest.mark.xfail(strict=True, reason="the builtin does not decline these yet")
-@pytest.mark.parametrize("term", NOT_YET_STUCK.values(), ids=NOT_YET_STUCK.keys())
+@pytest.mark.parametrize("term", DECLINED_INSTEAD_OF_FAILING.values(),
+                         ids=DECLINED_INSTEAD_OF_FAILING.keys())
 def test_a_builtin_declines_instead_of_failing(term):
     assert _evaluate(term) == term.remove_name()
+
+
+# ---------------------------------------------------------------------------
+# A stuck application says why
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("term", [*STUCK.values(), *DECLINED_INSTEAD_OF_FAILING.values()],
+                         ids=[*STUCK.keys(), *DECLINED_INSTEAD_OF_FAILING.keys()])
+def test_a_stuck_application_records_the_reason(term):
+    assert _evaluate(term).meta_info["error"].startswith("PGSN")
+
+
+def test_the_reason_is_the_one_where_evaluation_stopped():
+    stuck = _evaluate(record({'a': integer(1)})('b'))
+    assert stuck.meta_info["error"] == "PGSNKeyError: Record: there is no label 'b'"
+
+
+def test_an_argument_declined_on_the_way_leaves_no_reason():
+    """A builtin declines an argument that is not reduced yet, too, but that
+    is not where evaluation stops."""
+    term = _evaluate(record({'a': plus(plus(1)(2))(3)}))
+    assert "error" not in term.attributes()['a'].meta_info
+
+
+def test_the_reason_is_not_shared_with_other_terms():
+    _evaluate(div(1)(0))
+    assert "error" not in div(1)(1).remove_name().meta_info
+    assert "error" not in integer(0).remove_name().meta_info
+
+
+def test_readback_shows_the_reason():
+    with pytest.raises(ValueError, match="PGSNValueError: Div: division by zero"):
+        python_value(_evaluate(div(1)(0)))
+
+
+# ---------------------------------------------------------------------------
+# A fault of the interpreter is not a stuck term
+# ---------------------------------------------------------------------------
+
+class _Broken(pgsn_term.ConstMixin, pgsn_term.Unary):
+
+    def _apply_arg(self, arg):
+        raise RuntimeError("a fault of the interpreter")
+
+
+def test_a_fault_of_the_interpreter_escapes():
+    with pytest.raises(RuntimeError, match="a fault of the interpreter"):
+        _evaluate(_Broken.named()(integer(1)))
 
 
 # A list applied to an integer is indexed as `index` indexes it: from the end

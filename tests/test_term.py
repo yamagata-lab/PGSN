@@ -8,6 +8,18 @@ def test_var():
     assert (nameless_x.meta_info['name']== 'x')
 
 
+def test_metainfo_belongs_to_one_term():
+    # Both terms start from the shared default meta_info.
+    a = pgsn_term.Integer.nameless(value=1)
+    b = pgsn_term.Integer.nameless(value=1)
+    a.add_metainfo('k', 'v')
+    assert a.meta_info == {'k': 'v'}
+    assert b.meta_info == {}
+    assert a == b
+    a.def_metainfo('k')
+    assert a.meta_info == {}
+
+
 def test_pgsn_term_id():
     x = variable('x')
     id_f = lambda_abs(x, x)
