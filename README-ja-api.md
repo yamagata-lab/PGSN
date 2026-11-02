@@ -103,6 +103,8 @@ pgsn.python_value(double(pgsn.integer(21)).fully_eval())   # 42
 
 `fold` は `foldr` の別名で、左畳み込みはありません。畳み込みは右からで、`f` は要素を先に、accumulator を後に受け取ります。つまり `fold(f)(z)([x1, x2])` は `f(x1)(f(x2)(z))` です。
 
+`index(list)(i)` は `list` の `i` 番目の要素です。添字は 0 から数え、負の添字は Python と同じく末尾から数えます（`-1` が最後の要素）。
+
 ---
 
 ## GSN コンストラクタ

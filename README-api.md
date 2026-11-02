@@ -103,6 +103,8 @@ Note that `fold` takes its arguments as `fold(f)(accumulator)(list)`, and `repea
 
 `fold` is another name for `foldr`; there is no left fold. It folds from the right, and `f` receives an element first and the accumulator second, so `fold(f)(z)([x1, x2])` is `f(x1)(f(x2)(z))`.
 
+`index(list)(i)` is the `i`-th element of `list`, counting from 0. A negative index counts from the end, as in Python (`-1` is the last element).
+
 ---
 
 ## GSN constructors

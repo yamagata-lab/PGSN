@@ -17,6 +17,9 @@ def test_list():
     assert t3.fully_eval() == t.fully_eval()
     assert index(t2)(integer(0)).fully_eval() == d.fully_eval()
     assert index(t2)(integer(1)).fully_eval() == c.fully_eval()
+    # A negative index counts from the end, as in Python.
+    assert index(t2)(integer(-1)).fully_eval() == c.fully_eval()
+    assert index(t2)(integer(-2)).fully_eval() == d.fully_eval()
     assert t3.fully_eval() == t.fully_eval()
 
 

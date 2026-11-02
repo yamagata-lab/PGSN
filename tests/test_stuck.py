@@ -16,9 +16,12 @@ or a crash.
 import pytest
 
 from pgsn import pgsn_term
-from pgsn.dsl import (base_class, define_class, div, equal, integer,
-                      lambda_abs, less_than, list_term, mod, python_value,
-                      record, string, true, undefined, variable)
+from pgsn.dsl import (base_class, define_class, div, equal, format_string,
+                      if_then_else, index, integer, integer_sum, is_subtype,
+                      lambda_abs,
+                      less_than, list_term, map_term, minus, mod, plus,
+                      python_value, record, remove_attribute, string, true,
+                      undefined, variable)
 from pgsn.gsn import goal, gsn_tree, undeveloped
 
 _x = variable('x')
@@ -110,3 +113,119 @@ def test_conversion_to_gsn_reports_a_stuck_term():
                           support=undeveloped))
     with pytest.raises(ValueError, match=r"at path '<root>\.description'"):
         gsn_tree(node)
+
+
+# ---------------------------------------------------------------------------
+# The term evaluation comes to rest on
+# ---------------------------------------------------------------------------
+#
+# Each case pairs a term with the exact term its evaluation stops at. The
+# expected term is written by hand, so a change to where evaluation stops, or
+# to what it leaves around a stuck application, shows up here.
+
+_thunk = variable('_thunk')
+
+SHAPES = {
+    "a builtin keeps arguments it declines":
+        (div(1)(0),
+         div(1)(0)),
+    "arguments are reduced before the builtin declines them":
+        (div(plus(1)(2))(minus(1)(1)),
+         div(3)(0)),
+    "an argument is substituted, then reduced":
+        (lambda_abs(_x, div(_x)(0))(plus(1)(2)),
+         div(3)(0)),
+    "arguments beyond the arity are reduced too":
+        (div(1)(0)(plus(1)(2)),
+         div(1)(0)(3)),
+    "a stuck head keeps its arguments, reduced":
+        (record({'a': integer(1)})('b')(plus(1)(1)),
+         record({'a': integer(1)})('b')(2)),
+    "a stuck argument blocks the builtin that needs it":
+        (plus(div(1)(0))(plus(1)(1)),
+         plus(div(1)(0))(2)),
+    "a stuck argument blocks every builtin above it":
+        (plus(1)(plus(2)(div(1)(0))),
+         plus(1)(plus(2)(div(1)(0)))),
+    "a free variable as head":
+        (variable('f')(plus(1)(1)),
+         variable('f')(2)),
+    "a stuck term is copied wherever it is used":
+        (lambda_abs(_x, list_term((_x, _x)))(div(1)(0)),
+         list_term((div(1)(0), div(1)(0)))),
+    "the other elements of a list are reduced":
+        (list_term((plus(1)(1), div(1)(0), plus(2)(2))),
+         list_term((integer(2), div(1)(0), integer(4)))),
+    "the other fields of a record are reduced":
+        (record({'a': plus(1)(1), 'b': div(1)(0)}),
+         record({'a': integer(2), 'b': div(1)(0)})),
+    "a stuck condition leaves both branches unevaluated":
+        (if_then_else(div(1)(0))(plus(1)(1))(plus(2)(2)),
+         pgsn_term.IfThenElse.named()(div(1)(0))
+         (lambda_abs(_thunk, plus(1)(1)))
+         (lambda_abs(_thunk, plus(2)(2)))
+         (undefined)),
+    "the branch taken is stuck":
+        (if_then_else(true)(div(1)(0))(2),
+         div(1)(0)),
+    "map leaves the stuck element in place":
+        (map_term(lambda_abs(_x, div(6)(_x)))(list_term((integer(1), integer(0), integer(2)))),
+         list_term((integer(6), div(6)(0), integer(3)))),
+    "fold stops at the stuck element and keeps the rest of the sum":
+        (integer_sum(list_term((integer(1), div(1)(0), integer(3)))),
+         plus(1)(plus(div(1)(0))(3))),
+}
+
+
+@pytest.mark.parametrize("term, expected", SHAPES.values(), ids=SHAPES.keys())
+def test_evaluation_comes_to_rest_on(term, expected):
+    assert _evaluate(term) == expected.remove_name()
+
+
+# A builtin that lets a Python exception escape instead of leaving the
+# application as it stands. Each should come to rest on the term itself.
+_one_two = list_term((integer(1), integer(2)))
+_a_is_one = record({'a': integer(1)})
+
+NOT_YET_STUCK = {
+    "index out of range": index(_one_two)(5),
+    "negative index out of range": index(_one_two)(-3),
+    "removing an absent label": remove_attribute(_a_is_one)('b'),
+    "positional field in a format string": format_string('{0}')(_a_is_one),
+    "attribute reference in a format string": format_string('{a.b}')(_a_is_one),
+}
+
+
+@pytest.mark.xfail(strict=True, reason="the builtin does not decline these yet")
+@pytest.mark.parametrize("term", NOT_YET_STUCK.values(), ids=NOT_YET_STUCK.keys())
+def test_a_builtin_declines_instead_of_failing(term):
+    assert _evaluate(term) == term.remove_name()
+
+
+# A list applied to an integer is indexed as `index` indexes it: from the end
+# when the integer is negative, as in Python, and stuck outside the list.
+@pytest.mark.parametrize("i", (2, -3))
+def test_a_list_applied_out_of_range_is_stuck(i):
+    assert _evaluate(_one_two(i)) == _one_two(i).remove_name()
+
+
+@pytest.mark.xfail(strict=True, reason="a list applied to a negative integer is stuck")
+@pytest.mark.parametrize("i, expected", ((-1, 2), (-2, 1)))
+def test_a_list_applied_to_a_negative_integer_counts_from_the_end(i, expected):
+    assert _evaluate(_one_two(i)) == integer(expected).remove_name()
+
+
+# A builtin is handed every pending argument and consumes as many as its arity;
+# the rest are applied to its result. These two wait for exactly their arity
+# instead, so they stop one application early. The result cannot be applied
+# either, so only the place where evaluation stops differs.
+@pytest.mark.xfail(strict=True, reason="Formatter declines arguments beyond its arity")
+def test_formatter_applies_with_arguments_beyond_its_arity():
+    term = format_string('{a}')(_a_is_one)(plus(1)(1))
+    assert _evaluate(term) == string('1')(2).remove_name()
+
+
+@pytest.mark.xfail(strict=True, reason="IsSubtype declines arguments beyond its arity")
+def test_is_subtype_applies_with_arguments_beyond_its_arity():
+    term = is_subtype(_attributes_only)(base_class)(plus(1)(1))
+    assert _evaluate(term) == true(2).remove_name()
