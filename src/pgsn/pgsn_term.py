@@ -100,9 +100,6 @@ class ConstMixin(ABC):
     def _shift_or_none(self, num: int, cutoff: int) -> Term | None:
         return None
 
-    def _subst_or_none(self, variable: int, term: Term) -> Term | None:
-        return None
-
     def _compute_free_bound(self) -> int:
         return 0
 
@@ -189,25 +186,6 @@ class Term(ABC):
 
     def shift(self, num: int, cutoff: int) -> Term:
         return helpers.default(self.shift_or_none(num, cutoff), self)
-
-    @abstractmethod
-    def _subst_or_none(self, variable: int, term: Term) -> Term | None:
-        pass
-
-    def subst_or_none(self, variable: int, term: Term) -> Term | None:
-        assert not self.is_named
-        assert not term.is_named
-        # The variable does not occur free here.
-        if self.free_bound() <= variable:
-            return None
-        substituted = self._subst_or_none(variable, term)
-        assert substituted is None or not substituted.is_named
-        return substituted
-
-    def subst(self, variable:int, term: Term) -> Term:
-        substituted_or_none = self.subst_or_none(variable, term)
-        substituted = helpers.default(substituted_or_none, self)
-        return substituted
 
     @abstractmethod
     def _free_variables(self) -> set[str]:
@@ -299,12 +277,6 @@ class Variable(Term):
         else:
             return self.evolve(num=self.num+d)
 
-    def _subst_or_none(self, num, term) -> Term | None:
-        if self.num == num:
-            return term
-        else:
-            return None
-
     # The name is kept in meta_info, so that a variable left unbound can still
     # be reported by name once the term has been evaluated.
     def _remove_name_with_context(self, context: list[str]) -> Term:
@@ -347,15 +319,6 @@ class Abs(Term):
         if t_shifted is None:
             return None
         return self.evolve(t=t_shifted)
-
-    def _subst_or_none(self, var: int, term: Term) -> Term | None:
-        term_shifted_or_none = term.shift_or_none(1, 0)
-        term_shifted = helpers.default(term_shifted_or_none, term)
-        substituted = self.t.subst_or_none(var + 1, term_shifted)
-        if substituted is None:
-            return None
-        else:
-            return self.evolve(t=substituted)
 
     def _free_variables(self) -> set[str]:
         f_vars = self.t.free_variables()
@@ -416,15 +379,6 @@ class App(Term):
         t1_shifted = helpers.default(t1_shifted_or_none, self.t1)
         t2_shifted = helpers.default(t2_shifted_or_none, self.t2)
         return self.evolve(t1=t1_shifted, t2=t2_shifted)
-
-    def _subst_or_none(self, var: int, term: Term) -> Term | None:
-        t1_subst_or_none = self.t1.subst_or_none(var, term)
-        t2_subst_or_none = self.t2.subst_or_none(var, term)
-        if t1_subst_or_none is None and t2_subst_or_none is None:
-            return None
-        t1_subst = helpers.default(t1_subst_or_none, self.t1)
-        t2_subst = helpers.default(t2_subst_or_none, self.t2)
-        return self.evolve(t1=t1_subst, t2=t2_subst)
 
     def _free_variables(self) -> set[str]:
         return self.t1.free_variables() | self.t2.free_variables()
@@ -532,14 +486,6 @@ class List(Unary):
         shifted = (helpers.default(shifted_or_none[i], self.terms[i]) for i in range(len(self.terms)))
         return self.evolve(terms=tuple(shifted))
 
-    def _subst_or_none(self, num, term):
-        subst = [t.subst_or_none(num, term) for t in self.terms]
-        if all(t is None for t in subst):
-            return None
-        else:
-            subst_expanded = (x[0] if x[1] is None else x[1] for x in zip(self.terms, subst))
-            return self.evolve(terms=tuple(subst_expanded))
-
     def _free_variables(self):
         return set().union(*[t.free_variables() for t in self.terms])
 
@@ -597,16 +543,6 @@ class Record(Unary):
             if shifted[k] is None:
                 shifted[k] = self._attributes[k]
         return self.evolve(attributes=shifted)
-
-    def _subst_or_none(self, num, term):
-        subst = dict((label, t.subst_or_none(num, term)) for label, t in self.attributes().items())
-        if all(t is None for _, t in subst.items()):
-            return None
-        else:
-            for k in subst.keys():
-                if subst[k] is None:
-                    subst[k] = self._attributes[k]
-            return self.evolve(attributes=subst)
 
     def _free_variables(self):
         return set().union(*(t.free_variables() for _, t in self.attributes().items()))
@@ -717,9 +653,6 @@ class PGSNClass(Unary):
 
     def _shift_or_none(self, num: int, cutoff: int) -> Term | None:
         return self._traverse(lambda t: t.shift_or_none(num, cutoff))
-
-    def _subst_or_none(self, variable: int, term: Term) -> Term | None:
-        return self._traverse(lambda t: t.subst_or_none(variable, term))
 
     def _free_variables(self) -> set[str]:
         vars_inherit = self.inherit.free_variables() if self.inherit is not None else set()
@@ -896,9 +829,6 @@ class PGSNObject(Unary):
     def _compute_free_bound(self) -> int:
         children = [self.instance, *self._attributes.values(), *self._methods.values()]
         return max(t.free_bound() for t in children)
-
-    def _subst_or_none(self, variable: int, term: Term) -> Term | None:
-        return self._traverse(lambda t: t.subst_or_none(variable, term))
 
     def _free_variables(self) -> set[str]:
         vars_instance = self.instance.free_variables()
