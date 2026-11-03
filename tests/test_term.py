@@ -22,7 +22,7 @@ def test_pgsn_term_id():
     x = variable('x')
     id_f = lambda_abs(x, x)
     t = id_f(id_f)
-    assert t.eval() == id_f.eval()
+    assert t.fully_eval() == id_f.fully_eval()
 
 
 def test_pgsn_term_const():
@@ -30,7 +30,7 @@ def test_pgsn_term_const():
     x = variable('x')
     id_f = lambda_abs(x, c)
     t = id_f(c)
-    assert t.eval() == c.eval()
+    assert t.fully_eval() == c.fully_eval()
 
 
 def test_pgsn_term_nested():

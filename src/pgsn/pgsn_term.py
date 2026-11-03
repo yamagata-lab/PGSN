@@ -97,9 +97,6 @@ def cast(x: Castable, is_named: bool) -> Term:
 
 class ConstMixin(ABC):
 
-    def _eval_or_none(self) -> Term | None:
-        return None
-
     def _shift_or_none(self, num: int, cutoff: int) -> Term | None:
         return None
 
@@ -155,37 +152,14 @@ class Term(ABC):
     def _evolve(self, **kwarg):
         return evolve(self, **kwarg)
 
-    @abstractmethod
-    def _eval_or_none(self):
-        pass
-
-    # If None is returned, the reduction is terminated. A term returned is a
-    # reduction, even when it equals the term reduced: (λx. x x)(λx. x x)
-    # reduces to itself.
-    def eval_or_none(self):
-        if self.is_named:
-            t = self.remove_name()
-        else:
-            t = self
-        evaluated = t._eval_or_none()
-        assert (evaluated is None) or (not evaluated.is_named)
-        return evaluated
-
-    def eval(self) -> Term:
-        t = self if not self.is_named else self.remove_name()
-        evaluated = helpers.default(t.eval_or_none(), t)
-        assert(not evaluated.is_named)
-        return evaluated
-
-    # The weak normal form, computed by the call-by-need machine below rather
-    # than by repeating `eval_or_none`. `steps` bounds the beta reductions and
-    # the builtin applications together.
+    # The weak normal form, computed by the call-by-need machine below.
+    # `steps` bounds the beta reductions and the builtin applications together.
     def fully_eval(self, steps=DEFAULT_STEPS) -> Term:
         t = self if not self.is_named else self.remove_name()
         machine = _Machine(steps)
-        value = machine.whnf(t, None)
-        machine.normalize(value)
-        return machine.readback(*value)
+        thunk = _new_thunk(t, None)
+        machine.deep(thunk)
+        return machine.readback_thunk(thunk)
 
     # One more than the largest de Bruijn index free in this term, 0 if closed.
     @abstractmethod
@@ -316,9 +290,6 @@ class Variable(Term):
     def _free_variables(self) -> set[str]:
         return {self.name}
 
-    def _eval_or_none(self):
-        return None
-
     def _compute_free_bound(self) -> int:
         return self.num + 1
 
@@ -366,12 +337,6 @@ class Abs(Term):
             return evolve(self, v=v, t=t, is_named=True)
         else:
             assert False
-
-    # Evaluation stops at an abstraction and leaves its body as written, so a
-    # term evaluates to a weak normal form, and recursion through `fix` cannot
-    # unfold under a binder.
-    def _eval_or_none(self) -> Term | None:
-        return None
 
     def _compute_free_bound(self) -> int:
         # Index 0 in the body is bound by this abstraction.
@@ -440,18 +405,6 @@ class App(Term):
         else:
             assert False
 
-    def _eval_or_none(self):
-        # Context.build unwinds the applications on the left into the spine.
-        c = Context.build(head=self.t1, args=(self.t2,))
-        c_reduced = c.reduce_or_declined()
-        if isinstance(c_reduced, PGSNRuntimeError):
-            self.mark_stuck(c_reduced)
-            return None
-        if c_reduced is None:
-            return None
-        else:
-            return c_reduced.to_term()
-
     def _compute_free_bound(self) -> int:
         return max(self.t1.free_bound(), self.t2.free_bound())
 
@@ -489,10 +442,9 @@ class Builtin(Term, ABC):
 
     # The result of applying the builtin. When the arguments do not meet its
     # preconditions it raises a PGSNRuntimeError, which leaves the application
-    # stuck. An argument that is not reduced yet fails the preconditions too;
-    # the evaluator then reduces it and applies the builtin again. `args` holds
-    # every pending argument, so it may be longer than the arity, but never
-    # shorter.
+    # stuck. The evaluator hands over each argument evaluated through, as the
+    # machine below describes, and applies the builtin once. `args` may be
+    # longer than the arity, but never shorter.
     @abstractmethod
     def _apply_args(self, args: tuple[Term, ...]) -> Term:
         pass
@@ -508,8 +460,8 @@ class Builtin(Term, ABC):
         assert not reduced.is_named
         return reduced, args[self.arity:]
 
-    # Only type names go into the message: it is built every time an argument
-    # is not reduced yet, and printing the argument would cost a traversal.
+    # Only type names go into the message: printing the argument would cost a
+    # traversal.
     def _type_error(self, subject: str, expected: str, got: Term) -> PGSNTypeError:
         return PGSNTypeError(f"{type(self).__name__}: {subject} must be {expected}, "
                              f"got {type(got).__name__}")
@@ -569,14 +521,6 @@ class List(Unary):
     def __attrs_post_init__(self):
         assert all(isinstance(t, Term) for t in self.terms)
         assert all(t.is_named == self.is_named for t in self.terms)
-
-    def _eval_or_none(self):
-        evaluated = [term.eval_or_none() for term in self.terms]
-        if all(t is None for t in evaluated):
-            return None
-        else:
-            evaluated_expanded = (x[0] if x[1] is None else x[1] for x in zip(self.terms, evaluated))
-            return self.evolve(terms=tuple(evaluated_expanded))
 
     def _compute_free_bound(self) -> int:
         return max((t.free_bound() for t in self.terms), default=0)
@@ -641,17 +585,6 @@ class Record(Unary):
 
     def attributes(self):
         return self._attributes.copy()
-
-    def _eval_or_none(self):
-        evaluated = {label: t.eval_or_none() for label, t in self.attributes().items()}
-        if all(t is None for _, t in evaluated.items()):
-            return None
-        else:
-            evaluated_expand = dict(evaluated)
-            for k in evaluated.keys():
-                if evaluated_expand[k] is None:
-                    evaluated_expand[k] = self.attributes()[k]
-            return self.evolve(attributes=evaluated_expand)
 
     def _compute_free_bound(self) -> int:
         return max((t.free_bound() for t in self._attributes.values()), default=0)
@@ -776,9 +709,6 @@ class PGSNClass(Unary):
         methods2 = {k: helpers.default(methods1[k], self.methods()[k]) for k in self.methods().keys()}
         return self.evolve(inherit=inherit2, defaults=defaults2, methods=methods2)
 
-    def _eval_or_none(self):
-        return self._traverse(lambda t: t.eval_or_none())
-
     def _compute_free_bound(self) -> int:
         children = [*self._defaults.values(), *self._methods.values()]
         if self.inherit is not None:
@@ -816,13 +746,20 @@ class PGSNClass(Unary):
         return reduced.evolve(is_named=False)
 
 
+# What a field of an argument holds. The machine below hands a builtin its
+# arguments evaluated through, but the fields of data stay thunks, so a
+# builtin that looks into a field looks at the value of its thunk.
+def _value(t: Term) -> Term:
+    return t._cell.value[0] if isinstance(t, Thunk) else t
+
+
 @frozen
 class DefineClass(ConstMixin, Unary):
 
     def _apply_arg(self, arg: Term) -> Term:
         if not isinstance(arg, Record):
             raise self._type_error("the argument", "a record", arg)
-        params = arg.attributes()
+        params = {k: _value(t) for k, t in arg.attributes().items()}
         if not "inherit" in params:
             raise PGSNKeyError("DefineClass: inherit is missing")
         if not isinstance(params["inherit"], PGSNClass):
@@ -836,12 +773,12 @@ class DefineClass(ConstMixin, Unary):
             raise self._type_error("defaults", "a record", params["defaults"])
         if "attributes" in params and not isinstance(params["attributes"], List):
             raise self._type_error("attributes", "a list", params["attributes"])
-        if "attributes" in params:
-            for k in params["attributes"].terms:
-                if not isinstance(k, String):
-                    raise self._type_error("each attribute", "a string", k)
-            if "name" in (t.value for t in params["attributes"].terms):
-                raise PGSNValueError("DefineClass: 'name' is reserved and cannot be an attribute")
+        names = [_value(t) for t in params["attributes"].terms] if "attributes" in params else []
+        for k in names:
+            if not isinstance(k, String):
+                raise self._type_error("each attribute", "a string", k)
+        if "name" in (t.value for t in names):
+            raise PGSNValueError("DefineClass: 'name' is reserved and cannot be an attribute")
         if "methods" in params:
             if not isinstance(params["methods"], Record):
                 raise self._type_error("methods", "a record", params["methods"])
@@ -849,8 +786,7 @@ class DefineClass(ConstMixin, Unary):
                 raise PGSNValueError("DefineClass: 'name' is reserved and cannot be a method")
         inherit: PGSNClass = params["inherit"]
         added_defaults = params["defaults"].attributes() if "defaults" in params else {}
-        added_attributes = ({a.value for a in params["attributes"].terms}
-                            if "attributes" in params else set())
+        added_attributes = {a.value for a in names}
         added_methods = params["methods"].attributes() if "methods" in params else {}
         # The invariants of PGSNClass: every default names an attribute, and no name
         # is both an attribute and a method. The parent holds them by induction over
@@ -953,9 +889,6 @@ class PGSNObject(Unary):
         attributes2 = {k: helpers.default(attributes1[k], self.attributes()[k]) for k in attributes1.keys()}
         methods2 = {k: helpers.default(methods1[k], self.methods()[k]) for k in self.methods().keys()}
         return self.evolve(instance=instance2, attributes=attributes2, methods=methods2)
-
-    def _eval_or_none(self):
-        return self._traverse(lambda t: t.eval_or_none())
 
     def _shift_or_none(self, num: int, cutoff: int) -> Term | None:
         return self._traverse(lambda t: t.shift_or_none(num, cutoff))
@@ -1221,14 +1154,20 @@ class LessThan(ConstMixin, Builtin):
 # them the same is an open question, and answering it here would decide it by
 # accident. Refusing the question is not the same answer as `false`, and a
 # document that asks it stops where it asked.
-def _comparable(term: Term) -> bool:
+#
+# The comparable term, with the thunks in it replaced by their values, or None
+# when the term is not comparable.
+def _ground(term: Term) -> Term | None:
+    term = _value(term)
     if isinstance(term, (String, Integer, Boolean, Constant)):
-        return True
+        return term
     if isinstance(term, List):
-        return all(_comparable(t) for t in term.terms)
+        terms = tuple(_ground(t) for t in term.terms)
+        return None if any(t is None for t in terms) else term.evolve(terms=terms)
     if isinstance(term, Record):
-        return all(_comparable(t) for t in term._attributes.values())
-    return False
+        attributes = {k: _ground(t) for k, t in term._attributes.items()}
+        return None if any(t is None for t in attributes.values()) else term.evolve(attributes=attributes)
+    return None
 
 
 @frozen
@@ -1242,10 +1181,11 @@ class Equal(ConstMixin, Builtin):
     # along the spine is passed on by `apply_args_or_none` and is none of our
     # business.
     def _apply_args(self, args: tuple[Term,...]) -> Term:
-        for arg in args[:2]:
-            if not _comparable(arg):
+        grounds = [_ground(arg) for arg in args[:2]]
+        for arg, ground in zip(args, grounds):
+            if ground is None:
                 raise self._type_error("both arguments", "data", arg)
-        return Boolean.build(is_named=self.is_named, value=args[0] == args[1])
+        return Boolean.build(is_named=self.is_named, value=grounds[0] == grounds[1])
 
 
 # The first two arguments of `builtin` must be a record and a label.
@@ -1360,7 +1300,7 @@ class Formatter(ConstMixin, Builtin):
     def _show(self, label: str, fields: dict[str, Term]) -> str:
         if label not in fields:
             raise PGSNKeyError(f"Formatter: there is no field {label!r}")
-        value = fields[label]
+        value = _value(fields[label])
         if isinstance(value, Boolean):
             return "true" if value.value else "false"
         if not isinstance(value, (String, Integer)):
@@ -1378,34 +1318,30 @@ class Formatter(ConstMixin, Builtin):
 # needed and then overwritten with its value, so an argument used many times
 # is evaluated once.
 #
-# The machine stops at a weak head normal form. The rest of the weak normal
-# form is reached from outside: `normalize` forces the contents of the data the
-# result holds, and a builtin that declines its arguments has them forced a
-# level deeper and is applied again, as the one-step reducer above reduces an
-# argument and applies the builtin again. The body of an abstraction is never
-# evaluated.
+# The machine stops at a weak head normal form. A builtin is strict: before it
+# is applied, each of its arguments is evaluated through, that is, to a weak
+# head normal form, and so is everything it holds outside an abstraction, the
+# fields of data and the arguments of an application that cannot proceed. The
+# builtin is then applied once. Data applied to an argument is a builtin too,
+# but the data is not one of its arguments, so a record is projected without
+# its other fields being evaluated. The result of `fully_eval` is evaluated
+# through in the same way. The body of an abstraction is never evaluated.
 #
-# Values hand thunks to the builtins and hold them in their fields, so a
-# thunk is a term. A builtin declines a thunk not yet forced, as it declines
-# any term not reduced yet. A forced thunk whose value is not data -- a
-# function, or an application that cannot proceed -- stays a thunk to the
-# builtins, so that a function keeps its environment.
+# A builtin is handed the value of each argument, except a function, which is
+# handed as its thunk so that it keeps its environment. The fields of data are
+# thunks, and a builtin that looks into them looks at their values (`_value`).
 #
-# A function in the result is written out with the arguments it captured
-# substituted as they were written, as beta reduction substitutes an argument
-# before reducing it. An argument a builtin had reduced before it took it is
-# the exception, as it was for the one-step reducer: the builtin is handed a
-# copy of the thunk that is written out as its value.
+# The result is read back with a thunk replaced by its value, or by what it
+# was made from with its environment substituted if it was never forced.
 
 _PENDING, _RUNNING, _DONE = range(3)
 _ARG, _UPDATE = range(2)
 
 
 class _Cell:
-    __slots__ = ("code", "env", "state", "value", "by_value", "reduced", "readback",
-                 "code_readback")
+    __slots__ = ("code", "env", "state", "value", "deep", "readback")
 
-    def __init__(self, code: Term, env, state: int, value, by_value: bool = False):
+    def __init__(self, code: Term, env, state: int, value):
         self.code = code
         self.env = env
         self.state = state
@@ -1413,12 +1349,9 @@ class _Cell:
         # that of a function and None for anything else, whose free indices
         # are those of the term evaluated at the top.
         self.value = value
-        # Written out as its value even under an abstraction.
-        self.by_value = by_value
-        # The copy of this thunk that is written out as its value.
-        self.reduced = None
+        # Whether the value is evaluated through, in the states of `state`.
+        self.deep = _PENDING
         self.readback = None
-        self.code_readback = None
 
 
 def _new_thunk(code: Term, env) -> Thunk:
@@ -1453,77 +1386,44 @@ def _delay(t: Term, env) -> Thunk:
         return _value_thunk(t, None)
     if isinstance(t, Abs):
         return _value_thunk(t, env)
-    # Data written out is a value already, as it is to the one-step reducer.
     if isinstance(t, (List, Record, PGSNClass, PGSNObject)):
         return _value_thunk(_close(t, env), None)
     return _new_thunk(t, env)
 
 
-def _wrap(t: Term, env) -> Term:
-    return t if isinstance(t, ConstMixin) else _delay(t, env)
-
-
-# Data reached under an environment, with each field made a thunk. Data whose
-# fields are thunks already is returned as it is.
-def _close(t: Term, env) -> Term:
+# Data with `f` applied to each of its fields, those of its classes included,
+# or the data itself when `f` changes none of them. Anything else is returned
+# as it is.
+def _map_fields(t: Term, f) -> Term:
+    def mapped(d: dict):
+        new = {k: f(c) for k, c in d.items()}
+        return None if all(new[k] is c for k, c in d.items()) else new
     if isinstance(t, List):
-        terms = tuple(_wrap(c, env) for c in t.terms)
-        if all(a is b for a, b in zip(terms, t.terms)):
-            return t
-        return t.evolve(terms=terms)
+        terms = tuple(f(c) for c in t.terms)
+        return t if all(a is b for a, b in zip(terms, t.terms)) else t.evolve(terms=terms)
     if isinstance(t, Record):
-        attributes = {k: _wrap(c, env) for k, c in t._attributes.items()}
-        if all(attributes[k] is c for k, c in t._attributes.items()):
-            return t
-        return t.evolve(attributes=attributes)
+        attributes = mapped(t._attributes)
+        return t if attributes is None else t.evolve(attributes=attributes)
     if isinstance(t, PGSNClass):
-        inherit = _close(t.inherit, env) if t.inherit is not None else None
-        defaults = {k: _wrap(c, env) for k, c in t._defaults.items()}
-        methods = {k: _wrap(c, env) for k, c in t._methods.items()}
-        if (inherit is t.inherit
-                and all(defaults[k] is c for k, c in t._defaults.items())
-                and all(methods[k] is c for k, c in t._methods.items())):
+        inherit = _map_fields(t.inherit, f) if t.inherit is not None else None
+        defaults = mapped(t._defaults)
+        methods = mapped(t._methods)
+        if inherit is t.inherit and defaults is None and methods is None:
             return t
         return t.evolve(inherit=inherit, defaults=defaults, methods=methods)
     if isinstance(t, PGSNObject):
-        instance = _close(t.instance, env)
-        attributes = {k: _wrap(c, env) for k, c in t._attributes.items()}
-        methods = {k: _wrap(c, env) for k, c in t._methods.items()}
-        if (instance is t.instance
-                and all(attributes[k] is c for k, c in t._attributes.items())
-                and all(methods[k] is c for k, c in t._methods.items())):
+        instance = _map_fields(t.instance, f)
+        attributes = mapped(t._attributes)
+        methods = mapped(t._methods)
+        if instance is t.instance and attributes is None and methods is None:
             return t
         return t.evolve(instance=instance, attributes=attributes, methods=methods)
     return t
 
 
-# The thunks directly in the fields of data, those of its classes included.
-def _data_children(t: Term) -> list[Thunk]:
-    if isinstance(t, List):
-        children = list(t.terms)
-    elif isinstance(t, Record):
-        children = list(t._attributes.values())
-    elif isinstance(t, PGSNClass):
-        children = [*t._defaults.values(), *t._methods.values()]
-        if t.inherit is not None:
-            children += _data_children(t.inherit)
-    elif isinstance(t, PGSNObject):
-        children = [*t._attributes.values(), *t._methods.values(),
-                    *_data_children(t.instance)]
-    else:
-        children = []
-    return [c for c in children if isinstance(c, Thunk)]
-
-
-# The thunks a value holds outside any abstraction: those of data, and the
-# head and the arguments of an application that cannot proceed.
-def _value_children(t: Term) -> list[Thunk]:
-    if isinstance(t, App):
-        children = _value_children(t.t1)
-        if isinstance(t.t2, Thunk):
-            children.append(t.t2)
-        return children
-    return _data_children(t)
+# Data reached under an environment, with each field made a thunk.
+def _close(t: Term, env) -> Term:
+    return _map_fields(t, lambda c: c if isinstance(c, ConstMixin) else _delay(c, env))
 
 
 def _spine(head: Term, args) -> Term:
@@ -1541,22 +1441,6 @@ def _pending_args(stack: list) -> tuple[Thunk, ...]:
     return tuple(entry[1] for entry in reversed(stack[i:]))
 
 
-# How far a builtin has reduced an argument: every thunk down to `level`
-# fields deep, except those of `frontier`, the thunks at `level`, from `next`
-# on. `one_at_a_time` when the frontier is the fields of a record.
-class _Reach:
-    __slots__ = ("level", "frontier", "next", "one_at_a_time")
-
-    def __init__(self, arg: Thunk):
-        self.level = 0
-        self.frontier = [arg]
-        self.next = 0
-        self.one_at_a_time = False
-
-    def pending(self) -> set[int]:
-        return {id(th) for th in self.frontier[self.next:]}
-
-
 class _Machine:
 
     def __init__(self, steps: int):
@@ -1571,6 +1455,34 @@ class _Machine:
         if thunk._cell.state != _DONE:
             self.whnf(thunk, None)
         return thunk._cell.value
+
+    # Evaluates the thunk through.
+    def deep(self, thunk: Thunk):
+        cell = thunk._cell
+        if cell.deep == _DONE:
+            return
+        if cell.deep == _RUNNING:
+            # Its value would have to hold itself.
+            raise LambdaInterpreterError('Reduction did not terminate', thunk)
+        cell.deep = _RUNNING
+        t, _ = self.force(thunk)
+        while isinstance(t, App):
+            self.deep(t.t2)
+            t = t.t1
+        if not isinstance(t, Abs):
+            _map_fields(t, self._deep_field)
+        cell.deep = _DONE
+
+    def _deep_field(self, c: Term) -> Term:
+        if isinstance(c, Thunk):
+            self.deep(c)
+        return c
+
+    # What a builtin is handed for an argument.
+    def _argument(self, thunk: Thunk) -> Term:
+        self.deep(thunk)
+        t, env = thunk._cell.value
+        return thunk if env is not None else t
 
     # `head` applied to every argument on top of the stack, which it takes off.
     def _stuck(self, head: Term, stack: list, error: PGSNRuntimeError | None) -> Term:
@@ -1619,14 +1531,20 @@ class _Machine:
             elif isinstance(term, Builtin):
                 term = _close(term, env)
                 args = _pending_args(stack)
-                applied = self._apply(term, args) if args else None
-                if isinstance(applied, tuple):
-                    reduced, used = applied
-                    self._step(term)
-                    del stack[len(stack) - used:]
-                    term, env = reduced, None
-                    continue
-                value = (self._stuck(term, stack, applied), None)
+                n = term.arity
+                if not args or len(args) < n:
+                    value = (self._stuck(term, stack, None), None)
+                else:
+                    handed = tuple(self._argument(a) for a in args[:n])
+                    try:
+                        reduced, _ = term.apply_args_or_none(handed)
+                    except PGSNRuntimeError as e:
+                        value = (self._stuck(term, stack, e), None)
+                    else:
+                        self._step(term)
+                        del stack[len(stack) - n:]
+                        term, env = reduced, None
+                        continue
             else:
                 raise TypeError(f"not a term the machine evaluates: {type(term).__name__}")
 
@@ -1642,189 +1560,28 @@ class _Machine:
                 stack.append((_ARG, term.t2))
                 term = term.t1
 
-    # The result of applying a builtin and the number of arguments it used,
-    # None when there are fewer arguments than it takes, or the error with
-    # which it declined them for good.
-    #
-    # Data in the head has its contents reduced before the arguments, as the
-    # one-step reducer reduces the head first.
-    def _apply(self, head: Builtin, args: tuple[Thunk, ...]):
-        terms = args if isinstance(head, ConstMixin) else (_value_thunk(head, None),) + args
-        reach = [_Reach(t) for t in terms]
-        while True:
-            views = tuple(self._view(t, r.level, r.pending()) for t, r in zip(terms, reach))
-            receiver, arg_views = (head, views) if terms is args else (views[0], views[1:])
-            try:
-                applied = receiver.apply_args_or_none(arg_views)
-            except PGSNRuntimeError as e:
-                error = e
-            else:
-                if applied is None:
-                    return None
-                reduced, rest = applied
-                return reduced, len(args) - len(rest)
-            if not any(self._deepen(r) for r in reach):
-                return self._final_error(head, terms, args, error)
-
-    # The argument as a builtin sees it: the thunks it has reduced, down to
-    # `level` fields deep but not those `pending` at that level, are replaced
-    # by their values. A thunk forced elsewhere stays as it is, as the
-    # one-step reducer holds its own copy of the argument, not reduced yet;
-    # one that was a value from the start is shown as its value. `raw` shows
-    # every forced thunk, with a value that is not data as the term it is.
-    def _view(self, x: Term, level: int, pending: set[int], raw: bool = False) -> Term:
-        if not isinstance(x, Thunk) or level < 0 or x._cell.state != _DONE:
-            return x
-        cell = x._cell
-        t = cell.value[0]
-        written = t is cell.code
-        if level == 0 and not written and id(x) in pending:
-            return x
-        if isinstance(t, Builtin):
-            return self._view_data(t, level, pending, raw)
-        if raw:
-            return t
-        if written:
-            return x
-        if cell.reduced is None:
-            cell.reduced = Thunk(is_named=False,
-                                 cell=_Cell(cell.code, cell.env, _DONE, cell.value, by_value=True))
-        return cell.reduced
-
-    def _view_data(self, t: Term, level: int, pending: set[int], raw: bool) -> Term:
-        def child(c):
-            return self._view(c, level - 1, pending, raw)
-        if isinstance(t, List):
-            terms = tuple(child(c) for c in t.terms)
-            return t if all(a is b for a, b in zip(terms, t.terms)) else t.evolve(terms=terms)
-        def fields(d):
-            viewed = {k: child(c) for k, c in d.items()}
-            return None if all(viewed[k] is c for k, c in d.items()) else viewed
-        if isinstance(t, Record):
-            attributes = fields(t._attributes)
-            return t if attributes is None else t.evolve(attributes=attributes)
-        if isinstance(t, PGSNClass):
-            inherit = (self._view_data(t.inherit, level, pending, raw)
-                       if t.inherit is not None else None)
-            defaults = fields(t._defaults)
-            methods = fields(t._methods)
-            if inherit is t.inherit and defaults is None and methods is None:
-                return t
-            return t.evolve(inherit=inherit, defaults=defaults, methods=methods)
-        if isinstance(t, PGSNObject):
-            instance = self._view_data(t.instance, level, pending, raw)
-            attributes = fields(t._attributes)
-            methods = fields(t._methods)
-            if instance is t.instance and attributes is None and methods is None:
-                return t
-            return t.evolve(instance=instance, attributes=attributes, methods=methods)
-        return t
-
-    # Reduces more of the argument, level by level, so that a builtin is
-    # applied again as soon as what it needs is there. The fields of a record
-    # are forced one at a time, because a builtin may need some fields and not
-    # others (a format string reads only the fields it names); anything else a
-    # whole level at a time, which keeps the views few. False when everything
-    # in the argument is reduced.
-    def _deepen(self, reach: _Reach) -> bool:
-        while True:
-            changed = False
-            while reach.next < len(reach.frontier):
-                th = reach.frontier[reach.next]
-                reach.next += 1
-                if th._cell.state != _DONE:
-                    self.force(th)
-                    if reach.one_at_a_time:
-                        return True
-                    changed = True
-                elif th._cell.value[0] is not th._cell.code:
-                    changed = True
-            if changed:
-                return True
-            frontier = list({id(c): c for th in reach.frontier
-                             for c in _value_children(th._cell.value[0])}.values())
-            if not frontier:
-                return False
-            reach.one_at_a_time = (reach.level == 0
-                                   and isinstance(reach.frontier[0]._cell.value[0], Record))
-            reach.level += 1
-            reach.frontier = frontier
-            reach.next = 0
-            # What was a value from the start is shown as soon as it is reached.
-            if any(th._cell.state == _DONE and th._cell.value[0] is th._cell.code
-                   for th in frontier):
-                return True
-
-    # The error is the one the builtin gives on its arguments as the one-step
-    # reducer would hand them over, all reduced.
-    def _final_error(self, head, terms, args, error) -> PGSNRuntimeError:
-        everything = 1 << 30
-        views = tuple(self._view(t, everything, set(), raw=True) for t in terms)
-        receiver, arg_views = (head, views) if terms is args else (views[0], views[1:])
-        try:
-            receiver.apply_args_or_none(arg_views)
-        except PGSNRuntimeError as e:
-            return e
-        return error
-
-    # Forces every thunk the value holds outside an abstraction.
-    def normalize(self, value: tuple[Term, object]):
-        t, _ = value
-        todo = [] if isinstance(t, Abs) else _value_children(t)
-        seen = set()
-        while todo:
-            th = todo.pop()
-            if id(th) in seen:
-                continue
-            seen.add(id(th))
-            t, _ = self.force(th)
-            if not isinstance(t, Abs):
-                todo.extend(_value_children(t))
-
-    # The term a value stands for, with no thunk left in it. A function is
-    # written out with its environment substituted as it was written, as
-    # beta reduction substitutes an argument before it is reduced.
+    # The term a value stands for, with no thunk left in it.
     def readback(self, t: Term, env) -> Term:
         if isinstance(t, Abs):
             return self._substitute(t, 0, env)
         if isinstance(t, App):
-            r = App.nameless(t1=self._readback_term(t.t1), t2=self._readback_term(t.t2))
+            r = App.nameless(t1=self._readback_field(t.t1), t2=self._readback_field(t.t2))
             if "error" in t.meta_info:
                 r.add_metainfo("error", t.meta_info["error"])
             return r
-        if isinstance(t, List):
-            return t.evolve(terms=tuple(self._readback_term(c) for c in t.terms))
-        if isinstance(t, Record):
-            return t.evolve(attributes={k: self._readback_term(c) for k, c in t._attributes.items()})
-        if isinstance(t, PGSNClass):
-            inherit = self.readback(t.inherit, None) if t.inherit is not None else None
-            return t.evolve(inherit=inherit,
-                            defaults={k: self._readback_term(c) for k, c in t._defaults.items()},
-                            methods={k: self._readback_term(c) for k, c in t._methods.items()})
-        if isinstance(t, PGSNObject):
-            return t.evolve(instance=self.readback(t.instance, None),
-                            attributes={k: self._readback_term(c) for k, c in t._attributes.items()},
-                            methods={k: self._readback_term(c) for k, c in t._methods.items()})
-        return t
+        return _map_fields(t, self._readback_field)
 
-    def _readback_term(self, t: Term) -> Term:
-        if not isinstance(t, Thunk):
-            return self.readback(t, None)
-        cell = t._cell
-        if cell.state != _DONE:
-            return self._readback_code(t)
-        if cell.readback is None:
-            cell.readback = self.readback(*cell.value)
-        return cell.readback
+    def _readback_field(self, t: Term) -> Term:
+        return self.readback_thunk(t) if isinstance(t, Thunk) else self.readback(t, None)
 
-    # What the thunk was made from, with its environment substituted.
-    def _readback_code(self, thunk: Thunk) -> Term:
+    def readback_thunk(self, thunk: Thunk) -> Term:
         cell = thunk._cell
-        if cell.by_value:
-            return self._readback_term(thunk)
-        if cell.code_readback is None:
-            cell.code_readback = self._substitute(cell.code, 0, cell.env)
-        return cell.code_readback
+        if cell.readback is None:
+            if cell.state == _DONE:
+                cell.readback = self.readback(*cell.value)
+            else:
+                cell.readback = self._substitute(cell.code, 0, cell.env)
+        return cell.readback
 
     # `t` under `depth` binders, with the environment substituted for the
     # indices that reach past them.
@@ -1834,32 +1591,17 @@ class _Machine:
                 return t
             found = _lookup(env, t.num - depth)
             if isinstance(found, Thunk):
-                return self._readback_code(found).shift(depth, 0)
+                return self.readback_thunk(found).shift(depth, 0)
             num = found + depth
             return t if num == t.num else t.evolve(num=num)
         if isinstance(t, Thunk):
-            return self._readback_code(t).shift(depth, 0)
+            return self.readback_thunk(t).shift(depth, 0)
         if isinstance(t, Abs):
             return t.evolve(t=self._substitute(t.t, depth + 1, env))
         if isinstance(t, App):
             return t.evolve(t1=self._substitute(t.t1, depth, env),
                             t2=self._substitute(t.t2, depth, env))
-        if isinstance(t, List):
-            return t.evolve(terms=tuple(self._substitute(c, depth, env) for c in t.terms))
-        if isinstance(t, Record):
-            return t.evolve(attributes={k: self._substitute(c, depth, env)
-                                        for k, c in t._attributes.items()})
-        if isinstance(t, PGSNClass):
-            inherit = self._substitute(t.inherit, depth, env) if t.inherit is not None else None
-            return t.evolve(inherit=inherit,
-                            defaults={k: self._substitute(c, depth, env) for k, c in t._defaults.items()},
-                            methods={k: self._substitute(c, depth, env) for k, c in t._methods.items()})
-        if isinstance(t, PGSNObject):
-            return t.evolve(instance=self._substitute(t.instance, depth, env),
-                            attributes={k: self._substitute(c, depth, env)
-                                        for k, c in t._attributes.items()},
-                            methods={k: self._substitute(c, depth, env) for k, c in t._methods.items()})
-        return t
+        return _map_fields(t, lambda c: self._substitute(c, depth, env))
 
 
 def value_of(term: Term, steps=DEFAULT_STEPS, with_inherit_chain=False) -> Any:
@@ -1944,68 +1686,6 @@ def _why_not_a_value(t: Term) -> str:
     if isinstance(t, Abs):
         return "a function is not a value; an argument may be missing"
     return f"unexpected term type {type(t).__name__}"
-
-
-# Evaluation Context
-# leftmost, outermost reduction
-@frozen
-class Context:
-    head: Term = field(validator=helpers.not_none)
-    args: tuple[Term, ...] = field(default=(), validator=helpers.not_none)
-
-    @classmethod
-    def build(cls, head, args):
-        if isinstance(head, App):
-            return cls.build(head=head.t1, args=(head.t2,) + args)
-        else:
-            return cls(head=head, args=args)
-
-    def evolve(self, head=None, args=None):
-        if head is None:
-            head = self.head
-        if args is None:
-            args = self.args
-        return type(self).build(head=head, args=args)
-
-    def to_term(self) -> Term:
-        term = self.head
-        for arg in self.args:
-            term = term(arg)
-        return term
-
-    def stack(self, arg: Term):
-        return self.evolve(args=self.args + (arg,))
-
-    # Outermost leftmost reduction. The reduced context, or, when nothing
-    # reduces, the error of the builtin that declined its arguments if there is
-    # one, and None otherwise.
-    def reduce_or_declined(self) -> Context | PGSNRuntimeError | None:
-        declined = None
-        if isinstance(self.head, Abs) and len(self.args) > 0:
-            head_substituted = (self.head.t.subst(0, self.args[0].shift(1, 0))
-                                .shift(-1, 0))
-            return self.evolve(head=head_substituted, args=self.args[1:])
-        if isinstance(self.head, Builtin):
-            # A builtin declines arguments that are not reduced yet as well,
-            # so this is not the end: they are reduced below and the builtin
-            # is applied again on the next step.
-            try:
-                applied = self.head.apply_args_or_none(self.args)
-            except PGSNRuntimeError as e:
-                applied = None
-                declined = e
-            if applied is not None:
-                reduced, rest = applied
-                return self.evolve(head=reduced, args=rest)
-        head_reduced = self.head.eval_or_none()
-        if head_reduced is not None:
-            return self.evolve(head=head_reduced)
-        for i in range(len(self.args)):
-            arg_reduced = self.args[i].eval_or_none()
-            if arg_reduced is not None:
-                new_args = self.args[0:i] + (arg_reduced,) + self.args[i + 1:]
-                return self.evolve(args=new_args)
-        return declined
 
 
 json_term_converter = cattrs.preconf.json.make_converter()

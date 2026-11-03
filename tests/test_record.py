@@ -8,8 +8,9 @@ def test_record():
     r = record({'x': x, 'y': y, 'z': z})
     k1 = string('x')
     k2 = string('w')
-    assert r(k1).eval() == x.eval()
-    assert r(k2).eval_or_none() is None
+    assert r(k1).fully_eval() == x.fully_eval()
+    stuck = r(k2).fully_eval()
+    assert isinstance(stuck, App) and "error" in stuck.meta_info
 
 
 x = variable('x')

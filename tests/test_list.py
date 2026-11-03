@@ -10,7 +10,7 @@ def test_list():
     ll = list_term((x, y, z))
     assert ll.terms == (x, y, z)
     i = integer(1)
-    assert ll(i).eval().name == 'y'
+    assert ll(i).fully_eval().name == 'y'
 
 
 def _is_one():
