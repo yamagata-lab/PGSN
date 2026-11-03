@@ -484,19 +484,41 @@ class Boolean(ConstMixin, ZeroAry):
 
 # A term that holds other terms in fields: a list, a record, a class or an
 # object. Data is a value however its fields are, and applied to an argument
-# it is a builtin that looks itself up. The evaluator reaches the fields only
-# through `map_fields`, so a new kind of data needs no change there.
+# it is a builtin that looks itself up. The fields are reached only through
+# `fields` and `map_fields`, by the evaluator and by the operations on terms
+# below, so a new kind of data defines those two and `_apply_arg`.
 @frozen
 class Data(Unary, ABC):
     # Whether every field is a thunk of the evaluator or a constant, so that
     # data applied again and again is not walked again and again.
     _closed: bool = field(default=False, init=False, eq=False, repr=False)
 
-    # The data with `f` applied to each of its fields, those of its classes
-    # included, or the data itself when `f` changes none of them.
+    # The fields, those of its classes included, in the order `map_fields`
+    # visits them.
     @abstractmethod
-    def map_fields(self, f) -> Data:
+    def fields(self):
         pass
+
+    # The data with `f` applied to each of its fields, those of its classes
+    # included, or the data itself when `f` changes none of them. `is_named`,
+    # when given, is that of the result: data is named exactly when its fields
+    # are, so removing the names changes both at once.
+    @abstractmethod
+    def map_fields(self, f, is_named: bool | None = None) -> Data:
+        pass
+
+    def _compute_free_bound(self) -> int:
+        return max((c.free_bound() for c in self.fields()), default=0)
+
+    def _shift_or_none(self, num: int, cutoff: int) -> Term | None:
+        shifted = self.map_fields(lambda c: c.shift(num, cutoff))
+        return None if shifted is self else shifted
+
+    def _free_variables(self) -> set[str]:
+        return set().union(*(c.free_variables() for c in self.fields()))
+
+    def _remove_name_with_context(self, context: list[str]) -> Term:
+        return self.map_fields(lambda c: c.remove_name_with_context(context), is_named=False)
 
 
 # `d` with `f` applied to each value, or None when `f` changes none of them.
@@ -513,26 +535,15 @@ class List(Data):
         assert all(isinstance(t, Term) for t in self.terms)
         assert all(t.is_named == self.is_named for t in self.terms)
 
-    def map_fields(self, f) -> Data:
+    def fields(self):
+        return self.terms
+
+    def map_fields(self, f, is_named: bool | None = None) -> Data:
+        is_named = helpers.default(is_named, self.is_named)
         terms = tuple(f(c) for c in self.terms)
-        return self if all(a is b for a, b in zip(terms, self.terms)) else self.evolve(terms=terms)
-
-    def _compute_free_bound(self) -> int:
-        return max((t.free_bound() for t in self.terms), default=0)
-
-    def _shift_or_none(self, d, c):
-        shifted_or_none = [t.shift_or_none(d, c) for t in self.terms]
-        if all(s is None for s in shifted_or_none):
-            return None
-        shifted = (helpers.default(shifted_or_none[i], self.terms[i]) for i in range(len(self.terms)))
-        return self.evolve(terms=tuple(shifted))
-
-    def _free_variables(self):
-        return set().union(*[t.free_variables() for t in self.terms])
-
-    def _remove_name_with_context(self, context):
-        return List.nameless(meta_info=self.meta_info,
-                             terms=tuple(t.remove_name_with_context(context) for t in self.terms))
+        if is_named == self.is_named and all(a is b for a, b in zip(terms, self.terms)):
+            return self
+        return self.evolve(terms=terms, is_named=is_named)
 
     # A negative index counts from the end, as in Python and as `Index` does.
     def _apply_arg(self, term: Term) -> Term:
@@ -563,9 +574,15 @@ class Record(Data):
         assert all(isinstance(k, str) for k in self.attributes().keys())
         assert all(isinstance(t, Term) for t in self.attributes().values())
 
-    def map_fields(self, f) -> Data:
+    def fields(self):
+        return self._attributes.values()
+
+    def map_fields(self, f, is_named: bool | None = None) -> Data:
+        is_named = helpers.default(is_named, self.is_named)
         attributes = _map_dict(self._attributes, f)
-        return self if attributes is None else self.evolve(attributes=attributes)
+        if is_named == self.is_named and attributes is None:
+            return self
+        return self.evolve(attributes=attributes, is_named=is_named)
 
     def _evolve(self, is_named: bool | None = None, attributes: dict[str, Term] | None =None):
         if attributes is None:
@@ -576,27 +593,6 @@ class Record(Data):
 
     def attributes(self):
         return self._attributes.copy()
-
-    def _compute_free_bound(self) -> int:
-        return max((t.free_bound() for t in self._attributes.values()), default=0)
-
-    def _shift_or_none(self, d, c):
-        shifted = dict((label, t.shift_or_none(d, c)) for label, t in self.attributes().items())
-        if all(s is None for s in shifted.values()):
-            return None
-        for k in shifted.keys():
-            if shifted[k] is None:
-                shifted[k] = self._attributes[k]
-        return self.evolve(attributes=shifted)
-
-    def _free_variables(self):
-        return set().union(*(t.free_variables() for _, t in self.attributes().items()))
-
-    def _remove_name_with_context(self, context):
-        return self.evolve(
-            attributes=dict((label, t.remove_name_with_context(context)) for label, t
-                            in self.attributes().items()),
-            is_named=False)
 
     def _apply_arg(self, term: Term) -> Term:
         if not isinstance(term, String):
@@ -674,44 +670,19 @@ class PGSNClass(Data):
                       attributes=attributes,
                       methods=methods.copy())
 
-    def _traverse(self, visit):
-        if self.inherit is not None:
-            inherit1 = visit(self.inherit)
-        else:
-            inherit1 = None
-        defaults1 = {label: visit(t) for label, t in self.defaults().items()}
-        methods1 = {label: visit(t) for label, t in self.methods().items()}
-        if all(v is None for v in defaults1.values()):
-            if all(v is None for v in methods1.values()):
-                if inherit1 is None:
-                    return None
-        inherit2 = helpers.default(inherit1, self.inherit)
-        defaults2 = {k: helpers.default(defaults1[k], self.defaults()[k]) for k in defaults1.keys()}
-        methods2 = {k: helpers.default(methods1[k], self.methods()[k]) for k in self.methods().keys()}
-        return self.evolve(inherit=inherit2, defaults=defaults2, methods=methods2)
+    def fields(self):
+        inherited = self.inherit.fields() if self.inherit is not None else ()
+        return [*inherited, *self._defaults.values(), *self._methods.values()]
 
-    def map_fields(self, f) -> Data:
-        inherit = self.inherit.map_fields(f) if self.inherit is not None else None
+    def map_fields(self, f, is_named: bool | None = None) -> Data:
+        is_named = helpers.default(is_named, self.is_named)
+        inherit = self.inherit.map_fields(f, is_named) if self.inherit is not None else None
         defaults = _map_dict(self._defaults, f)
         methods = _map_dict(self._methods, f)
-        if inherit is self.inherit and defaults is None and methods is None:
+        if (is_named == self.is_named and inherit is self.inherit
+                and defaults is None and methods is None):
             return self
-        return self.evolve(inherit=inherit, defaults=defaults, methods=methods)
-
-    def _compute_free_bound(self) -> int:
-        children = [*self._defaults.values(), *self._methods.values()]
-        if self.inherit is not None:
-            children.append(self.inherit)
-        return max((t.free_bound() for t in children), default=0)
-
-    def _shift_or_none(self, num: int, cutoff: int) -> Term | None:
-        return self._traverse(lambda t: t.shift_or_none(num, cutoff))
-
-    def _free_variables(self) -> set[str]:
-        vars_inherit = self.inherit.free_variables() if self.inherit is not None else set()
-        vars_defaults = set().union(*(t.free_variables() for t in self.defaults().values()))
-        vars_methods = set().union(*(t.free_variables() for t in self.methods().values()))
-        return vars_inherit | vars_defaults | vars_methods
+        return self.evolve(is_named=is_named, inherit=inherit, defaults=defaults, methods=methods)
 
     def _apply_arg(self, arg: Term) -> Term:
         if not isinstance(arg, Record):
@@ -724,12 +695,6 @@ class PGSNClass(Data):
             if not k in attr.keys():
                 attr[k] = self.defaults()[k]
         return PGSNObject.nameless(instance=self, attributes=attr, methods=self.methods())
-
-    def _remove_name_with_context(self, context: list[str]) -> Term:
-        reduced = self._traverse(lambda t: t.remove_name_with_context(context))
-        if reduced is None:
-            return self.evolve(is_named=False)
-        return reduced.evolve(is_named=False)
 
 
 _CLASS_PARAMETERS = ("inherit", "name", "defaults", "attributes", "methods")
@@ -886,39 +851,18 @@ class PGSNObject(Data):
                       attributes=attributes,
                       methods=methods)
 
-    def _traverse(self, visit):
-        instance1 = visit(self.instance)
-        attributes1 = {label: visit(t) for label, t in self.attributes().items()}
-        methods1 = {label: visit(t) for label, t in self.methods().items()}
-        if all(v is None for v in attributes1.values()):
-            if all(v is None for v in methods1.values()):
-                if instance1 is None:
-                    return None
-        instance2 = helpers.default(instance1, self.instance)
-        attributes2 = {k: helpers.default(attributes1[k], self.attributes()[k]) for k in attributes1.keys()}
-        methods2 = {k: helpers.default(methods1[k], self.methods()[k]) for k in self.methods().keys()}
-        return self.evolve(instance=instance2, attributes=attributes2, methods=methods2)
+    def fields(self):
+        return [*self.instance.fields(), *self._attributes.values(), *self._methods.values()]
 
-    def map_fields(self, f) -> Data:
-        instance = self.instance.map_fields(f)
+    def map_fields(self, f, is_named: bool | None = None) -> Data:
+        is_named = helpers.default(is_named, self.is_named)
+        instance = self.instance.map_fields(f, is_named)
         attributes = _map_dict(self._attributes, f)
         methods = _map_dict(self._methods, f)
-        if instance is self.instance and attributes is None and methods is None:
+        if (is_named == self.is_named and instance is self.instance
+                and attributes is None and methods is None):
             return self
-        return self.evolve(instance=instance, attributes=attributes, methods=methods)
-
-    def _shift_or_none(self, num: int, cutoff: int) -> Term | None:
-        return self._traverse(lambda t: t.shift_or_none(num, cutoff))
-
-    def _compute_free_bound(self) -> int:
-        children = [self.instance, *self._attributes.values(), *self._methods.values()]
-        return max(t.free_bound() for t in children)
-
-    def _free_variables(self) -> set[str]:
-        vars_instance = self.instance.free_variables()
-        vars_attributes = set().union(*(t.free_variables() for t in self.attributes().values()))
-        vars_methods = set().union(*(t.free_variables() for t in self.methods().values()))
-        return vars_instance | vars_attributes | vars_methods
+        return self.evolve(is_named=is_named, instance=instance, attributes=attributes, methods=methods)
 
     def _apply_arg(self, arg: Term) -> Term:
         if not isinstance(arg, String):
@@ -930,12 +874,6 @@ class PGSNObject(Data):
             return self.attributes()[k]
         else:
             return (self.methods()[k])(self)
-
-    def _remove_name_with_context(self, context: list[str]) -> Term:
-        reduced = self._traverse(lambda t: t.remove_name_with_context(context=context))
-        if reduced is None:
-            return self.evolve(is_named=False)
-        return reduced.evolve(is_named=False)
 
 
 @frozen
@@ -1625,12 +1563,6 @@ class _Machine:
     def normalize(self, thunk: Thunk):
         todo = [thunk]
         seen = set()
-
-        def visit(c: Term) -> Term:
-            if isinstance(c, Thunk):
-                todo.append(c)
-            return c
-
         while todo:
             th = todo.pop()
             if id(th) in seen:
@@ -1641,7 +1573,7 @@ class _Machine:
                 todo.append(t.t2)
                 t = t.t1
             if isinstance(t, Data):
-                t.map_fields(visit)
+                todo.extend(c for c in t.fields() if isinstance(c, Thunk))
             elif isinstance(t, Thunk):
                 todo.append(t)
 
@@ -1677,8 +1609,9 @@ class _Machine:
             cell.readback.free_bound()
         return thunk._cell.readback
 
+    # The thunk has been read back already, before the term that reaches it.
     def _read_under(self, thunk: Thunk, depth: int) -> Term:
-        r = self.readback(thunk)
+        r = thunk._cell.readback
         return r if depth == 0 else r.shift(depth, 0)
 
     # `t` under `depth` binders, with each thunk it reaches -- one written in
