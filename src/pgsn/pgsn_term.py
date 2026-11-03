@@ -488,6 +488,9 @@ class Boolean(ConstMixin, ZeroAry):
 # through `map_fields`, so a new kind of data needs no change there.
 @frozen
 class Data(Unary, ABC):
+    # Whether every field is a thunk of the evaluator or a constant, so that
+    # data applied again and again is not walked again and again.
+    _closed: bool = field(default=False, init=False, eq=False, repr=False)
 
     # The data with `f` applied to each of its fields, those of its classes
     # included, or the data itself when `f` changes none of them.
@@ -1186,46 +1189,48 @@ class Equal(ConstMixin, Builtin):
         if isinstance(a, List) and isinstance(b, List):
             if len(a.terms) != len(b.terms):
                 return Boolean.nameless(value=False)
-            return _components_equal(a.terms, b.terms)
+            return _components_equal(a, b, 0)
         if isinstance(a, Record) and isinstance(b, Record):
             if a._attributes.keys() != b._attributes.keys():
                 return Boolean.nameless(value=False)
             labels = list(a._attributes)
-            return _components_equal(tuple(a._attributes[k] for k in labels),
-                                     tuple(b._attributes[k] for k in labels))
+            return _components_equal(List.nameless(terms=tuple(a._attributes[k] for k in labels)),
+                                     List.nameless(terms=tuple(b._attributes[k] for k in labels)),
+                                     0)
         if isinstance(a, (List, Record)) or isinstance(b, (List, Record)):
             return Boolean.nameless(value=False)
         return Boolean.nameless(value=a == b)
 
 
-# Whether each of `xs` equals the component of `ys` in the same place.
-def _components_equal(xs: tuple[Term, ...], ys: tuple[Term, ...]) -> Term:
-    if not xs:
+# Whether each component of `xs` from the `i`th on equals the component of
+# `ys` in the same place. The lists are passed on whole with the place, so a
+# step costs the same however long they are.
+def _components_equal(xs: List, ys: List, i: int) -> Term:
+    if i == len(xs.terms):
         return Boolean.nameless(value=True)
-    first = _spine(Equal.nameless(), [xs[0], ys[0]])
-    return _spine(_ComponentsEqual.nameless(),
-                  [first, List.nameless(terms=xs[1:]), List.nameless(terms=ys[1:])])
+    equal = _spine(Equal.nameless(), [xs.terms[i], ys.terms[i]])
+    return _spine(_ComponentsEqual.nameless(), [equal, xs, ys, Integer.nameless(value=i)])
 
 
-# The step of Equal that takes whether the first components are equal, and
-# the components that remain.
+# The step of Equal that takes whether the `i`th components are equal, both
+# lists of components and `i`.
 @frozen
 class _ComponentsEqual(ConstMixin, Builtin):
 
     @classmethod
     def build(cls, is_named: bool, **kwarg) -> Term:
-        return super().build(arity=3, is_named=is_named, **kwarg)
+        return super().build(arity=4, is_named=is_named, **kwarg)
 
     def _reported_name(self) -> str:
         return "Equal"
 
     def _apply_args(self, args: tuple[Term, ...]) -> Term:
-        equal, xs, ys = args
+        equal, xs, ys, i = args
         if not isinstance(equal, Boolean):
             raise self._type_error("the components", "data", equal)
         if not equal.value:
             return equal
-        return _components_equal(xs.terms, ys.terms)
+        return _components_equal(xs, ys, i.value + 1)
 
 
 # The first two arguments of `builtin` must be a record and a label.
@@ -1454,9 +1459,11 @@ def _delay(t: Term, env) -> Thunk:
 
 # Data reached under an environment, with each field made a thunk.
 def _close(t: Term, env) -> Term:
-    if not isinstance(t, Data):
+    if not isinstance(t, Data) or t._closed:
         return t
-    return t.map_fields(lambda c: c if isinstance(c, ConstMixin) else _delay(c, env))
+    closed = t.map_fields(lambda c: c if isinstance(c, ConstMixin) else _delay(c, env))
+    object.__setattr__(closed, "_closed", True)
+    return closed
 
 
 def _spine(head: Term, args) -> Term:
@@ -1609,7 +1616,10 @@ class _Machine:
                         t = t.t1
                     term, env = t, None
                     break
-                value = (self._stuck(t, stack, None), None)
+                # A stuck application is held in a thunk under the new one,
+                # so that the term of a value does not deepen as it is applied.
+                head = _value_thunk(t, None) if isinstance(t, App) else t
+                value = (self._stuck(head, stack, None), None)
 
     # Evaluates every thunk the value of `thunk` holds outside an abstraction.
     def normalize(self, thunk: Thunk):
@@ -1632,11 +1642,14 @@ class _Machine:
                 t = t.t1
             if isinstance(t, Data):
                 t.map_fields(visit)
+            elif isinstance(t, Thunk):
+                todo.append(t)
 
     # The term a thunk stands for, with no thunk left in it. A thunk is read
     # back after the thunks its term reaches, so that reading it back does not
-    # recurse into theirs, and the depth of the Python stack does not grow
-    # with the data.
+    # recurse into theirs: the Python stack grows with the structure of one
+    # term, not with the data. The free bound of each term read back is found
+    # at once, for the same reason, before a term that holds it asks for it.
     def readback(self, thunk: Thunk) -> Term:
         todo = [thunk]
         expanded = set()
@@ -1661,6 +1674,7 @@ class _Machine:
                     continue
             todo.pop()
             cell.readback = self._substitute(t, 0, env, self._read_under)
+            cell.readback.free_bound()
         return thunk._cell.readback
 
     def _read_under(self, thunk: Thunk, depth: int) -> Term:
