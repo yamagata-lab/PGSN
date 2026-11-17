@@ -515,6 +515,7 @@
     <choice>
       <ref name="strategy_pat"/>
       <ref name="evidence_pat"/>
+      <ref name="gsn_module_pat"/>
       <oneOrMore>
         <ref name="goal_pat"/>
       </oneOrMore>
@@ -560,6 +561,18 @@
     <optional>
       <ref name="support_pat"/>
     </optional>
+  </define>
+
+  <!-- Modular extension (GSN Community Standard v3, 1:4). A Module holds the
+       argument of one module: one goal, drawn as a diagram of its own. Where
+       it stands, it supports the node above it with that whole argument, and
+       is drawn as the standard's module reference (Table 1:4-1). -->
+  <define name="gsn_module_pat">
+    <element name="Module">
+      <attribute name="identifier"/>
+      <optional><ref name="description_pat"/></optional>
+      <ref name="goal_pat"/>
+    </element>
   </define>
 
 </grammar>

@@ -312,6 +312,10 @@ compiled term however many names are taken from it. Rebinding that reserved
 name for the next `<from>` in the same block is harmless, because each
 projection reads the binding nearest to it.
 
+These modules are units of reuse for any value. The `<Module>` of GSN's modular
+extension is a unit of the argument, and is a GSN class (§5); the two are
+independent, and either can be used without the other.
+
 ## 4. Surface syntax
 
 ### 4.1 Conditionals
@@ -530,6 +534,16 @@ losing that assumption and a context besides. `strategy_class` declares them
 now. `evidence_class` does not, because the standard attaches nothing to a
 Solution, and `PGSN.rng` rejects one written there — the compiler has nowhere
 to put it and would say nothing.
+
+GSN v3 divides a goal structure into modules (1:4), and a module reference
+points to the argument of a module kept elsewhere. A term carries no record of
+where it came from, so there is nothing for a reference to point to: a
+`<Module>` holds the argument itself, as `argument`, and stands where the
+standard's reference would. This is the second deviation. The renderer draws
+the module as the reference symbol and stops there, and draws the argument
+inside it on a page of its own, named after the module's identifier; that
+name becomes a file name, which is why the compiler, not only the schema,
+keeps it to characters a file name can carry.
 
 ## 6. Measurements
 

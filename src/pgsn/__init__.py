@@ -117,6 +117,7 @@ from pgsn.gsn import (
     context,
     assumption,
     defeater,
+    module,
     undeveloped,
     immediate,
     evidence_as_goal,
@@ -130,9 +131,11 @@ from pgsn.gsn import (
     support_class,
     undeveloped_class,
     defeater_class,
+    module_class,
     # Rendering
     gsn_tree,
     gsn_dot,
+    gsn_module_dots,
     save_gsn,
     LABEL_WIDTH,
 )
@@ -221,6 +224,7 @@ __all__ = [
     "context",
     "assumption",
     "defeater",
+    "module",
     "undeveloped",
     "immediate",
     "evidence_as_goal",
@@ -234,10 +238,12 @@ __all__ = [
     "support_class",
     "undeveloped_class",
     "defeater_class",
+    "module_class",
     # Conversion and rendering
     "python_value",
     "gsn_tree",
     "gsn_dot",
+    "gsn_module_dots",
     "save_gsn",
     "LABEL_WIDTH",
 ]

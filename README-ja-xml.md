@@ -409,9 +409,9 @@ import が jail に入ると、その jail が import 先モジュールの封�
 - 文字列: `format_string`
 - クラス／オブジェクト: `define_class`・`instantiate`・`type_of`・`is_subtype`・`base_class`
 - その他: `fix`・`repeat`・`undefined`
-- GSN コンストラクタ: `goal`・`strategy`・`evidence`・`context`・`assumption`・`defeater`・`undeveloped`・`immediate`・`evidence_as_goal`
-- GSN クラス（長い名前）: `goal_class`・`strategy_class`・`evidence_class`・`context_class`・`assumption_class`・`defeater_class`・`gsn_class`・`support_class`・`undeveloped_class`
-- GSN クラス（短いエイリアス）: `Goal`・`Strategy`・`Evidence`・`Context`・`Assumption`・`Defeater`・`GSN`・`Support`
+- GSN コンストラクタ: `goal`・`strategy`・`evidence`・`context`・`assumption`・`defeater`・`module`・`undeveloped`・`immediate`・`evidence_as_goal`
+- GSN クラス（長い名前）: `goal_class`・`strategy_class`・`evidence_class`・`context_class`・`assumption_class`・`defeater_class`・`module_class`・`gsn_class`・`support_class`・`undeveloped_class`
+- GSN クラス（短いエイリアス）: `Goal`・`Strategy`・`Evidence`・`Context`・`Assumption`・`Defeater`・`Module`・`GSN`・`Support`
 
 例（リストにテンプレートを写像する）:
 
@@ -704,6 +704,7 @@ GSN ノードはどれも説明（description）から始まり、どれも `Def
     <!-- body は以下のいずれか -->
     <Strategy>...</Strategy>              <!-- Strategy で支持 -->
     <Evidence>...</Evidence>              <!-- Evidence で支持 -->
+    <Module>...</Module>                  <!-- モジュールの議論で支持 -->
     <Goal>...</Goal>                      <!-- サブゴールで支持（1つ以上） -->
     <supportedBy var="strategy1"/>        <!-- 変数参照で支持 -->
     <undeveloped/>                        <!-- 未展開 -->
@@ -790,6 +791,32 @@ defeater はゴールだけでなく、戦略やエビデンスにも付きま�
 対応する組み込みは `defeater`、クラス値は `defeater_class` です。図では破線の六角形で描かれ、challenge の辺も破線になります。SupportedBy と読み違えないためです。
 
 なお規格そのものには Defeater 要素はありません。規格上の defeater は、Challenges 関係で対象に繋がった普通の Goal または Solution であり、rebutting と undercutting の区別も記法ではなく議論の中身から読み取るものです。PGSN は値の言語で辺を持たないため、攻撃するという役割をクラスとして表現しています。区別は 1 クラスで足ります。
+
+### モジュール
+
+GSN v3 にはモジュールの拡張（1:4）があり、ゴール構造を、それぞれ独自の議論を持つモジュールに分けられます。`<Module>` は1つのモジュールの議論を持ち、その議論全体で上のノードを支持します。
+
+```xml
+<Goal>システムは安全である
+    <Strategy>サブシステムごとに議論する
+        <Goal>サブシステム A は安全である
+            <Module identifier="a">サブシステム A の安全性の議論
+                <Goal>サブシステム A は安全である
+                    <Evidence>テスト報告書 A</Evidence>
+                </Goal>
+            </Module>
+        </Goal>
+    </Strategy>
+</Goal>
+```
+
+`identifier` 属性は必須で、規格のモジュール識別子にあたります。使える文字は英数字・`-`・`_` です。先頭のテキストか `<description>` がモジュールの説明、ちょうど1つの `<Goal>` が議論になります。`<Module>` は、`<Evidence>` や `<Strategy>` がノードを支持できる場所（`<Goal>` や `<Defeater>` の下）に置けます。
+
+図では、モジュールは規格のモジュール参照（タブ付きの長方形）として、識別子と説明を添えて描かれ、その下は描かれません。`pgsn render -o out` は、各モジュールの中の議論を、識別子を名前にした別の図に書き出します（`out.svg`、`out.a.svg`）。モジュールの中のモジュールも、それぞれ別の図になります。同じ識別子のモジュールを2つ置くことはできません。
+
+規格のモジュール参照は、別の場所にある議論を指します。項はどこから来たかの記録を持たないため、`<Module>` は議論そのものを中に持ちます。別のファイルに置きたいときは、`<PGSNModule>` で定義して import します。`<PGSNModule>` はあらゆる値の再利用の単位で、`<Module>` は議論の単位です。両者は独立しています。
+
+対応する組み込みは `module`、クラス値は `module_class` です。
 
 ---
 

@@ -1,0 +1,37 @@
+<PGSN>
+    <!-- The modular extension of GSN v3. A Module holds the argument of one
+         module and supports the node above it with that whole argument. It is
+         drawn as the standard's module reference, and `pgsn render -o out`
+         draws the argument inside it on a page of its own: out.svg holds the
+         main argument, and out.sw.svg the argument of the software module. -->
+    <Goal>
+        The braking controller is safe to release
+        <Strategy>
+            Argue over the hardware and the software of the controller
+            <Goal>
+                The hardware of the controller is safe
+                <Evidence>Hardware FMEA report HW-12</Evidence>
+            </Goal>
+            <Goal>
+                The software of the controller is safe
+                <Module identifier="sw">
+                    Safety argument for the controller software
+                    <Goal>
+                        The software of the controller is safe
+                        <Strategy>
+                            Argue over each software hazard
+                            <Goal>
+                                SH1, a stale wheel-speed reading, is mitigated
+                                <Evidence>Timing analysis report TA-04</Evidence>
+                            </Goal>
+                            <Goal>
+                                SH2, an unhandled sensor fault, is mitigated
+                                <Evidence>Fault injection campaign FI-07</Evidence>
+                            </Goal>
+                        </Strategy>
+                    </Goal>
+                </Module>
+            </Goal>
+        </Strategy>
+    </Goal>
+</PGSN>

@@ -5,6 +5,7 @@ Semantic errors surface as non-terminating reduction.
 """
 
 import ast
+import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from string import Formatter
@@ -28,10 +29,10 @@ from pgsn.dsl import (
     Term,
 )
 from pgsn.gsn import (
-    goal, strategy, evidence, context, assumption, defeater,
+    goal, strategy, evidence, context, assumption, defeater, module,
     goal_class, strategy_class, evidence_class,
     context_class, assumption_class, gsn_class,
-    support_class, undeveloped_class, defeater_class,
+    support_class, undeveloped_class, defeater_class, module_class,
     undeveloped, immediate, evidence_as_goal,
 )
 
@@ -661,6 +662,7 @@ _BUILTINS: dict[str, Term] = {
     "goal": goal, "strategy": strategy, "evidence": evidence,
     "context": context, "assumption": assumption,
     "defeater": defeater,
+    "module": module,
     "immediate": immediate, "undeveloped": undeveloped,
     "evidence_as_goal": evidence_as_goal,
     "gsn_class": gsn_class, "goal_class": goal_class,
@@ -668,14 +670,17 @@ _BUILTINS: dict[str, Term] = {
     "context_class": context_class, "assumption_class": assumption_class,
     "support_class": support_class, "undeveloped_class": undeveloped_class,
     "defeater_class": defeater_class,
+    "module_class": module_class,
     # Intuitive aliases for GSN class values
     "Goal": goal_class, "Strategy": strategy_class, "Evidence": evidence_class,
     "Context": context_class, "Assumption": assumption_class,
     "GSN": gsn_class, "Support": support_class,
     "Defeater": defeater_class,
+    "Module": module_class,
 }
 
-_SUPPORT_TAGS = {"Strategy", "Evidence", "Goal", "supportedBy", "undeveloped"}
+_SUPPORT_TAGS = {"Strategy", "Evidence", "Module", "Goal", "supportedBy",
+                 "undeveloped"}
 
 
 def _text_fields(s: str) -> list[str]:
@@ -1355,7 +1360,7 @@ def _support_of(elem: ET.Element, unit: _Unit) -> Term:
         return undeveloped
     first = body[0]
     match first.tag:
-        case "Strategy" | "Evidence":
+        case "Strategy" | "Evidence" | "Module":
             return _expr(first, unit)
         case "Goal":
             return immediate(list_term(tuple(
@@ -1455,6 +1460,37 @@ def _e_evidence(elem: ET.Element, unit: _Unit) -> Term:
                     defeaters=header.defeaters)
 
 
+# A module's identifier names the file its argument is drawn to, so it is kept
+# to characters that are safe in a file name and cannot leave the directory.
+_MODULE_IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
+
+
+def _e_module(elem: ET.Element, unit: _Unit) -> Term:
+    """A module whose whole argument supports the node above it.
+
+    The identifier is an attribute, the module description the leading text,
+    and the argument the one goal inside:
+
+        <Module identifier="sw">Safety argument for the software
+          <Goal>The software is safe ...</Goal>
+        </Module>
+    """
+    identifier = elem.get("identifier")
+    if not identifier:
+        raise PGSNError("<Module> needs an identifier attribute")
+    if not _MODULE_IDENTIFIER.fullmatch(identifier):
+        raise PGSNError(
+            f"<Module identifier={identifier!r}>: an identifier is letters, "
+            "digits, '-' and '_', starting with a letter or digit")
+    goals = [c for c in elem if c.tag == "Goal"]
+    if len(goals) != 1:
+        raise PGSNError(f"<Module identifier={identifier!r}> holds one <Goal>, "
+                        f"not {len(goals)}")
+    return module(identifier=string(identifier),
+                  description=_header_description(elem, unit),
+                  argument=_e_goal(goals[0], unit))
+
+
 # ------------------------------------------------------------------ #
 # The elements that stand for a value
 # ------------------------------------------------------------------ #
@@ -1477,6 +1513,7 @@ _COMPILERS = {
     "Strategy": _e_strategy,
     "Evidence": _e_evidence,
     "Defeater": _e_defeater,
+    "Module":   _e_module,
 }
 
 
