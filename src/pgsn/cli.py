@@ -154,7 +154,9 @@ def doc(input_file, term_name, doc_type, output, steps, jail_specs):
 @cli.command()
 @click.argument('input_file', type=click.Path(exists=True, dir_okay=False))
 @click.option('--term-name', default='main', help='The name of the Term object to evaluate.')
-@click.option('--output', '-o', default=None, help='The output filename (without extension).')
+@click.option('--output', '-o', default=None,
+              help='The output filename (without extension). The argument of each '
+                   'module is written beside it, as <output>.<identifier>.<format>.')
 @click.option('--format', '-f', 'image_format', type=click.Choice(['svg', 'png', 'pdf']), default='svg',
               help='The output image format.')
 @click.option('--steps', '-s', help='maximum number of evaluation steps', type=int, default=DEFAULT_STEPS)
@@ -172,10 +174,19 @@ def render(input_file, term_name, output, image_format, steps, label_width, jail
         evaluated_gsn = term.fully_eval(steps=steps)
 
         dot = gsn.gsn_dot(evaluated_gsn, label_width=label_width)
+        # Built before anything is written, so that a fault in a module (two
+        # sharing an identifier) leaves no drawing half updated.
+        module_dots = gsn.gsn_module_dots(evaluated_gsn, label_width=label_width)
 
         if output and output != '-':
             click.echo(f"Saving graph to '{output}.{image_format}'...", err=True)
             dot.render(filename=output, view=False, format=image_format, cleanup=True)
+            # Each module's argument is drawn beside the main drawing, named
+            # after it: out.svg, out.sw.svg, ...
+            for name, module_dot in module_dots.items():
+                click.echo(f"Saving module '{name}' to '{output}.{name}.{image_format}'...", err=True)
+                module_dot.render(filename=f"{output}.{name}", view=False,
+                                  format=image_format, cleanup=True)
         elif output == '-':
             # Explicit stdout
             click.echo(dot.pipe(format=image_format))

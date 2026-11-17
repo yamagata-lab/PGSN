@@ -29,6 +29,7 @@ XML_CLASS_ALIASES = {
     "GSN": "gsn_class",
     "Support": "support_class",
     "Defeater": "defeater_class",
+    "Module": "module_class",
 }
 
 

@@ -74,6 +74,11 @@ REJECTED = {
         '<PGSN><param name="p"/>v</PGSN>',
     "the retired <ul>, now that the one list is ordered":
         "<PGSN><ul><li>a</li></ul></PGSN>",
+    "a <Context> in a <Module>, which holds a description and one goal":
+        '<PGSN><Goal>g<Module identifier="m">d<Context>c</Context>'
+        '<Goal>a</Goal></Module></Goal></PGSN>',
+    "a <Module> with no identifier":
+        "<PGSN><Goal>g<Module><Goal>a</Goal></Module></Goal></PGSN>",
 }
 
 

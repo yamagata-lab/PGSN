@@ -123,6 +123,7 @@ pgsn.python_value(double(pgsn.integer(21)).fully_eval())   # 42
 | `context` | `description` |
 | `assumption` | `description` |
 | `defeater` | `description`・`support`（既定は undeveloped）・`defeaters`（既定は空） |
+| `module` | `identifier`・`description`（既定は空）・`argument`（モジュールの議論の頂点のゴール） |
 
 `support` に既定値はありません。支持のないゴールは `support=pgsn.undeveloped` と明示的に書きます。
 
@@ -166,7 +167,7 @@ Goal: System is secure
 
 ### クラス
 
-コンストラクタの背後にあるクラス値は `gsn_class`・`goal_class`・`strategy_class`・`evidence_class`・`context_class`・`assumption_class`・`defeater_class`・`support_class`・`undeveloped_class` です。`define_class` と組み合わせて独自のノード型を派生させられます。
+コンストラクタの背後にあるクラス値は `gsn_class`・`goal_class`・`strategy_class`・`evidence_class`・`context_class`・`assumption_class`・`defeater_class`・`module_class`・`support_class`・`undeveloped_class` です。`define_class` と組み合わせて独自のノード型を派生させられます。
 
 ```python
 my_goal_class = pgsn.define_class(
@@ -245,9 +246,20 @@ dot = pgsn.gsn_dot(evaluated, {"rankdir": "LR"})
 dot.render("out", format="svg", cleanup=True)
 ```
 
+モジュールは記号だけが描かれます。中の議論は `gsn_module_dots` で描きます。
+
+### `gsn_module_dots(term, layout_attrs=None)`
+
+各モジュールの識別子から、その中の議論の `graphviz.Digraph` への `dict` を、文書の順で返します。同じ識別子のモジュールが2つあると `ValueError` を送出します。
+
+```python
+for name, dot in pgsn.gsn_module_dots(evaluated).items():
+    dot.render(f"out.{name}", format="svg", cleanup=True)
+```
+
 ### `save_gsn(term, filename, image_format="png", view=False, cleanup=True)`
 
-そのままファイルに書き出します。
+そのままファイルに書き出します。各モジュールの議論は、その横に `<filename>.<identifier>.<image_format>` として書き出します。
 
 ---
 

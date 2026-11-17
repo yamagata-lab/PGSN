@@ -419,9 +419,9 @@ The following names are predefined; reference them with `<var name="..."/>` and 
 - Strings: `format_string`
 - Classes / objects: `define_class`, `instantiate`, `type_of`, `is_subtype`, `base_class`
 - Misc: `fix`, `repeat`, `undefined`
-- GSN constructors: `goal`, `strategy`, `evidence`, `context`, `assumption`, `defeater`, `undeveloped`, `immediate`, `evidence_as_goal`
-- GSN classes (long form): `goal_class`, `strategy_class`, `evidence_class`, `context_class`, `assumption_class`, `defeater_class`, `gsn_class`, `support_class`, `undeveloped_class`
-- GSN classes (short aliases): `Goal`, `Strategy`, `Evidence`, `Context`, `Assumption`, `Defeater`, `GSN`, `Support`
+- GSN constructors: `goal`, `strategy`, `evidence`, `context`, `assumption`, `defeater`, `module`, `undeveloped`, `immediate`, `evidence_as_goal`
+- GSN classes (long form): `goal_class`, `strategy_class`, `evidence_class`, `context_class`, `assumption_class`, `defeater_class`, `module_class`, `gsn_class`, `support_class`, `undeveloped_class`
+- GSN classes (short aliases): `Goal`, `Strategy`, `Evidence`, `Context`, `Assumption`, `Defeater`, `Module`, `GSN`, `Support`
 
 Example (mapping a template over a list):
 
@@ -716,6 +716,7 @@ document itself will say so.
     <!-- body: exactly one of the following -->
     <Strategy>...</Strategy>              <!-- supported by a Strategy -->
     <Evidence>...</Evidence>              <!-- supported by Evidence -->
+    <Module>...</Module>                  <!-- supported by a module's argument -->
     <Goal>...</Goal>                      <!-- supported by sub-goals (one or more) -->
     <supportedBy var="strategy1"/>        <!-- supported by a variable reference -->
     <undeveloped/>                        <!-- not yet developed -->
@@ -802,6 +803,32 @@ Defeaters attach to strategies and to evidence as well as to goals:
 The corresponding builtin is `defeater`, with the class value `defeater_class`. In a rendered graph a defeater is drawn as a hexagon with a broken outline, and the challenge is drawn with a dashed arrow, so that it does not read as SupportedBy.
 
 The standard has no Defeater element of its own: a defeater there is an ordinary Goal or Solution joined to its target by a Challenges relationship, and the literature's rebutting/undercutting distinction is read off the argument rather than off the notation. PGSN makes the challenging role a class instead, because a language of values has no edges to carry a relationship. One class covers both kinds.
+
+### Modules
+
+GSN v3 adds a modular extension (1:4): a goal structure can be divided into modules, each holding an argument of its own. A `<Module>` holds the argument of one module and supports the node above it with that whole argument.
+
+```xml
+<Goal>the system is safe
+    <Strategy>argue over each subsystem
+        <Goal>subsystem A is safe
+            <Module identifier="a">safety argument for subsystem A
+                <Goal>subsystem A is safe
+                    <Evidence>test report A</Evidence>
+                </Goal>
+            </Module>
+        </Goal>
+    </Strategy>
+</Goal>
+```
+
+The `identifier` attribute is required and is the standard's module identifier; it is made of letters, digits, `-` and `_`. Leading text or a `<description>` gives the module description, and exactly one `<Goal>` gives the argument. A `<Module>` can stand wherever an `<Evidence>` or a `<Strategy>` can support a node, under a `<Goal>` or a `<Defeater>`.
+
+A rendered graph draws the module as the standard's module reference, a rectangle with a tab, labelled with the identifier and the description, and stops there. `pgsn render -o out` writes the argument inside each module to a drawing of its own, named after the identifier: `out.svg`, `out.a.svg`. A module inside another is drawn in its own right too, and two modules may not share an identifier.
+
+The standard's module reference points to an argument kept elsewhere. A term carries no record of where it came from, so the `<Module>` holds the argument itself; to keep it in a file of its own, define it in a `<PGSNModule>` and import it. A `<PGSNModule>` is a unit of reuse for any value, and a `<Module>` is a unit of the argument; the two are independent.
+
+The corresponding builtin is `module`, with the class value `module_class`.
 
 ---
 

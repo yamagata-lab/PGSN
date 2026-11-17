@@ -123,6 +123,7 @@ Each constructor takes keyword arguments and returns a term.
 | `context` | `description` |
 | `assumption` | `description` |
 | `defeater` | `description`, `support` (default undeveloped), `defeaters` (default empty) |
+| `module` | `identifier`, `description` (default empty), `argument` (the goal of the module's argument) |
 
 `support` has no default: an unsupported goal is written explicitly with `support=pgsn.undeveloped`.
 
@@ -166,7 +167,7 @@ Goal: System is secure
 
 ### Classes
 
-The class values behind the constructors are `gsn_class`, `goal_class`, `strategy_class`, `evidence_class`, `context_class`, `assumption_class`, `defeater_class`, `support_class` and `undeveloped_class`. Use them with `define_class` to derive your own node types:
+The class values behind the constructors are `gsn_class`, `goal_class`, `strategy_class`, `evidence_class`, `context_class`, `assumption_class`, `defeater_class`, `module_class`, `support_class` and `undeveloped_class`. Use them with `define_class` to derive your own node types:
 
 ```python
 my_goal_class = pgsn.define_class(
@@ -249,9 +250,20 @@ dot = pgsn.gsn_dot(evaluated, {"rankdir": "LR"})
 dot.render("out", format="svg", cleanup=True)
 ```
 
+A module is drawn as its symbol only; its argument is drawn by `gsn_module_dots`.
+
+### `gsn_module_dots(term, layout_attrs=None)`
+
+Returns a `dict` from each module's identifier to a `graphviz.Digraph` of the argument inside it, in document order. Raises `ValueError` if two modules share an identifier.
+
+```python
+for name, dot in pgsn.gsn_module_dots(evaluated).items():
+    dot.render(f"out.{name}", format="svg", cleanup=True)
+```
+
 ### `save_gsn(term, filename, image_format="png", view=False, cleanup=True)`
 
-Renders straight to a file.
+Renders straight to a file. The argument of each module is written beside it, as `<filename>.<identifier>.<image_format>`.
 
 ---
 

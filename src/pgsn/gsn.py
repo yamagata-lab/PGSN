@@ -56,6 +56,18 @@ defeater_class = pgsn.dsl.define_class(inherit=gsn_class, name='Defeater',
                                        attributes=["support"],
                                        defaults={"support": undeveloped})
 
+# Modular extension (GSN Community Standard v3, 1:4). A Module supports the
+# node above it with the whole argument of a module. The standard's module
+# reference (Table 1:4-1) points to an argument kept elsewhere; a term carries
+# no record of where it came from, so PGSN keeps the argument itself in the
+# Module, and the renderer draws it as a diagram of its own. `identifier` is
+# the standard's Module Identifier (`name` is taken: it is the name of a
+# class), and `description` is the Module Description the standard writes in
+# the symbol.
+module_class = pgsn.dsl.define_class(inherit=support_class, name='Module',
+                                     attributes=["identifier", "argument"],
+                                     defaults={"description": ""})
+
 _d = pgsn.dsl.variable('x')
 _support = pgsn.dsl.variable('support')
 _assumptions = pgsn.dsl.variable('assumptions')
@@ -109,6 +121,15 @@ defeater = pgsn.dsl.lambda_abs_keywords(
     body=defeater_class(description=_d, support=_support,
                         defeaters=_defeaters))
 
+_identifier = pgsn.dsl.variable('identifier')
+_argument = pgsn.dsl.variable('argument')
+module = pgsn.dsl.lambda_abs_keywords(
+    arguments={'identifier': _identifier, 'description': _d,
+               'argument': _argument},
+    defaults=pgsn.dsl.record({'description': pgsn.dsl.string("")}),
+    body=module_class(identifier=_identifier, description=_d,
+                      argument=_argument))
+
 _goals = pgsn.dsl.variable('goals')
 immediate = pgsn.dsl.lambda_abs(_goals, strategy(description="immediate", sub_goals=_goals))
 
@@ -121,7 +142,7 @@ evidence_as_goal = pgsn.dsl.lambda_abs(_evd, goal(description=_evd('description'
 GSN_KEYS_TO_FLATTEN = {"support", "sub_goals", "contexts", "assumptions",
                        "defeaters"}
 GSN_TYPES = {"Goal", "Strategy", "Evidence", "Context", "Assumption",
-             "Undeveloped", "Defeater"}
+             "Undeveloped", "Defeater", "Module"}
 
 # The kinds of node that challenge rather than support what holds them.
 GSN_DEFEATER_TYPES = {"Defeater"}
@@ -214,6 +235,8 @@ GSN_SHAPES = {
         'Undeveloped': 'diamond',
         # The dialectic extension draws every defeater with one glyph.
         'Defeater': 'hexagon',
+        # The standard's module reference: a rectangle with a tab, as a folder.
+        'Module': 'tab',
     }
 
 
@@ -246,8 +269,45 @@ def gsn_dot(gsn: pgsn.pgsn_term.Term,
     treelib.Treeオブジェクトを受け取り、GSNのルールに基づいて
     ノードの形をカスタマイズしたdotファイルを生成する。
     """
-    tree = gsn_tree(gsn)
+    return _tree_dot(gsn_tree(gsn), layout_attrs, label_width)
 
+
+def gsn_module_dots(gsn: pgsn.pgsn_term.Term,
+                    layout_attrs: dict[str, str] | None = None,
+                    label_width: int = LABEL_WIDTH) -> dict[str, graphviz.Digraph]:
+    """The argument of every Module in `gsn`, each as a drawing of its own.
+
+    `gsn_dot` draws a Module as its symbol and stops there; this draws what
+    the symbol stands for. The result is keyed by module name, in document
+    order, and a Module nested inside another is drawn in its own right too.
+    """
+    tree = gsn_tree(gsn)
+    dots = {}
+    for node in tree.all_nodes_itr():
+        if node.tag.split(': ', 1)[0] != 'Module':
+            continue
+        children = tree.children(node.identifier)
+        name = next(c.tag.split(': ', 1)[1] for c in children
+                    if c.tag.startswith('identifier: '))
+        argument = next(c for c in children
+                        if c.tag.split(': ', 1)[0] in GSN_TYPES)
+        # The name becomes a file name, so two modules sharing one would
+        # overwrite each other's drawing without a word.
+        if name in dots:
+            raise ValueError(f"two modules are named {name!r}")
+        dots[name] = _tree_dot(tree.subtree(argument.identifier),
+                               layout_attrs, label_width)
+    return dots
+
+
+def _tree_dot(tree: Tree,
+              layout_attrs: dict[str, str] | None,
+              label_width: int) -> graphviz.Digraph:
+    """Draw `tree`, the whole of a GSN or a subtree of it, as a digraph.
+
+    A subtree keeps the node identifiers of the tree it was cut from, which
+    is why the tree questions below are asked relative to `tree.identifier`.
+    """
     default_layout = {
         "rankdir": "TB",
         # Straight lines are drawn through whatever stands between two nodes;
@@ -292,7 +352,7 @@ def gsn_dot(gsn: pgsn.pgsn_term.Term,
         # marker as well puts a diamond under every challenging defeater a
         # generator emits, which crowds out the undeveloped goals -- the ones a
         # reader is looking for. A goal keeps its marker.
-        if node_type == 'Undeveloped' and node_obj.is_leaf() and not node_obj.is_root():
+        if node_type == 'Undeveloped' and node_obj.is_leaf(tree.identifier) and not node_obj.is_root(tree.identifier):
             parent_tag = tree.get_node(node_obj.predecessor(tree.identifier)).tag
             if parent_tag.split(': ', 1)[0] in GSN_DEFEATER_TYPES:
                 continue
@@ -306,9 +366,22 @@ def gsn_dot(gsn: pgsn.pgsn_term.Term,
             is_gsn = len(child_parts) > 1 and child_parts[0] in GSN_TYPES
 
             # GSNノードではなく、かつ子を持たない「葉っぱ」のノード（数値やBooleanも含む）の場合
-            if not is_gsn and child.is_leaf():
+            if not is_gsn and child.is_leaf(tree.identifier):
                 attr_lines.append(child_tag)
                 skipped_nodes.add(child.identifier)
+
+        # A Module stands for an argument drawn elsewhere (gsn_module_dots),
+        # so the argument beneath it is left out of this drawing. Its name goes
+        # above the description, as the standard's symbols are labelled, not
+        # as an "identifier: ..." field line.
+        if node_type == 'Module':
+            for child in children:
+                if child.identifier not in skipped_nodes:
+                    skipped_nodes.update(tree.expand_tree(child.identifier))
+            names = [a.split(': ', 1)[1] for a in attr_lines
+                     if a.startswith('identifier: ')]
+            attr_lines = [a for a in attr_lines if not a.startswith('identifier: ')]
+            node_label = "\n".join(names + ([node_label] if node_label else []))
 
         # 吸収した属性があれば、ラベルの文字列に改行(\n)で合体させる
         if attr_lines:
@@ -343,7 +416,7 @@ def gsn_dot(gsn: pgsn.pgsn_term.Term,
         )
 
         edge_attrs = {}
-        if not node_obj.is_root():
+        if not node_obj.is_root(tree.identifier):
             parent_id = node_obj.predecessor(tree.identifier)
             parent_node_obj = tree.get_node(parent_id)
             parent_tag_parts = parent_node_obj.tag.split(': ', 1)
@@ -387,4 +460,10 @@ def save_gsn(gsn: pgsn.pgsn_term.Term,
              label_width: int = LABEL_WIDTH):
 
     dot = gsn_dot(gsn, label_width=label_width)
+    module_dots = gsn_module_dots(gsn, label_width=label_width)
     dot.render(filename, view=view, format=image_format, cleanup=cleanup)
+    # Each module's argument goes beside the main drawing, as `pgsn render`
+    # writes it: out.png, out.sw.png, ...
+    for name, module_dot in module_dots.items():
+        module_dot.render(f"{filename}.{name}", format=image_format,
+                          cleanup=cleanup)
