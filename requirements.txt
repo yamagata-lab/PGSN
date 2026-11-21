@@ -3,4 +3,3 @@ cattrs==25.2.0
 click==8.2.1
 graphviz==0.21
 treelib==1.7.1
-typeguard==4.4.4

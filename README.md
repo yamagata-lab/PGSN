@@ -40,7 +40,7 @@ For developers who want modify the library
 ```bash
 git clone https://github.com/yamagata-lab/PGSN.git
 cd PGSN
-pip install -e .
+pip install -e '.[dev]'
 ```
 
 Or using conda
@@ -48,6 +48,8 @@ Or using conda
 git clone https://github.com/yamagata-lab/PGSN.git
 cd PGSN
 conda env create -f environment.yml -n PGSN
+conda activate PGSN
+pip install -e '.[dev]'
 ```
 
 ---

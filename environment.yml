@@ -11,4 +11,3 @@ dependencies:
   - click>=8.2
   - graphviz
   - python-graphviz
-  - typeguard
