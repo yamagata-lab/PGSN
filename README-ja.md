@@ -60,9 +60,9 @@ Evaluating term 'main'...
 Goal: System is secure
 └── Strategy: Break into sub-goals
     ├── Goal: Input validated
-    │   └── Evidence: Static analysis passed
+    │   └── Solution: Static analysis passed
     └── Goal: Output sanitized
-        └── Evidence: Fuzzing test succeeded
+        └── Solution: Fuzzing test succeeded
 
 Done.
 ```
@@ -97,7 +97,7 @@ term = pgsn.load_xml("main.xml", config=cfg)
 print(pgsn.gsn_tree(term).show(stdout=False, sorting=False))
 ```
 
-公開しているのは、PGSN 定数および項を構築する関数（`string`、`record`、`lambda_abs`、`map_term` など）、GSN ノードとクラスを構築する関数（`goal`、`strategy`、`evidence`、`goal_class` など）、変換・描画の関数（`python_value`、`gsn_tree`、`gsn_dot`、`save_gsn`）、そして XML フロントエンドとその設定（`load_xml`、`load_xml_string`、`Config`、`Jails`、`configure`）です。
+公開しているのは、PGSN 定数および項を構築する関数（`string`、`record`、`lambda_abs`、`map_term` など）、GSN ノードとクラスを構築する関数（`goal`、`strategy`、`solution`、`goal_class` など）、変換・描画の関数（`python_value`、`gsn_tree`、`gsn_dot`、`save_gsn`）、そして XML フロントエンドとその設定（`load_xml`、`load_xml_string`、`Config`、`Jails`、`configure`）です。
 
 これら以外 — `pgsn.dsl`、`pgsn.gsn`、`pgsn.pgsn_term`、`pgsn.pgsn_xml`、`pgsn.dcom`、`pgsn.helpers`、`pgsn.cli` — は内部実装であり、予告なく変更されることがあります。以下の例は公開 API の導入前に書かれたもので、これらのサブモジュールを直接 import しています。新しいコードでは `import pgsn` を使ってください。
 
@@ -117,9 +117,9 @@ g = goal(
         description="Break into sub-goals",
         sub_goals=[
             goal(description="Input validated",
-                 support=evidence(description="Static analysis passed")),
+                 support=solution(description="Static analysis passed")),
             goal(description="Output sanitized",
-                 support=evidence(description="Fuzzing test succeeded"))
+                 support=solution(description="Fuzzing test succeeded"))
         ]
     )
 )
@@ -135,9 +135,9 @@ Evaluating term 'main'...
 Goal: System is secure
 └── Strategy: Break into sub-goals
     ├── Goal: Input validated
-    │   └── Evidence: Static analysis passed
+    │   └── Solution: Static analysis passed
     └── Goal: Output sanitized
-        └── Evidence: Fuzzing test succeeded
+        └── Solution: Fuzzing test succeeded
 
 Done.
 ```
@@ -148,18 +148,18 @@ Done.
 
 ### 例1：テンプレートによる再利用
 
-同じ説明文を持つ goal + evidence の構造を生成する再利用可能な関数を定義します。
+同じ説明文を持つ goal + solution の構造を生成する再利用可能な関数を定義します。
 
 ```python
 from pgsn.dsl import *
 from pgsn.gsn import *
 
-# 再利用できる goal + evidence のテンプレートを定義
+# 再利用できる goal + solution のテンプレートを定義
 mk_goal_with_evidence = lambda_abs_keywords(
     {"desc": variable("desc")},
     goal(
         description=variable("desc"),
-        support=evidence(description=variable("desc"))
+        support=solution(description=variable("desc"))
     )
 )
 
@@ -184,7 +184,7 @@ gsn_tree(top.fully_eval()).show(sorting=False)
 
 ### 例2：`map_term` を用いた一括生成
 
-複数の要件から自動的に goal + evidence の構造を生成します。
+複数の要件から自動的に goal + solution の構造を生成します。
 
 ```python
 from pgsn.dsl import *
@@ -195,7 +195,7 @@ requirements = ["Firewall enabled", "Encrypted communication", "Access control a
 
 goal_template = lambda_abs(variable("desc"),
     goal(description=variable("desc"),
-         support=evidence(description=variable("desc")))
+         support=solution(description=variable("desc")))
 )
 
 goals = map_term(goal_template, requirements)
@@ -223,7 +223,7 @@ CustomGoal = define_class(inherit=goal_class, name="GoalWithProject", attributes
 
 g = instantiate(CustomGoal, description="Secure connection established",
                 project='Alpha',
-                support=evidence(description="Verified by audit"))
+                support=solution(description="Verified by audit"))
 
 gsn_tree(g.fully_eval()).show(sorting=False)
 ```
@@ -245,7 +245,7 @@ gsn_tree(g.fully_eval()).show(sorting=False)
 |----------------------------|------------------------------------------------|
 | `goal(...)`                | GSNのゴール（主張）を定義                     |
 | `strategy(...)`            | ゴールを裏付ける推論戦略を記述                |
-| `evidence(...)`            | ゴールを支える情報を記述                      |
+| `solution(...)`            | ゴールを支える証拠への参照を記述              |
 | `context(...)`             | ゴールや戦略に対する文脈情報を追加            |
 | `assumption(...)`          | 前提条件を明示                                |
 | `immediate(...)`           | サブゴールを直接接続                          |

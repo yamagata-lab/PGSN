@@ -11,6 +11,6 @@
         <instanceOf var="GoalWithProject"/>
         <attribute name="description">Secure connection established</attribute>
         <attribute name="project">Alpha</attribute>
-        <attribute name="support"><Evidence>Verified by audit</Evidence></attribute>
+        <attribute name="support"><Solution>Verified by audit</Solution></attribute>
     </object>
 </PGSN>

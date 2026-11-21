@@ -4,7 +4,7 @@
         <Strategy>
             Break into sub-goals
             <Goal>Input validated<undeveloped/></Goal>
-            <Goal>Output sanitized<Evidence>Fuzzing test succeeded</Evidence></Goal>
+            <Goal>Output sanitized<Solution>Fuzzing test succeeded</Solution></Goal>
         </Strategy>
     </Goal>
 </PGSN>

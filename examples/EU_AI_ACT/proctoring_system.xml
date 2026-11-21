@@ -17,9 +17,9 @@
     <import name="noProhibitedPractice"/>
   </from>
 
-  <def name="art5Report" as="Evidence">Art. 5 prohibited-use self-assessment, Remote Proctoring Suite v4.2</def>
-  <def name="scopeAssessment" as="Evidence">Annex I and Annex III scope assessment, Remote Proctoring Suite v4.2</def>
-  <def name="notGpaiReport" as="Evidence">Model architecture and capability assessment against Art. 3(63)</def>
+  <def name="art5Report" as="Solution">Art. 5 prohibited-use self-assessment, Remote Proctoring Suite v4.2</def>
+  <def name="scopeAssessment" as="Solution">Annex I and Annex III scope assessment, Remote Proctoring Suite v4.2</def>
+  <def name="notGpaiReport" as="Solution">Model architecture and capability assessment against Art. 3(63)</def>
 
   <!-- ================================================================
        F1: identity verification. One route only.
@@ -36,12 +36,12 @@
     <dd>
       <dl>
         <dt key="Art. 6(1)"/>
-        <dd><apply template="doesNotApply"><arg><Evidence>Product scope statement: not covered by Annex I harmonisation legislation</Evidence></arg></apply></dd>
+        <dd><apply template="doesNotApply"><arg><Solution>Product scope statement: not covered by Annex I harmonisation legislation</Solution></arg></apply></dd>
         <dt key="Annex III, point 1"/>
-        <dd><apply template="doesApply"><arg><Evidence>Intended purpose statement: remote biometric verification of candidates (Annex III, point 1(a))</Evidence></arg></apply></dd>
+        <dd><apply template="doesApply"><arg><Solution>Intended purpose statement: remote biometric verification of candidates (Annex III, point 1(a))</Solution></arg></apply></dd>
         <dt key="Annex III, point 2"/><dd><apply template="doesNotApply"><arg var="scopeAssessment"/></apply></dd>
         <dt key="Annex III, point 3"/>
-        <dd><apply template="doesNotApply"><arg><Evidence>Function specification: identity is confirmed before the examination begins; no input to admission, grading or monitoring</Evidence></arg></apply></dd>
+        <dd><apply template="doesNotApply"><arg><Solution>Function specification: identity is confirmed before the examination begins; no input to admission, grading or monitoring</Solution></arg></apply></dd>
         <dt key="Annex III, point 4"/><dd><apply template="doesNotApply"><arg var="scopeAssessment"/></apply></dd>
         <dt key="Annex III, point 5"/><dd><apply template="doesNotApply"><arg var="scopeAssessment"/></apply></dd>
         <dt key="Annex III, point 6"/><dd><apply template="doesNotApply"><arg var="scopeAssessment"/></apply></dd>
@@ -55,17 +55,17 @@
     <dt key="notGpaiAssessment"/><dd var="notGpaiReport"/>
 
     <!-- Art. 9-15, 17, 43, 48, 49 -->
-    <dt key="risk_management"/><dd><Evidence>Risk management file: false accept and false reject analysis for identity verification (Art. 9)</Evidence></dd>
-    <dt key="data_governance"/><dd><Evidence>Enrolment data governance and demographic bias audit of the matcher (Art. 10)</Evidence></dd>
-    <dt key="technical_documentation"/><dd><Evidence>Annex IV technical documentation, Identity Verification (Art. 11)</Evidence></dd>
-    <dt key="record_keeping"/><dd><Evidence>Verification decision log specification and retention test report (Art. 12)</Evidence></dd>
-    <dt key="transparency_deployers"/><dd><Evidence>Instructions for use for examination boards (Art. 13)</Evidence></dd>
-    <dt key="human_oversight"/><dd><Evidence>Proctor review procedure for every rejected verification (Art. 14)</Evidence></dd>
-    <dt key="accuracy_robustness"/><dd><Evidence>Matcher accuracy and presentation attack detection benchmark (Art. 15)</Evidence></dd>
-    <dt key="quality_management_system"/><dd><Evidence>ISO 9001-aligned quality management system certificate (Art. 17)</Evidence></dd>
-    <dt key="conformity_assessment"/><dd><Evidence>Notified body conformity assessment certificate, Annex III point 1 (Art. 43)</Evidence></dd>
-    <dt key="ce_marking"/><dd><Evidence>CE marking affixation record (Art. 48)</Evidence></dd>
-    <dt key="declaration_of_conformity"/><dd><Evidence>EU declaration of conformity and EU database registration (Art. 49)</Evidence></dd>
+    <dt key="risk_management"/><dd><Solution>Risk management file: false accept and false reject analysis for identity verification (Art. 9)</Solution></dd>
+    <dt key="data_governance"/><dd><Solution>Enrolment data governance and demographic bias audit of the matcher (Art. 10)</Solution></dd>
+    <dt key="technical_documentation"/><dd><Solution>Annex IV technical documentation, Identity Verification (Art. 11)</Solution></dd>
+    <dt key="record_keeping"/><dd><Solution>Verification decision log specification and retention test report (Art. 12)</Solution></dd>
+    <dt key="transparency_deployers"/><dd><Solution>Instructions for use for examination boards (Art. 13)</Solution></dd>
+    <dt key="human_oversight"/><dd><Solution>Proctor review procedure for every rejected verification (Art. 14)</Solution></dd>
+    <dt key="accuracy_robustness"/><dd><Solution>Matcher accuracy and presentation attack detection benchmark (Art. 15)</Solution></dd>
+    <dt key="quality_management_system"/><dd><Solution>ISO 9001-aligned quality management system certificate (Art. 17)</Solution></dd>
+    <dt key="conformity_assessment"/><dd><Solution>Notified body conformity assessment certificate, Annex III point 1 (Art. 43)</Solution></dd>
+    <dt key="ce_marking"/><dd><Solution>CE marking affixation record (Art. 48)</Solution></dd>
+    <dt key="declaration_of_conformity"/><dd><Solution>EU declaration of conformity and EU database registration (Art. 49)</Solution></dd>
   </def>
 
   <!-- ================================================================
@@ -85,12 +85,12 @@
     <dd>
       <dl>
         <dt key="Art. 6(1)"/>
-        <dd><apply template="doesNotApply"><arg><Evidence>Product scope statement: not covered by Annex I harmonisation legislation</Evidence></arg></apply></dd>
+        <dd><apply template="doesNotApply"><arg><Solution>Product scope statement: not covered by Annex I harmonisation legislation</Solution></arg></apply></dd>
         <dt key="Annex III, point 1"/>
-        <dd><apply template="doesApply"><arg><Evidence>Data flow specification: gaze and head pose are derived from biometric data of the candidate (Annex III, point 1)</Evidence></arg></apply></dd>
+        <dd><apply template="doesApply"><arg><Solution>Data flow specification: gaze and head pose are derived from biometric data of the candidate (Annex III, point 1)</Solution></arg></apply></dd>
         <dt key="Annex III, point 2"/><dd><apply template="doesNotApply"><arg var="scopeAssessment"/></apply></dd>
         <dt key="Annex III, point 3"/>
-        <dd><apply template="doesApply"><arg><Evidence>Intended purpose statement: monitoring and detecting prohibited behaviour of students during tests (Annex III, point 3(d))</Evidence></arg></apply></dd>
+        <dd><apply template="doesApply"><arg><Solution>Intended purpose statement: monitoring and detecting prohibited behaviour of students during tests (Annex III, point 3(d))</Solution></arg></apply></dd>
         <dt key="Annex III, point 4"/><dd><apply template="doesNotApply"><arg var="scopeAssessment"/></apply></dd>
         <dt key="Annex III, point 5"/><dd><apply template="doesNotApply"><arg var="scopeAssessment"/></apply></dd>
         <dt key="Annex III, point 6"/><dd><apply template="doesNotApply"><arg var="scopeAssessment"/></apply></dd>
@@ -105,17 +105,17 @@
 
     <!-- One set of obligations, although two routes brought the function
          into the high-risk regime. -->
-    <dt key="risk_management"/><dd><Evidence>Risk management file: false accusation and disparate impact analysis for behaviour monitoring (Art. 9)</Evidence></dd>
-    <dt key="data_governance"/><dd><Evidence>Training data governance audit, including disability and environment coverage (Art. 10)</Evidence></dd>
-    <dt key="technical_documentation"/><dd><Evidence>Annex IV technical documentation, Examination Behaviour Monitoring (Art. 11)</Evidence></dd>
-    <dt key="record_keeping"/><dd><Evidence>Flagged-incident log specification and retention test report (Art. 12)</Evidence></dd>
-    <dt key="transparency_deployers"/><dd><Evidence>Instructions for use, including the limits of automated flagging (Art. 13)</Evidence></dd>
-    <dt key="human_oversight"/><dd><Evidence>Human proctor adjudication procedure: no flag results in a sanction without review (Art. 14)</Evidence></dd>
-    <dt key="accuracy_robustness"/><dd><Evidence>Detection accuracy benchmark across lighting, device and assistive technology conditions (Art. 15)</Evidence></dd>
-    <dt key="quality_management_system"/><dd><Evidence>ISO 9001-aligned quality management system certificate (Art. 17)</Evidence></dd>
-    <dt key="conformity_assessment"/><dd><Evidence>Notified body conformity assessment certificate, Annex III points 1 and 3 (Art. 43)</Evidence></dd>
-    <dt key="ce_marking"/><dd><Evidence>CE marking affixation record (Art. 48)</Evidence></dd>
-    <dt key="declaration_of_conformity"/><dd><Evidence>EU declaration of conformity and EU database registration (Art. 49)</Evidence></dd>
+    <dt key="risk_management"/><dd><Solution>Risk management file: false accusation and disparate impact analysis for behaviour monitoring (Art. 9)</Solution></dd>
+    <dt key="data_governance"/><dd><Solution>Training data governance audit, including disability and environment coverage (Art. 10)</Solution></dd>
+    <dt key="technical_documentation"/><dd><Solution>Annex IV technical documentation, Examination Behaviour Monitoring (Art. 11)</Solution></dd>
+    <dt key="record_keeping"/><dd><Solution>Flagged-incident log specification and retention test report (Art. 12)</Solution></dd>
+    <dt key="transparency_deployers"/><dd><Solution>Instructions for use, including the limits of automated flagging (Art. 13)</Solution></dd>
+    <dt key="human_oversight"/><dd><Solution>Human proctor adjudication procedure: no flag results in a sanction without review (Art. 14)</Solution></dd>
+    <dt key="accuracy_robustness"/><dd><Solution>Detection accuracy benchmark across lighting, device and assistive technology conditions (Art. 15)</Solution></dd>
+    <dt key="quality_management_system"/><dd><Solution>ISO 9001-aligned quality management system certificate (Art. 17)</Solution></dd>
+    <dt key="conformity_assessment"/><dd><Solution>Notified body conformity assessment certificate, Annex III points 1 and 3 (Art. 43)</Solution></dd>
+    <dt key="ce_marking"/><dd><Solution>CE marking affixation record (Art. 48)</Solution></dd>
+    <dt key="declaration_of_conformity"/><dd><Solution>EU declaration of conformity and EU database registration (Art. 49)</Solution></dd>
   </def>
 
   <!-- ================================================================
@@ -128,7 +128,7 @@
   <def name="system" as="dl">
     <dt key="name"/><dd>Remote Examination Proctoring System</dd>
     <dt key="functionInventoryEvidence"/>
-    <dd><Evidence>Annex IV technical documentation section 1(b) and independent architecture review AR-2026-014, identifying every AI component in the deployed build</Evidence></dd>
+    <dd><Solution>Annex IV technical documentation section 1(b) and independent architecture review AR-2026-014, identifying every AI component in the deployed build</Solution></dd>
     <dt key="functions"/>
     <dd>
       <ol>

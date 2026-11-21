@@ -34,7 +34,7 @@ def test_no_element_of_its_own_is_drawn():
 
 
 def test_a_developed_goal_has_no_decorator():
-    labels = _labels(_xml("<Goal>safe<Evidence>report</Evidence></Goal>"))
+    labels = _labels(_xml("<Goal>safe<Solution>report</Solution></Goal>"))
     assert not any(UNDEVELOPED_DECORATOR in label for label in labels)
 
 
@@ -48,6 +48,6 @@ def test_an_unsupported_defeater_has_neither():
     """The standard gives the decorator to goals and strategies only, and an
     objection put without grounds says so by having nothing beneath it."""
     labels = _labels(_xml(
-        "<Goal>safe<Defeater>H4</Defeater><Evidence>report</Evidence></Goal>"))
+        "<Goal>safe<Defeater>H4</Defeater><Solution>report</Solution></Goal>"))
     assert "Defeater\nH4" in labels
     assert not any(UNDEVELOPED_DECORATOR in label for label in labels)

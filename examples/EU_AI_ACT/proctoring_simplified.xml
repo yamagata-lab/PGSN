@@ -22,7 +22,7 @@
     <dl><dt key="applies"/><dd var="false"/><dt key="evidence"/><dd var="evidence"/></dl>
   </def>
 
-  <def name="art5Report" as="Evidence">Art. 5 prohibited-use self-assessment, Remote Proctoring Suite v4.2</def>
+  <def name="art5Report" as="Solution">Art. 5 prohibited-use self-assessment, Remote Proctoring Suite v4.2</def>
 
   <def name="noEmotionInference" as="dl">
     <dt key="Art. 5(1)(f)"/><dd><apply template="doesNotApply"><arg var="art5Report"/></apply></dd>
@@ -37,13 +37,13 @@
     <dd>
       <dl>
         <dt key="Annex III, point 1"/>
-        <dd><apply template="doesApply"><arg><Evidence>Intended purpose statement: remote biometric verification of candidates</Evidence></arg></apply></dd>
+        <dd><apply template="doesApply"><arg><Solution>Intended purpose statement: remote biometric verification of candidates</Solution></arg></apply></dd>
         <dt key="Annex III, point 3"/>
-        <dd><apply template="doesNotApply"><arg><Evidence>Function specification: identity is confirmed before the examination begins</Evidence></arg></apply></dd>
+        <dd><apply template="doesNotApply"><arg><Solution>Function specification: identity is confirmed before the examination begins</Solution></arg></apply></dd>
       </dl>
     </dd>
-    <dt key="risk_management"/><dd><Evidence>Risk management file: false accept and false reject analysis (Art. 9)</Evidence></dd>
-    <dt key="human_oversight"/><dd><Evidence>Proctor review procedure for every rejected verification (Art. 14)</Evidence></dd>
+    <dt key="risk_management"/><dd><Solution>Risk management file: false accept and false reject analysis (Art. 9)</Solution></dd>
+    <dt key="human_oversight"/><dd><Solution>Proctor review procedure for every rejected verification (Art. 14)</Solution></dd>
   </def>
 
   <!-- F2: two routes apply at once, and the obligation set is still one. -->
@@ -54,19 +54,19 @@
     <dd>
       <dl>
         <dt key="Annex III, point 1"/>
-        <dd><apply template="doesApply"><arg><Evidence>Data flow specification: gaze and head pose are derived from biometric data</Evidence></arg></apply></dd>
+        <dd><apply template="doesApply"><arg><Solution>Data flow specification: gaze and head pose are derived from biometric data</Solution></arg></apply></dd>
         <dt key="Annex III, point 3"/>
-        <dd><apply template="doesApply"><arg><Evidence>Intended purpose statement: detecting prohibited behaviour of students during tests</Evidence></arg></apply></dd>
+        <dd><apply template="doesApply"><arg><Solution>Intended purpose statement: detecting prohibited behaviour of students during tests</Solution></arg></apply></dd>
       </dl>
     </dd>
-    <dt key="risk_management"/><dd><Evidence>Risk management file: false accusation and disparate impact analysis (Art. 9)</Evidence></dd>
-    <dt key="human_oversight"/><dd><Evidence>Proctor adjudication: no flag results in a sanction without review (Art. 14)</Evidence></dd>
+    <dt key="risk_management"/><dd><Solution>Risk management file: false accusation and disparate impact analysis (Art. 9)</Solution></dd>
+    <dt key="human_oversight"/><dd><Solution>Proctor adjudication: no flag results in a sanction without review (Art. 14)</Solution></dd>
   </def>
 
   <def name="system" as="dl">
     <dt key="name"/><dd>Remote Examination Proctoring System</dd>
     <dt key="functionInventoryEvidence"/>
-    <dd><Evidence>Annex IV technical documentation and architecture review AR-2026-014</Evidence></dd>
+    <dd><Solution>Annex IV technical documentation and architecture review AR-2026-014</Solution></dd>
     <dt key="functions"/>
     <dd><ol><li var="identityVerification"/><li var="behaviourMonitoring"/></ol></dd>
   </def>

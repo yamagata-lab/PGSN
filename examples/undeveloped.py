@@ -8,7 +8,7 @@ g = goal(
             goal(description="Input validated",
                  support=undeveloped),
             goal(description="Output sanitized",
-                 support=evidence(description="Fuzzing test succeeded"))
+                 support=solution(description="Fuzzing test succeeded"))
         ]
     )
 )

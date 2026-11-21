@@ -5,13 +5,13 @@
     <def name="A1">サードパーティ製の部品は改変されていない</def>
     <def name="c">運用環境は社内ネットワークに限る</def>
 
-    <def name="y_evidence" as="Evidence">第三者検証レポート</def>
+    <def name="y_evidence" as="Solution">第三者検証レポート</def>
 
     <def name="x_secure" as="Goal">
         Xはセキュア
-        <Evidence>
+        <Solution>
             運用実績
-        </Evidence>
+        </Solution>
     </def>
 
     <def name="y_secure" as="Goal">

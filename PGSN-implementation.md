@@ -229,7 +229,7 @@ neither leaves a machine to decide what it is for two terms to be the same:
   This made typing structural, which is a change of language and not only of
   implementation. `inherit` is not consulted: a class satisfies every type
   whose labels it covers, related to it or not, so a `Goal` satisfies
-  `Evidence` by declaring `description` and `defeaters` and more besides.
+  `Solution` by declaring `description` and `defeaters` and more besides.
   What can no longer be asked is which class a value belongs to. The
   inheritance chain is still readable through `python_value`, and `gsn_tree`
   classifies nodes by the names it finds there, but that is a readback
@@ -547,7 +547,7 @@ and to nothing else. Only `goal_class` declared them, so the ones written on a
 strategy were read and then dropped, silently: `examples/Figure6` is the
 standard's Figure 6, where an assumption hangs off the strategy, and it was
 losing that assumption and a context besides. `strategy_class` declares them
-now. `evidence_class` does not, because the standard attaches nothing to a
+now. `solution_class` does not, because the standard attaches nothing to a
 Solution, and `PGSN.rng` rejects one written there — the compiler has nowhere
 to put it and would say nothing.
 
@@ -586,7 +586,7 @@ they produce, since they are material rather than specification.
 ## 7. Open questions
 
 - Typing is structural, so a type is satisfied by any class that carries its
-  labels, and a `Goal` satisfies `Evidence`. Whether a nominal check is wanted
+  labels, and a `Goal` satisfies `Solution`. Whether a nominal check is wanted
   as well — "this node is a Goal, not merely goal-shaped" — is open. A class
   carries the name its author gave it (§1.5), but that name is a label for
   readback: nothing in the language compares one with another, and names given

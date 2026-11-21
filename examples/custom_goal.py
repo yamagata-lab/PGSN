@@ -8,6 +8,6 @@ CustomGoal = define_class(inherit=goal_class, name="GoalWithProject", attributes
 
 g = instantiate(CustomGoal, description="Secure connection established",
                 project='Alpha',
-                support=evidence(description="Verified by audit"))
+                support=solution(description="Verified by audit"))
 
 gsn_tree(g.fully_eval()).show(sorting=False)

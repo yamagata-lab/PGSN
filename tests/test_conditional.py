@@ -70,9 +70,9 @@ def test_the_branch_not_taken_is_not_evaluated():
 
 
 def test_a_conditional_is_a_value_like_any_other():
-    result = run('<Goal>the system is safe<Evidence>'
+    result = run('<Goal>the system is safe<Solution>'
                  '<if><cond><expr>i == 2</expr></cond><then>report A</then>'
-                 '<else>report B</else></if></Evidence></Goal>', TWO)
+                 '<else>report B</else></if></Solution></Goal>', TWO)
     assert result["support"]["description"] == "report A"
 
 

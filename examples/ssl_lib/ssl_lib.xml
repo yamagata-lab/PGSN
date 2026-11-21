@@ -16,14 +16,14 @@
     <!-- SOUP evaluation per IEC 62304 §8: anomaly list reviewed, published
          errata assessed, regression test plan established for known issues -->
     <dt key="soup_evaluation"/>
-    <dd><Evidence>SOUP evaluation report: cryptography 41.0.7 (IEC 62304 §8)</Evidence></dd>
+    <dd><Solution>SOUP evaluation report: cryptography 41.0.7 (IEC 62304 §8)</Solution></dd>
 
     <!-- Hazard: eavesdropping on communications -->
     <dt key="eavesdropping"/>
     <dd>
       <Goal>Communications are protected against eavesdropping
         <Context>TLS 1.3 enforced; CBC cipher suites disabled</Context>
-        <Evidence>TLS 1.3 implementation verification test report</Evidence>
+        <Solution>TLS 1.3 implementation verification test report</Solution>
       </Goal>
     </dd>
 
@@ -32,7 +32,7 @@
     <dd>
       <Goal>Server identity is verified against certificate spoofing
         <Context>Certificate chain validation and hostname checking enabled</Context>
-        <Evidence>Certificate validation test suite results</Evidence>
+        <Solution>Certificate validation test suite results</Solution>
       </Goal>
     </dd>
   </def>

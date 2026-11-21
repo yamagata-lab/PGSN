@@ -14,8 +14,8 @@
     <import name="noProhibitedPractice"/>
   </from>
 
-  <def name="art5Report" as="Evidence">Art. 5 prohibited-use self-assessment report</def>
-  <def name="scopeAssessment" as="Evidence">Annex I and Annex III non-applicability assessment report</def>
+  <def name="art5Report" as="Solution">Art. 5 prohibited-use self-assessment report</def>
+  <def name="scopeAssessment" as="Solution">Annex I and Annex III non-applicability assessment report</def>
 
   <def name="textGeneration" as="dl">
     <dt key="name"/><dd>Text Generation</dd>
@@ -30,12 +30,12 @@
       <dl>
         <dt key="Art. 6(1)"/><dd><apply template="doesNotApply"><arg var="scopeAssessment"/></apply></dd>
         <dt key="Annex III, point 1"/>
-        <dd><apply template="doesNotApply"><arg><Evidence>Modality inventory: text-only model, no biometric input or categorisation capability</Evidence></arg></apply></dd>
+        <dd><apply template="doesNotApply"><arg><Solution>Modality inventory: text-only model, no biometric input or categorisation capability</Solution></arg></apply></dd>
         <dt key="Annex III, point 2"/><dd><apply template="doesNotApply"><arg var="scopeAssessment"/></apply></dd>
         <dt key="Annex III, point 3"/>
-        <dd><apply template="doesNotApply"><arg><Evidence>Acceptable use policy: admission, grading and examination monitoring are prohibited downstream uses</Evidence></arg></apply></dd>
+        <dd><apply template="doesNotApply"><arg><Solution>Acceptable use policy: admission, grading and examination monitoring are prohibited downstream uses</Solution></arg></apply></dd>
         <dt key="Annex III, point 4"/>
-        <dd><apply template="doesNotApply"><arg><Evidence>Acceptable use policy: employment screening is a prohibited downstream use</Evidence></arg></apply></dd>
+        <dd><apply template="doesNotApply"><arg><Solution>Acceptable use policy: employment screening is a prohibited downstream use</Solution></arg></apply></dd>
         <dt key="Annex III, point 5"/><dd><apply template="doesNotApply"><arg var="scopeAssessment"/></apply></dd>
         <dt key="Annex III, point 6"/><dd><apply template="doesNotApply"><arg var="scopeAssessment"/></apply></dd>
         <dt key="Annex III, point 7"/><dd><apply template="doesNotApply"><arg var="scopeAssessment"/></apply></dd>
@@ -45,26 +45,26 @@
 
     <dt key="isLimitedRisk"/><dd var="true"/>
     <dt key="ai_disclosure_mechanism"/>
-    <dd><Evidence>AI interaction disclosure implementation specification (Art. 50(1))</Evidence></dd>
+    <dd><Solution>AI interaction disclosure implementation specification (Art. 50(1))</Solution></dd>
     <dt key="ai_content_labeling"/>
-    <dd><Evidence>Machine-readable AI-generated content marking implementation (Art. 50(2))</Evidence></dd>
+    <dd><Solution>Machine-readable AI-generated content marking implementation (Art. 50(2))</Solution></dd>
 
     <dt key="isGPAI"/><dd var="true"/>
     <dt key="isSystemicRisk"/><dd var="false"/>
     <dt key="gpai_technical_documentation"/>
-    <dd><Evidence>GPAI model technical documentation (Art. 53(1)(a))</Evidence></dd>
+    <dd><Solution>GPAI model technical documentation (Art. 53(1)(a))</Solution></dd>
     <dt key="gpai_instructions_for_use"/>
-    <dd><Evidence>Downstream provider integration guide (Art. 53(1)(b))</Evidence></dd>
+    <dd><Solution>Downstream provider integration guide (Art. 53(1)(b))</Solution></dd>
     <dt key="copyright_policy"/>
-    <dd><Evidence>Copyright compliance policy and opt-out mechanism (Art. 53(1)(c))</Evidence></dd>
+    <dd><Solution>Copyright compliance policy and opt-out mechanism (Art. 53(1)(c))</Solution></dd>
     <dt key="training_data_summary"/>
-    <dd><Evidence>Published training data summary (Art. 53(1)(d))</Evidence></dd>
+    <dd><Solution>Published training data summary (Art. 53(1)(d))</Solution></dd>
   </def>
 
   <def name="system" as="dl">
     <dt key="name"/><dd>General-Purpose Language Model</dd>
     <dt key="functionInventoryEvidence"/>
-    <dd><Evidence>Model card and serving architecture review: one model is exposed, with no auxiliary classifiers in the inference path</Evidence></dd>
+    <dd><Solution>Model card and serving architecture review: one model is exposed, with no auxiliary classifiers in the inference path</Solution></dd>
     <dt key="functions"/>
     <dd><ol><li var="textGeneration"/></ol></dd>
   </def>
