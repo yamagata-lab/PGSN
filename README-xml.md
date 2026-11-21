@@ -51,6 +51,8 @@ Accepts parameters from the caller. `<param>` must appear first.
 
 `<from>` and `<def>` elements may be freely interleaved in both forms.
 
+**A module is closed.** Every name it uses is one of its parameters, one it defines or imports, or a builtin, so it receives values from the document that imports it only through its parameters. A module that uses any other name is rejected when it is imported, with the name in the message. A `<PGSN>` document is not held to this: a name it leaves unbound stops the evaluation, as described under [Design Principles](#design-principles).
+
 ---
 
 ## Values

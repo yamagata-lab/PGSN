@@ -299,8 +299,14 @@ A `<from>` is resolved at compile time: the file is read, compiled, and the
 module — an abstraction over its parameters, returning a record of its exported
 names — is embedded in the importing term, applied to the arguments given. A
 module inside a module is embedded the same way, so the whole import graph
-becomes one term. Each module carries a builtin scope of its own, so the
-importing document's names cannot reach inside it.
+becomes one term. Each module carries a builtin scope of its own, and a module
+that still has a free name once its builtins are bound is rejected. Embedding
+is what makes this necessary: the compiled term is named, so a free name in an
+embedded module would be bound by whatever the importing document has in scope
+at that point. Rejecting it is what keeps the importing document's names from
+reaching inside a module, and a module's argument the same in every system that
+imports it with the same arguments. A `<PGSN>` document may still leave a name
+free; nothing embeds it, and the readback reports the name.
 
 Nothing is cached: the same file imported from two places is read and compiled
 twice. Under call by name the module body is also evaluated once per imported

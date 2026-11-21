@@ -172,3 +172,52 @@ def test_the_single_import_form_still_works(project):
         '<from file="lib.xml" import="b" as="renamed">'
         '<arg name="prefix">p</arg></from><var name="renamed"/>')))
     assert result == "p b"
+
+
+# A module is closed: it receives values from its importer only through its
+# parameters. A name it leaves free would be bound by whatever the importer
+# has in scope where the module is embedded, so the same component would argue
+# differently in different systems (issue-drafts 10).
+OPEN_MODULE = '<PGSNModule><def name="leak"><var name="secret"/></def></PGSNModule>'
+
+
+def test_a_module_with_a_free_name_is_rejected(project, tmp_path):
+    (tmp_path / "open.xml").write_text(OPEN_MODULE)
+    with pytest.raises(PGSNError, match=r"'open\.xml' uses 'secret'"):
+        compile_pgsn(project(
+            '<def name="secret">the importer\'s value</def>'
+            '<from file="open.xml" import="leak"/><var name="leak"/>'))
+
+
+def test_a_free_name_is_rejected_when_the_module_is_a_value(project, tmp_path):
+    (tmp_path / "open.xml").write_text(OPEN_MODULE)
+    with pytest.raises(PGSNError, match=r"'open\.xml' uses 'secret'"):
+        compile_pgsn(project('<get key="leak"><from file="open.xml"/></get>'))
+
+
+def test_a_free_name_is_rejected_however_deep_the_module(project, tmp_path):
+    """The module in the middle binds the name, but it cannot lend it to the
+    module it imports: that one is closed or rejected on its own."""
+    (tmp_path / "open.xml").write_text(OPEN_MODULE)
+    (tmp_path / "middle.xml").write_text(
+        '<PGSNModule><def name="secret">the middle value</def>'
+        '<from file="open.xml" import="leak"/></PGSNModule>')
+    with pytest.raises(PGSNError, match=r"'open\.xml' uses 'secret'"):
+        compile_pgsn(project('<from file="middle.xml" import="leak"/>'
+                             '<var name="leak"/>'))
+
+
+def test_a_module_may_pass_its_parameters_on(project, tmp_path):
+    """Parameters, its own definitions, its imports and the builtins are what
+    a closed module may use."""
+    (tmp_path / "middle.xml").write_text(
+        '<PGSNModule><param name="prefix"/>'
+        '<from file="lib.xml" import="a"><arg name="prefix" var="prefix"/></from>'
+        '<def name="both"><ol><li><var name="a"/></li>'
+        '<li><apply template="plus"><arg><num>1</num></arg>'
+        '<arg><num>2</num></arg></apply></li>'
+        '</ol></def></PGSNModule>')
+    result = pgsn.python_value(pgsn.load_xml(project(
+        '<from file="middle.xml" import="both"><arg name="prefix">p</arg></from>'
+        '<var name="both"/>')))
+    assert result == ["p a", 3]

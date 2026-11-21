@@ -924,6 +924,18 @@ def _module_record(elem: ET.Element, unit: _Unit) -> Term:
     _desugar(root)
 
     module_term = _compile_module(root, inner)
+    # A module takes values from its importer only through its parameters, so
+    # a component's argument is the same in every system that imports it with
+    # the same arguments. A name the module leaves free would instead be bound
+    # by whatever the importer has in scope where the module is embedded, since
+    # nothing in the compiled term marks it as the module's own.
+    free = module_term.free_variables()
+    if free:
+        raise PGSNError(
+            f"The module {file_path!r} uses "
+            f"{', '.join(repr(n) for n in sorted(free))}, which it neither "
+            f"defines nor takes as a parameter. A module receives values from "
+            f"the document that imports it only through its parameters.")
 
     # Args compiled in the caller's scope — they are Terms, not values yet
     args = {a.get("name"): _content(a, unit) for a in elem.findall("arg")}
