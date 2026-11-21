@@ -126,6 +126,11 @@ GSN_TYPES = {"Goal", "Strategy", "Evidence", "Context", "Assumption",
 # The kinds of node that challenge rather than support what holds them.
 GSN_DEFEATER_TYPES = {"Defeater"}
 
+# The elements GSN v3 lets the undeveloped decorator apply to (Table 1:2-1),
+# and the glyph a drawing puts at the bottom of one.
+UNDEVELOPED_DECORATED_TYPES = {"Goal", "Strategy"}
+UNDEVELOPED_DECORATOR = "◇"  # WHITE DIAMOND
+
 
 # Term and to_python are assumed to be in your module
 # from your_module import Term, to_python
@@ -300,6 +305,7 @@ def gsn_dot(gsn: pgsn.pgsn_term.Term,
         # --- 子ノードを覗き込んで、単なる属性なら親の箱の中に吸収する ---
         children = tree.children(node)
         attr_lines = []
+        undeveloped_here = False
         for child in children:
             child_tag = child.tag
             child_parts = child_tag.split(': ', 1)
@@ -308,6 +314,13 @@ def gsn_dot(gsn: pgsn.pgsn_term.Term,
             # GSNノードではなく、かつ子を持たない「葉っぱ」のノード（数値やBooleanも含む）の場合
             if not is_gsn and child.is_leaf():
                 attr_lines.append(child_tag)
+                skipped_nodes.add(child.identifier)
+            # GSN v3 (Table 1:2-1) marks an undeveloped goal or strategy with
+            # a decorator on the element itself, a hollow diamond at its
+            # bottom centre, rather than with an element of its own beneath.
+            elif (child_parts[0] == 'Undeveloped' and child.is_leaf()
+                  and node_type in UNDEVELOPED_DECORATED_TYPES):
+                undeveloped_here = True
                 skipped_nodes.add(child.identifier)
 
         # 吸収した属性があれば、ラベルの文字列に改行(\n)で合体させる
@@ -344,9 +357,13 @@ def gsn_dot(gsn: pgsn.pgsn_term.Term,
         # \l, \n and \r break the line. escape() quotes the label and doubles
         # its backslashes, which leaves the newlines of _wrap as they are.
         # tests/test_dot_escaping.py checks each of these.
+        label = _wrap(final_label, label_width)
+        if undeveloped_here:
+            # The last line of a label is centred at the bottom of the box.
+            label += "\n" + UNDEVELOPED_DECORATOR
         dot.node(
             name=node_obj.identifier,
-            label=graphviz.escape(_wrap(final_label, label_width)),
+            label=graphviz.escape(label),
             shape=shape,
             style=style,
             **node_attrs
