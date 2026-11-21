@@ -147,6 +147,54 @@ def test_objects_are_not_compared():
 
 
 # ---------------------------------------------------------------------------
+# Both arguments are checked whole before anything is answered
+# ---------------------------------------------------------------------------
+
+_g = lambda_abs(_x, plus(_x)(integer(1)))
+
+
+def test_a_length_that_differs_does_not_answer_for_what_is_not_data():
+    assert _is_stuck(equal(list_term((goal(description="a"),)))(empty))
+    assert _is_stuck(equal(list_term((_identity,)))(string('a')))
+
+
+def test_labels_that_differ_do_not_answer_for_what_is_not_data():
+    assert _is_stuck(equal(record({'a': integer(1), 'b': _identity}))
+                     (record({'a': integer(1), 'c': _identity})))
+
+
+def test_a_component_that_differs_does_not_answer_for_those_after_it():
+    assert _is_stuck(equal(list_term((integer(1), _identity)))
+                     (list_term((integer(2), _g))))
+
+
+def test_the_answer_does_not_depend_on_the_order_of_the_components():
+    assert _is_stuck(equal(list_term((_identity, integer(1))))
+                     (list_term((_g, integer(2)))))
+    assert _answer(equal(list_term((integer(1), integer(2))))
+                   (list_term((integer(2), integer(2))))) is False
+    assert _answer(equal(list_term((integer(2), integer(1))))
+                   (list_term((integer(2), integer(2))))) is False
+
+
+def test_shapes_that_differ_are_unequal_once_both_are_data():
+    assert _answer(equal(list_term((integer(1),)))
+                   (list_term((integer(1), integer(2))))) is False
+    assert _answer(equal(list_term((integer(1),)))(string('a'))) is False
+    assert _answer(equal(record({'a': integer(1)}))
+                   (list_term((integer(1),)))) is False
+
+
+def test_deeply_nested_data_compares_without_recursion():
+    nested = pgsn_term.List.nameless(terms=(pgsn_term.Integer.nameless(value=0),))
+    for _ in range(20000):
+        nested = pgsn_term.List.nameless(terms=(nested,))
+    compared = pgsn_term.App.nameless(
+        t1=pgsn_term.App.nameless(t1=pgsn_term.Equal.nameless(), t2=nested), t2=nested)
+    assert pgsn_term.value_of(compared, steps=10**6) is True
+
+
+# ---------------------------------------------------------------------------
 # `is_empty`, and the fold that needs it
 # ---------------------------------------------------------------------------
 

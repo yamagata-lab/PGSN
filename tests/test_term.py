@@ -22,7 +22,7 @@ def test_pgsn_term_id():
     x = variable('x')
     id_f = lambda_abs(x, x)
     t = id_f(id_f)
-    assert t.eval() == id_f.eval()
+    assert t.fully_eval() == id_f.fully_eval()
 
 
 def test_pgsn_term_const():
@@ -30,7 +30,7 @@ def test_pgsn_term_const():
     x = variable('x')
     id_f = lambda_abs(x, c)
     t = id_f(c)
-    assert t.eval() == c.eval()
+    assert t.fully_eval() == c.fully_eval()
 
 
 def test_pgsn_term_nested():
@@ -65,8 +65,7 @@ class Id(ConstMixin, Unary):
 def test_builtin():
     id_f = Id.named().fully_eval()
     c = constant('c').fully_eval()
-    assert id_f.apply_args_or_none((c,)) == (c, tuple())
-    assert id_f.apply_args_or_none(()) is None
+    assert id_f.apply_args((c,)) == c
     assert id_f(c).fully_eval() == c
 
 
