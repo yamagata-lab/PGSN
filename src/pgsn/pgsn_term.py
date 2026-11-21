@@ -41,8 +41,14 @@ class PGSNRuntimeError(Exception):
     pass
 
 
+# `cause` is why the argument the builtin refused is not a value, when that is
+# the reason it was refused: a list that never came because a label was
+# missing further in is reported as that missing label, not as a list that did
+# not come.
 class PGSNTypeError(PGSNRuntimeError):
-    pass
+    def __init__(self, message: str, cause: str | None = None):
+        super().__init__(message)
+        self.cause = cause
 
 
 class PGSNIndexError(PGSNRuntimeError):
@@ -142,6 +148,9 @@ class Term(ABC):
     # evolved.
     def mark_stuck(self, e: PGSNRuntimeError):
         self.add_metainfo("error", f"{type(e).__name__}: {e}")
+        cause = getattr(e, "cause", None)
+        if cause is not None:
+            self.add_metainfo("cause", cause)
 
     def evolve(self, **kwarg):
         return self._evolve(**kwarg)
@@ -427,12 +436,34 @@ class Builtin(Term, ABC):
     # traversal. A thunk is named after its value.
     def _type_error(self, subject: str, expected: str, got: Term) -> PGSNTypeError:
         return PGSNTypeError(f"{self._reported_name()}: {subject} must be {expected}, "
-                             f"got {type(_value(got)).__name__}")
+                             f"got {type(_value(got)).__name__}",
+                             cause=_why_stuck(got))
 
 
 # The term a thunk the evaluator handed over stands for: its value.
 def _value(t: Term) -> Term:
     return t._cell.value[0] if isinstance(t, Thunk) else t
+
+
+# Why `t`, an argument the evaluator handed over, is stuck rather than a value,
+# or None when it is a value. A stuck application already knows the first
+# reason in the chain that led to it, so following the chain costs one look per
+# term rather than a traversal. Only the head of the application is followed:
+# an argument that is stuck where nothing needed it is no reason at all.
+def _why_stuck(t: Term) -> str | None:
+    while True:
+        t = _value(t)
+        if "cause" in t.meta_info:
+            return t.meta_info["cause"]
+        if "error" in t.meta_info:
+            return t.meta_info["error"]
+        if isinstance(t, App):
+            t = t.t1
+        elif isinstance(t, Variable):
+            name = t.meta_info.get("name", t.name)
+            return f"name {name!r} is not defined" if name is not None else "a name is not defined"
+        else:
+            return None
 
 
 @frozen
@@ -1711,7 +1742,10 @@ def to_python(t: Term, with_inherit_chain=False, _path: str = "<root>") -> Any:
 # What readback tells the user about a term it met in place of a value.
 def _why_not_a_value(t: Term) -> str:
     if "error" in t.meta_info:
-        return f"evaluation stopped here: {t.meta_info['error']}"
+        reason = f"evaluation stopped here: {t.meta_info['error']}"
+        if "cause" in t.meta_info:
+            reason += f", which was stuck on {t.meta_info['cause']}"
+        return reason
     head = t
     while isinstance(head, App):
         head = head.t1
