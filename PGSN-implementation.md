@@ -295,22 +295,25 @@ purpose.
 
 ## 3. Modules
 
-A `<from>` is resolved at compile time: the file is read, compiled, and the
+A `<from>` is resolved at compile time: the file is read and compiled into the
 module — an abstraction over its parameters, returning a record of its exported
-names — is embedded in the importing term, applied to the arguments given. A
-module inside a module is embedded the same way, so the whole import graph
-becomes one term. Each module carries a builtin scope of its own, and a module
-that still has a free name once its builtins are bound is rejected. Embedding
-is what makes this necessary: the compiled term is named, so a free name in an
-embedded module would be bound by whatever the importing document has in scope
-at that point. Rejecting it is what keeps the importing document's names from
-reaching inside a module, and a module's argument the same in every system that
-imports it with the same arguments. A `<PGSN>` document may still leave a name
-free; nothing embeds it, and the readback reports the name.
+names. The whole import graph becomes one term. Each file is compiled once,
+however many times and from however many places it is imported, and the entry
+document binds each module once at its head, in an order in which a module
+comes after every module it imports; an import is an application of that
+binding to the arguments given. Embedding the module at every import instead
+makes the compiled term grow with the number of import paths, which a chain of
+files each importing the next twice makes exponential in its depth, and the
+step budget does not bound it, since it applies only to evaluation.
 
-Nothing is cached: the same file imported from two places is read and compiled
-twice. Under call by name the module body is also evaluated once per imported
-name, and once more per use of that name.
+Each module carries a builtin scope of its own, and a module that still has a
+free name once its builtins are bound is rejected. Moving the module to the
+head of the document is what makes this necessary: the compiled term is named,
+so a free name in a module would be bound by whatever happens to be in scope
+there. Rejecting it is what keeps the importing document's names from reaching
+inside a module, and a module's argument the same in every system that imports
+it with the same arguments. A `<PGSN>` document may still leave a name free;
+nothing moves it, and the readback reports the name.
 
 A binding-position `<from>` binds the applied module to a reserved name and
 projects each imported name from it, so the module occupies one position in the

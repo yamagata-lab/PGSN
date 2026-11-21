@@ -66,19 +66,24 @@ class _Unit:
     `root` and `cwd` are both None for a document compiled from a string with
     no jail of its own; such a document can only use jailed paths.
 
+    `modules` is shared by every unit of one compilation: the modules compiled
+    so far, which the entry document binds once at its head.
+
     Whatever a compiler needs to know beyond the element in front of it
     belongs here, which is why the compilers below take one of these and
     nothing else.
     """
 
-    __slots__ = ("root", "cwd", "config", "visiting")
+    __slots__ = ("root", "cwd", "config", "visiting", "modules")
 
     def __init__(self, root: Path | None, cwd: Path | None, config: Config,
-                 visiting: frozenset[Path] = frozenset()):
+                 visiting: frozenset[Path] = frozenset(),
+                 modules: "_Modules | None" = None):
         self.root = root
         self.cwd = cwd
         self.config = config
         self.visiting = visiting
+        self.modules = _Modules() if modules is None else modules
 
     @classmethod
     def for_entry(cls, path: Path, config: Config) -> "_Unit":
@@ -122,7 +127,8 @@ class _Unit:
         if path in self.visiting:
             raise PGSNError(f"Circular import: {path}")
         return _Unit(root=root, cwd=path.parent, config=self.config,
-                     visiting=self.visiting | {path}), path
+                     visiting=self.visiting | {path},
+                     modules=self.modules), path
 
     def _resolve(self, spec: str) -> tuple[Path, Path]:
         """The confinement root an import lands in, and the file it names."""
@@ -157,6 +163,48 @@ class _Unit:
         if not candidate.is_file():
             raise PGSNError(f"No such file: {spec!r}")
         return self.root, candidate
+
+
+class _Modules:
+    """The modules one compilation has compiled, each under a name of its own.
+
+    A file is compiled once however many times it is imported, and the entry
+    document binds every module it reaches once, at its head; an import is an
+    application of that binding to the import's arguments. Embedding the
+    module at every import instead made the compiled term, and the time spent
+    building it and walking it, grow with the number of import paths -- which
+    is exponential in the depth of the imports.
+
+    Moving a module out to the head of the document is sound because a module
+    is closed (`_compile_closed_module` rejects one that is not), so nothing between
+    the head and the import can capture its names. A file is identified by its
+    path together with the root it was reached under, since the root decides
+    where the file's own imports may resolve.
+
+    The bindings are kept in the order the modules were finished, and a module
+    is finished only after every module it imports, so each binding refers to
+    earlier ones only.
+    """
+
+    __slots__ = ("_names", "bindings")
+
+    def __init__(self):
+        self._names: dict[tuple[Path, Path], str] = {}
+        self.bindings: list[tuple[str, Term]] = []
+
+    def name_of(self, root: Path, path: Path) -> str | None:
+        return self._names.get((root, path))
+
+    def add(self, root: Path, path: Path, term: Term) -> str:
+        # Not an identifier, so no document can write it, and distinct from
+        # every reserved alias, which is one.
+        name = f"{_RESERVED_PREFIX}module:{len(self.bindings)}"
+        self._names[(root, path)] = name
+        self.bindings.append((name, term))
+        return name
+
+    def names(self) -> set[str]:
+        return {name for name, _ in self.bindings}
 
 
 # ------------------------------------------------------------------ #
@@ -848,7 +896,9 @@ def _compile_root(root: ET.Element, unit: _Unit) -> Term:
         raise PGSNError(f"Expected <PGSN>, got <{root.tag}>")
     _check_source(root)
     _desugar(root)
-    return _builtin_scope(_block(_items(root), unit, "PGSN"))
+    body = _builtin_scope(_block(_items(root), unit, "PGSN"))
+    # Every module the document reaches, bound once (see _Modules).
+    return _thread_lets(unit.modules.bindings, body)
 
 
 def _compile_module(root: ET.Element, unit: _Unit) -> Term:
@@ -912,34 +962,46 @@ def _module_record(elem: ET.Element, unit: _Unit) -> Term:
     """The record a `<from>` denotes: its module applied to its arguments.
 
     File I/O happens here, at compile time, because the path is a static
-    literal. The application itself is an ordinary Term and is not evaluated.
+    literal. The module is compiled the first time its file is imported and
+    bound at the head of the entry document (see _Modules); the import is an
+    application of that binding, an ordinary Term that is not evaluated.
     """
     file_path = elem.get("file", "")
     inner, full = unit.enter(file_path)
 
+    name = unit.modules.name_of(inner.root, full)
+    if name is None:
+        name = unit.modules.add(inner.root, full,
+                                _compile_closed_module(file_path, full, inner))
+
+    # Args compiled in the caller's scope — they are Terms, not values yet
+    args = {a.get("name"): _content(a, unit) for a in elem.findall("arg")}
+    return variable(name)(record(args))
+
+
+def _compile_closed_module(file_path: str, full: Path, unit: _Unit) -> Term:
+    """Compile the module in `full`, which must be closed."""
     root = ET.parse(full).getroot()
     if root.tag != "PGSNModule":
         raise PGSNError(f"Expected <PGSNModule> in {file_path!r}")
     _check_source(root)
     _desugar(root)
 
-    module_term = _compile_module(root, inner)
+    module_term = _compile_module(root, unit)
     # A module takes values from its importer only through its parameters, so
     # a component's argument is the same in every system that imports it with
-    # the same arguments. A name the module leaves free would instead be bound
-    # by whatever the importer has in scope where the module is embedded, since
-    # nothing in the compiled term marks it as the module's own.
-    free = module_term.free_variables()
+    # the same arguments. A name the module left free would be bound by
+    # whatever happened to be in scope where the module ends up, since nothing
+    # in the compiled term marks it as the module's own. The only free names a
+    # closed module has are the bindings of the modules it imports.
+    free = module_term.free_variables() - unit.modules.names()
     if free:
         raise PGSNError(
             f"The module {file_path!r} uses "
             f"{', '.join(repr(n) for n in sorted(free))}, which it neither "
             f"defines nor takes as a parameter. A module receives values from "
             f"the document that imports it only through its parameters.")
-
-    # Args compiled in the caller's scope — they are Terms, not values yet
-    args = {a.get("name"): _content(a, unit) for a in elem.findall("arg")}
-    return module_term(record(args))
+    return module_term
 
 
 def _e_from(elem: ET.Element, unit: _Unit) -> Term:
