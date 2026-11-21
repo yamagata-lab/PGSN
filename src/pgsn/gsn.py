@@ -334,9 +334,19 @@ def gsn_dot(gsn: pgsn.pgsn_term.Term,
         # ラベルの最終決定（GSNならタイプ名を見出しにし、それ以外はタグをそのまま使う）
         final_label = f"{node_type}\n{node_label}" if node_type else node_label
 
+        # The label is the document's text, so nothing in it may mean anything
+        # to graphviz. Unescaped, a label of the form <...> is taken as HTML
+        # and written into the source unquoted, so whatever follows the end of
+        # the HTML label becomes attributes of the node -- image="..." among
+        # them, which embeds a file of the host in the drawing. A trailing
+        # backslash escapes the closing quote and the source no longer parses,
+        # \N and \G are replaced by the names of the node and the graph, and
+        # \l, \n and \r break the line. escape() quotes the label and doubles
+        # its backslashes, which leaves the newlines of _wrap as they are.
+        # tests/test_dot_escaping.py checks each of these.
         dot.node(
             name=node_obj.identifier,
-            label=_wrap(final_label, label_width),
+            label=graphviz.escape(_wrap(final_label, label_width)),
             shape=shape,
             style=style,
             **node_attrs
