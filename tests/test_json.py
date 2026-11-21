@@ -1,5 +1,5 @@
 import pgsn.dsl
-from pgsn.gsn import goal, evidence, immediate
+from pgsn.gsn import goal, solution, immediate
 from pgsn.dsl import lambda_abs, variable, define_class, base_class, list_term, record
 
 requirements = ["Firewall enabled", "Encrypted communication", "Access control active"]
@@ -7,7 +7,7 @@ requirements = ["Firewall enabled", "Encrypted communication", "Access control a
 
 goal_template = lambda_abs(variable("desc"),
     goal(description=variable("desc"),
-         support=evidence(description=variable("desc")))
+         support=solution(description=variable("desc")))
 )
 
 goals = pgsn.dsl.map_term(goal_template, requirements)

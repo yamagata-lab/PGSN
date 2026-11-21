@@ -13,9 +13,9 @@ if __name__ == '__main__':
             description="Break into sub-goals",
             sub_goals=[
                 goal(description="Input validated",
-                     support=evidence(description="Static analysis passed")),
+                     support=solution(description="Static analysis passed")),
                 goal(description="Output sanitized",
-                     support=evidence(description="Fuzzing test succeeded"))
+                     support=solution(description="Fuzzing test succeeded"))
             ]
         )
     )

@@ -7,9 +7,9 @@ robot = pgsn.gsn.goal(description="There is no known vulnerability in the robot"
                            support=pgsn.gsn.strategy(description="Argument over each vulnerability",
                                                           sub_goals=[
                                   pgsn.gsn.goal(description="Vulnerability A is not exploited",
-                                                     support=pgsn.gsn.evidence(description="Test results")),
+                                                     support=pgsn.gsn.solution(description="Test results")),
                                   pgsn.gsn.goal(description="Vulnerability B is not exploited",
-                                                     support=pgsn.gsn.evidence(description="Test results"))
+                                                     support=pgsn.gsn.solution(description="Test results"))
                               ]
                                                           )
                            )
@@ -18,19 +18,19 @@ robot = pgsn.gsn.goal(description="There is no known vulnerability in the robot"
 s = pgsn.gsn.strategy(description="Argument over each vulnerability",
                                                           sub_goals=[
                                   pgsn.gsn.goal(description="Vulnerability A is not exploited",
-                                                     support=pgsn.gsn.evidence(description="Test results")),
+                                                     support=pgsn.gsn.solution(description="Test results")),
                                   pgsn.gsn.goal(description="Vulnerability B is not exploited",
-                                                     support=pgsn.gsn.evidence(description="Test results"))
+                                                     support=pgsn.gsn.solution(description="Test results"))
                               ]
                                                           )
 
-pprint.pprint(pgsn.dsl.python_value(pgsn.gsn.evidence(description="Test results").fully_eval()), indent=2)
+pprint.pprint(pgsn.dsl.python_value(pgsn.gsn.solution(description="Test results").fully_eval()), indent=2)
 
-e1 = pgsn.gsn.evidence(description="Test results")
+e1 = pgsn.gsn.solution(description="Test results")
 pprint.pprint(pgsn.dsl.to_python(e1.fully_eval()), indent=2)
 
 g1 = pgsn.gsn.goal(description="Vulnerability A is not exploited",
-                                                     support=pgsn.gsn.evidence(description="Test results"))
+                                                     support=pgsn.gsn.solution(description="Test results"))
 pprint.pprint(pgsn.dsl.to_python(g1.fully_eval()), indent=2)
 
 pprint.pprint(pgsn.dsl.to_python(s.fully_eval()), indent=2)
@@ -40,7 +40,7 @@ pprint.pprint(pgsn.dsl.to_python(robot.fully_eval()), indent=2)
 pprint.pprint(pgsn.dsl.to_python(robot.fully_eval()), indent=2)
 
 web_server = pgsn.gsn.goal(description="The server can deal with DoS attacks on the server",
-                                support=pgsn.gsn.evidence(description="Access restriction"))
+                                support=pgsn.gsn.solution(description="Access restriction"))
 
 system = pgsn.gsn.goal(description="The robot does not make unintended movements",
                             support=pgsn.gsn.strategy(description="Argument over the robot and the server",

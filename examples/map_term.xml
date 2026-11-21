@@ -1,7 +1,7 @@
 <PGSN>
     <def name="goalTemplate" as="template">
         <param name="desc" positional="true"/>
-        <Goal>{desc}<Evidence>{desc}</Evidence></Goal>
+        <Goal>{desc}<Solution>{desc}</Solution></Goal>
     </def>
 
     <def name="goals" as="apply">

@@ -137,21 +137,21 @@ def test_record_shift_under_unused_lambda():
 # collected them and nothing they assert was ever checked.
 # ------------------------------------------------------------------ #
 
-GSN_TYPES = {"Goal", "Strategy", "Evidence", "Context", "Assumption",
+GSN_TYPES = {"Goal", "Strategy", "Solution", "Context", "Assumption",
              "Undeveloped"}
 
 
 def _build():
-    from pgsn.gsn import goal, strategy, evidence
+    from pgsn.gsn import goal, strategy, solution
     return goal(
         description="System is secure",
         support=strategy(
             description="Break into sub-goals",
             sub_goals=[
                 goal(description="Input validated",
-                     support=evidence(description="Static analysis passed")),
+                     support=solution(description="Static analysis passed")),
                 goal(description="Output sanitized",
-                     support=evidence(description="Fuzzing test succeeded")),
+                     support=solution(description="Fuzzing test succeeded")),
             ],
         ),
     )
@@ -199,4 +199,4 @@ def test_root_and_children_resolve_expected_types():
     assert gsn_type_of(data["support"]) == "Strategy"
     subs = data["support"]["sub_goals"]
     assert [gsn_type_of(s) for s in subs] == ["Goal", "Goal"]
-    assert [gsn_type_of(s["support"]) for s in subs] == ["Evidence", "Evidence"]
+    assert [gsn_type_of(s["support"]) for s in subs] == ["Solution", "Solution"]

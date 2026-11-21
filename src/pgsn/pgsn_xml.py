@@ -28,11 +28,11 @@ from pgsn.dsl import (
     Term,
 )
 from pgsn.gsn import (
-    goal, strategy, evidence, context, assumption, defeater,
-    goal_class, strategy_class, evidence_class,
+    goal, strategy, solution, context, assumption, defeater,
+    goal_class, strategy_class, solution_class,
     context_class, assumption_class, gsn_class,
     support_class, undeveloped_class, defeater_class,
-    undeveloped, immediate, evidence_as_goal,
+    undeveloped, immediate, solution_as_goal,
 )
 
 
@@ -706,24 +706,24 @@ _BUILTINS: dict[str, Term] = {
     "empty_record": empty_record, "undefined": undefined,
     "define_class": define_class, "instantiate": instantiate,
     "type_of": type_of, "is_subtype": is_subtype, "base_class": base_class,
-    "goal": goal, "strategy": strategy, "evidence": evidence,
+    "goal": goal, "strategy": strategy, "solution": solution,
     "context": context, "assumption": assumption,
     "defeater": defeater,
     "immediate": immediate, "undeveloped": undeveloped,
-    "evidence_as_goal": evidence_as_goal,
+    "solution_as_goal": solution_as_goal,
     "gsn_class": gsn_class, "goal_class": goal_class,
-    "strategy_class": strategy_class, "evidence_class": evidence_class,
+    "strategy_class": strategy_class, "solution_class": solution_class,
     "context_class": context_class, "assumption_class": assumption_class,
     "support_class": support_class, "undeveloped_class": undeveloped_class,
     "defeater_class": defeater_class,
     # Intuitive aliases for GSN class values
-    "Goal": goal_class, "Strategy": strategy_class, "Evidence": evidence_class,
+    "Goal": goal_class, "Strategy": strategy_class, "Solution": solution_class,
     "Context": context_class, "Assumption": assumption_class,
     "GSN": gsn_class, "Support": support_class,
     "Defeater": defeater_class,
 }
 
-_SUPPORT_TAGS = {"Strategy", "Evidence", "Goal", "supportedBy", "undeveloped"}
+_SUPPORT_TAGS = {"Strategy", "Solution", "Goal", "supportedBy", "undeveloped"}
 
 
 def _text_fields(s: str) -> list[str]:
@@ -1369,7 +1369,7 @@ class _Header(NamedTuple):
     annotations and challenges hung off it.
 
     Each field is already a PGSN list, which is what the constructors in
-    `gsn.py` take. A node with no place for one of them -- an <Evidence>
+    `gsn.py` take. A node with no place for one of them -- a <Solution>
     carries no <Context> -- simply leaves that field unread.
     """
 
@@ -1386,7 +1386,7 @@ def _header_description(elem: ET.Element, unit: _Unit) -> Term:
     when neither is present — as a single value child, so that a computed
     description can be given directly:
 
-        <Evidence><expr>f"test report {i}"</expr></Evidence>
+        <Solution><expr>f"test report {i}"</expr></Solution>
     """
     desc_elem = elem.find("description")
     if desc_elem is not None:
@@ -1429,7 +1429,7 @@ def _support_of(elem: ET.Element, unit: _Unit) -> Term:
         return undeveloped
     first = body[0]
     match first.tag:
-        case "Strategy" | "Evidence":
+        case "Strategy" | "Solution":
             return _expr(first, unit)
         case "Goal":
             return immediate(list_term(tuple(
@@ -1447,7 +1447,7 @@ def _e_defeater(elem: ET.Element, unit: _Unit) -> Term:
     support of its own and further defeaters challenging it in turn:
 
         <Defeater>hazard H4 is unmitigated
-          <Evidence>incident report 2026-03</Evidence>
+          <Solution>incident report 2026-03</Solution>
         </Defeater>
     """
     header = _gsn_header(elem, unit)
@@ -1522,10 +1522,10 @@ def _sub_goals(elem: ET.Element, unit: _Unit) -> Term:
     raise PGSNError("<Strategy> requires sub-goals or <subGoals>")
 
 
-def _e_evidence(elem: ET.Element, unit: _Unit) -> Term:
-    """Evidence: a solution, and whatever challenges it."""
+def _e_solution(elem: ET.Element, unit: _Unit) -> Term:
+    """Solution: a reference to an evidence item, and whatever challenges it."""
     header = _gsn_header(elem, unit)
-    return evidence(description=header.description,
+    return solution(description=header.description,
                     defeaters=header.defeaters)
 
 
@@ -1549,7 +1549,7 @@ _COMPILERS = {
     "dl":       _e_dict,
     "Goal":     _e_goal,
     "Strategy": _e_strategy,
-    "Evidence": _e_evidence,
+    "Solution": _e_solution,
     "Defeater": _e_defeater,
 }
 

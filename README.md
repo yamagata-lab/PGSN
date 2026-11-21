@@ -63,9 +63,9 @@ Evaluating term 'main'...
 Goal: System is secure
 └── Strategy: Break into sub-goals
     ├── Goal: Input validated
-    │   └── Evidence: Static analysis passed
+    │   └── Solution: Static analysis passed
     └── Goal: Output sanitized
-        └── Evidence: Fuzzing test succeeded
+        └── Solution: Fuzzing test succeeded
 
 Done.
 ```
@@ -100,7 +100,7 @@ term = pgsn.load_xml("main.xml", config=cfg)
 print(pgsn.gsn_tree(term).show(stdout=False, sorting=False))
 ```
 
-It exposes constructors for PGSN constants and terms (`string`, `record`, `lambda_abs`, `map_term`, ...), constructors for GSN nodes and classes (`goal`, `strategy`, `evidence`, `goal_class`, ...), the conversion and rendering functions (`python_value`, `gsn_tree`, `gsn_dot`, `save_gsn`), and the XML front end with its configuration (`load_xml`, `load_xml_string`, `Config`, `Jails`, `configure`).
+It exposes constructors for PGSN constants and terms (`string`, `record`, `lambda_abs`, `map_term`, ...), constructors for GSN nodes and classes (`goal`, `strategy`, `solution`, `goal_class`, ...), the conversion and rendering functions (`python_value`, `gsn_tree`, `gsn_dot`, `save_gsn`), and the XML front end with its configuration (`load_xml`, `load_xml_string`, `Config`, `Jails`, `configure`).
 
 Everything else in the package — `pgsn.dsl`, `pgsn.gsn`, `pgsn.pgsn_term`, `pgsn.pgsn_xml`, `pgsn.dcom`, `pgsn.helpers`, `pgsn.cli` — is internal and may change without notice. The examples below import from those submodules directly and predate the public API; prefer `import pgsn` in new code.
 
@@ -120,9 +120,9 @@ g = goal(
         description="Break into sub-goals",
         sub_goals=[
             goal(description="Input validated",
-                 support=evidence(description="Static analysis passed")),
+                 support=solution(description="Static analysis passed")),
             goal(description="Output sanitized",
-                 support=evidence(description="Fuzzing test succeeded"))
+                 support=solution(description="Fuzzing test succeeded"))
         ]
     )
 )
@@ -139,9 +139,9 @@ Evaluating term 'main'...
 Goal: System is secure
 └── Strategy: Break into sub-goals
     ├── Goal: Input validated
-    │   └── Evidence: Static analysis passed
+    │   └── Solution: Static analysis passed
     └── Goal: Output sanitized
-        └── Evidence: Fuzzing test succeeded
+        └── Solution: Fuzzing test succeeded
 
 Done.
 ```
@@ -150,20 +150,20 @@ Done.
 
 ## Advanced Examples
 
-### Example 1: Reusable Goal Template with Evidence
+### Example 1: Reusable Goal Template with a Solution
 
-Define a reusable function that generates a goal node supported by an evidence node with the same description.
+Define a reusable function that generates a goal node supported by a solution node with the same description.
 
 ```python
 from pgsn.dsl import *
 from pgsn.gsn import *
 
-# Define a reusable goal+evidence template
+# Define a reusable goal+solution template
 mk_goal_with_evidence = lambda_abs_keywords(
     {"desc": variable("desc")},
     goal(
         description=variable("desc"),
-        support=evidence(description=variable("desc"))
+        support=solution(description=variable("desc"))
     )
 )
 
@@ -199,7 +199,7 @@ requirements = ["Firewall enabled", "Encrypted communication", "Access control a
 
 goal_template = lambda_abs(variable("desc"),
     goal(description=variable("desc"),
-         support=evidence(description=variable("desc")))
+         support=solution(description=variable("desc")))
 )
 
 goals = map_term(goal_template, requirements)
@@ -227,7 +227,7 @@ CustomGoal = define_class(inherit=goal_class, name="GoalWithProject", attributes
 
 g = instantiate(CustomGoal, description="Secure connection established",
                 project='Alpha',
-                support=evidence(description="Verified by audit"))
+                support=solution(description="Verified by audit"))
 
 gsn_tree(g.fully_eval()).show(sorting=False)
 ```
@@ -260,7 +260,7 @@ You can adapt these techniques to build domain-specific GSN templates, automate 
 |-----------------------------|-----------------------------------------|
 | `goal(...)`                 | Defines a GSN Goal                      |
 | `strategy(...)`             | Logical inference for a Goal            |
-| `evidence(...)`             | Data supporting a Goal                  |
+| `solution(...)`             | Reference to evidence for a Goal        |
 | `context(...)`              | Context for a Goal or Strategy          |
 | `assumption(...)`           | Declares an assumption                  |
 | `immediate(...)`            | Binds sub-goals directly                |

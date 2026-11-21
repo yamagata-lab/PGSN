@@ -1,7 +1,7 @@
 # PGSN — Programmable Goal Structuring Notation
 
 PGSN は XML ベースの言語で、GSN（Goal Structuring Notation）をプログラマブルに拡張したものです。
-GSN ノード（Goal・Strategy・Evidence）を値として扱い、変数・テンプレート・クラスといったプログラミング構造と組み合わせることができます。
+GSN ノード（Goal・Strategy・Solution）を値として扱い、変数・テンプレート・クラスといったプログラミング構造と組み合わせることができます。
 
 ---
 
@@ -9,7 +9,7 @@ GSN ノード（Goal・Strategy・Evidence）を値として扱い、変数・�
 
 言語のどこでも成り立つ性質が5つあります。以降の節は構文を説明しますが、ここで述べるのは、その構文が何のための構文なのかです。
 
-**すべてが値です。** Goal も Strategy も Evidence も、クラスもテンプレートも、文字列やリストと同じ値です。名前に束縛でき、リストに入れられ、テンプレートに渡せて、テンプレートから返せます。名前を書くための特別なスロットも、クラス名を表す文字列もありません。content を取る要素は、どこでも式を取ります。[値（val）](#値val)を参照してください。
+**すべてが値です。** Goal も Strategy も Solution も、クラスもテンプレートも、文字列やリストと同じ値です。名前に束縛でき、リストに入れられ、テンプレートに渡せて、テンプレートから返せます。名前を書くための特別なスロットも、クラス名を表す文字列もありません。content を取る要素は、どこでも式を取ります。[値（val）](#値val)を参照してください。
 
 **純粋関数型です。** 書き換えも実行もありません。`<def>` はそれ以降のスコープで名前を束縛するだけで、前の束縛が意味していたものを変えることはありません。同じ名前をもう一度束縛するのは、代入ではなくシャドーイングです。したがってドキュメントはひとつの値を表し、何度評価しても同じ値を表します。[定義（def）](#定義def)を参照してください。
 
@@ -355,8 +355,8 @@ import が jail に入ると、その jail が import 先モジュールの封�
 
 **型付けは構造的です。** ある値が型を満たすのは、その値のクラスが、型の宣言する属性と
 メソッドを少なくとも全部宣言しているときです。クラスの出自は関係ありません。`description` と
-`defeaters` を持つ自作のクラスは、`Evidence` を継承していなくても `Evidence` を満たしますし、
-`Goal` もそれらのラベルを（さらに多く）宣言しているので `Evidence` を満たします。
+`defeaters` を持つ自作のクラスは、`Solution` を継承していなくても `Solution` を満たしますし、
+`Goal` もそれらのラベルを（さらに多く）宣言しているので `Solution` を満たします。
 クラスの**同一性**を比べる場所がどこにもないので、どのコピーについて訊いても答えは同じです。
 
 検査に失敗しても例外にはなりません。値が通らないだけなので、文書は与える値を持たず、
@@ -411,9 +411,9 @@ import が jail に入ると、その jail が import 先モジュールの封�
 - 文字列: `format_string`
 - クラス／オブジェクト: `define_class`・`instantiate`・`type_of`・`is_subtype`・`base_class`
 - その他: `fix`・`repeat`・`undefined`
-- GSN コンストラクタ: `goal`・`strategy`・`evidence`・`context`・`assumption`・`defeater`・`undeveloped`・`immediate`・`evidence_as_goal`
-- GSN クラス（長い名前）: `goal_class`・`strategy_class`・`evidence_class`・`context_class`・`assumption_class`・`defeater_class`・`gsn_class`・`support_class`・`undeveloped_class`
-- GSN クラス（短いエイリアス）: `Goal`・`Strategy`・`Evidence`・`Context`・`Assumption`・`Defeater`・`GSN`・`Support`
+- GSN コンストラクタ: `goal`・`strategy`・`solution`・`context`・`assumption`・`defeater`・`undeveloped`・`immediate`・`solution_as_goal`
+- GSN クラス（長い名前）: `goal_class`・`strategy_class`・`solution_class`・`context_class`・`assumption_class`・`defeater_class`・`gsn_class`・`support_class`・`undeveloped_class`
+- GSN クラス（短いエイリアス）: `Goal`・`Strategy`・`Solution`・`Context`・`Assumption`・`Defeater`・`GSN`・`Support`
 
 例（リストにテンプレートを写像する）:
 
@@ -629,13 +629,13 @@ import が jail に入ると、その jail が import 先モジュールの封�
 ```xml
 <template>
     <param name="c" positional="true"/>
-    <Evidence>Component {c} のテスト結果</Evidence>
+    <Solution>Component {c} のテスト結果</Solution>
 </template>
 ```
 
 ### GSN の地テキストとして description を記述する
 
-GSN ヘッダー要素（`Goal`・`Strategy`・`Evidence`・`Context`・`Assumption`）では、先頭の地テキストが自動的に `description` として扱われます。子要素（`<Strategy>` など）と共存する場合も同じで、`<description>` 要素に書いても同じことを表します。`{name}` 展開もここで使えます。
+GSN ヘッダー要素（`Goal`・`Strategy`・`Solution`・`Context`・`Assumption`）では、先頭の地テキストが自動的に `description` として扱われます。子要素（`<Strategy>` など）と共存する場合も同じで、`<description>` 要素に書いても同じことを表します。`{name}` 展開もここで使えます。
 
 ```xml
 <!-- この2つは等価です -->
@@ -653,7 +653,7 @@ GSN ヘッダー要素（`Goal`・`Strategy`・`Evidence`・`Context`・`Assumpt
 先頭の地テキストが無い場合、値を表す子要素が1つだけあればそれが description になります。計算した description に `<description>` を被せる必要はありません。
 
 ```xml
-<Evidence><expr>f"テスト報告書 {i}"</expr></Evidence>
+<Solution><expr>f"テスト報告書 {i}"</expr></Solution>
 ```
 
 値を表す子要素が複数ある場合はエラーになります。どれが description なのかを明示してください。
@@ -692,7 +692,7 @@ GSN ノードはどれも説明（description）から始まり、どれも `Def
 
 **どこに書けるか。** `Context` と `Assumption` が付くのは `Goal` と `Strategy` の2つで、
 規格が許しているのもこの2つです。戦略は、その推論が依拠する仮定を自分で持てます。
-`Evidence` はどちらも取りませんし、`Defeater` も取りません。そこに書いたものは `PGSN.rng` が弾きます。
+`Solution` はどちらも取りませんし、`Defeater` も取りません。そこに書いたものは `PGSN.rng` が弾きます。
 文書の側は何も言いません。
 
 ### Goal
@@ -705,7 +705,7 @@ GSN ノードはどれも説明（description）から始まり、どれも `Def
 
     <!-- body は以下のいずれか -->
     <Strategy>...</Strategy>              <!-- Strategy で支持 -->
-    <Evidence>...</Evidence>              <!-- Evidence で支持 -->
+    <Solution>...</Solution>              <!-- Solution で支持 -->
     <Goal>...</Goal>                      <!-- サブゴールで支持（1つ以上） -->
     <supportedBy var="strategy1"/>        <!-- 変数参照で支持 -->
     <undeveloped/>                        <!-- 未展開 -->
@@ -714,7 +714,7 @@ GSN ノードはどれも説明（description）から始まり、どれも `Def
 
 > **補足: サブゴールの並記は糖衣構文です**
 > Goal の直下に `<Goal>` を複数並べる書き方は、`immediate`（サブゴールを束ねる特殊な Strategy）でラップされます。
-> PGSN のコアでは Goal の支持（support）は Strategy か Evidence のいずれかでなければなりません。
+> PGSN のコアでは Goal の支持（support）は Strategy か Solution のいずれかでなければなりません。
 > 実行時に計算したゴールのリストを支持にしたい場合は、`immediate` を明示的に適用して Strategy 化します。
 >
 > ```xml
@@ -751,15 +751,15 @@ GSN ノードはどれも説明（description）から始まり、どれも `Def
 </Strategy>
 ```
 
-### Evidence
+### Solution
 
-Evidence は説明を持ち、その妥当性に異議があれば Defeater を持ちます。
+Solution は、GSN v3 と同じく、証拠となるものへの参照を示します。説明を持ち、その妥当性に異議があれば Defeater を持ちます。
 
 ```xml
-<Evidence>
+<Solution>
     <description>テスト結果報告書</description>
     <Defeater>報告書が最新のリリースより古い</Defeater>
-</Evidence>
+</Solution>
 ```
 
 ### 反証（Defeater）
@@ -769,23 +769,23 @@ GSN v3 で追加された dialectic extension では、*defeater* が議論の�
 ```xml
 <Goal>システムは安全である
     <Defeater>ハザード H4 が未対応である
-        <Evidence>インシデント報告 2026-03</Evidence>
+        <Solution>インシデント報告 2026-03</Solution>
     </Defeater>
     <Defeater>テストスイートが仕様に追従していない
         <Defeater>改訂 7 で更新済みである</Defeater>
     </Defeater>
-    <Evidence>テスト報告書</Evidence>
+    <Solution>テスト報告書</Solution>
 </Goal>
 ```
 
-書き方は他の GSN ノードと同じで、先頭テキストか `<description>` が description になり、入れ子の `<Evidence>`・`<Strategy>`・`<Goal>`・`<supportedBy>` が support に、入れ子の `<Defeater>` がそれ自身への反証になります。support は省略でき、既定は undeveloped です。対抗論拠を伴う反証は support を埋め、異議を述べるだけの反証は空のままにします。
+書き方は他の GSN ノードと同じで、先頭テキストか `<description>` が description になり、入れ子の `<Solution>`・`<Strategy>`・`<Goal>`・`<supportedBy>` が support に、入れ子の `<Defeater>` がそれ自身への反証になります。support は省略でき、既定は undeveloped です。対抗論拠を伴う反証は support を埋め、異議を述べるだけの反証は空のままにします。
 
-defeater はゴールだけでなく、戦略やエビデンスにも付きます。
+defeater はゴールだけでなく、戦略や Solution にも付きます。
 
 ```xml
 <Strategy>ハザードごとに議論する
     <Defeater>ハザード一覧が網羅的でない</Defeater>
-    <Goal>H1 は緩和されている<Evidence>テスト報告書 H1</Evidence></Goal>
+    <Goal>H1 は緩和されている<Solution>テスト報告書 H1</Solution></Goal>
 </Strategy>
 ```
 

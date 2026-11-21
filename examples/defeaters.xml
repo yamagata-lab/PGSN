@@ -7,24 +7,24 @@
         The braking controller is safe to release
         <Defeater>
             Hazard H4, wheel lock-up on ice, is not mitigated
-            <Evidence>Incident report 2026-03, field unit 118</Evidence>
+            <Solution>Incident report 2026-03, field unit 118</Solution>
         </Defeater>
         <Strategy>
             Argue over each identified hazard
             <Defeater>The hazard list predates the winter tyre variant</Defeater>
             <Goal>
                 H1, brake overheating, is mitigated
-                <Evidence>Thermal soak test report TR-91</Evidence>
+                <Solution>Thermal soak test report TR-91</Solution>
             </Goal>
             <Goal>
                 H2, sensor dropout, is mitigated
-                <Evidence>
+                <Solution>
                     Fault injection campaign FI-07
                     <Defeater>
                         The campaign covered only the primary sensor
                         <Defeater>The secondary sensor was added after FI-07 closed</Defeater>
                     </Defeater>
-                </Evidence>
+                </Solution>
             </Goal>
             <Goal>
                 H3, latency under load, is mitigated

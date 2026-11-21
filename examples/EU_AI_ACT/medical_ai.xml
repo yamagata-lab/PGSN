@@ -15,8 +15,8 @@
     <import name="noProhibitedPractice"/>
   </from>
 
-  <def name="art5Report" as="Evidence">Art. 5 prohibited-use self-assessment report</def>
-  <def name="scopeAssessment" as="Evidence">Annex III scope assessment: clinical decision support only</def>
+  <def name="art5Report" as="Solution">Art. 5 prohibited-use self-assessment report</def>
+  <def name="scopeAssessment" as="Solution">Annex III scope assessment: clinical decision support only</def>
 
   <def name="diagnosticSupport" as="dl">
     <dt key="name"/><dd>Diagnostic Support</dd>
@@ -30,13 +30,13 @@
     <dd>
       <dl>
         <dt key="Art. 6(1)"/>
-        <dd><apply template="doesApply"><arg><Evidence>Class IIb medical device certificate under Regulation (EU) 2017/745, which is listed in Annex I and requires notified body conformity assessment</Evidence></arg></apply></dd>
+        <dd><apply template="doesApply"><arg><Solution>Class IIb medical device certificate under Regulation (EU) 2017/745, which is listed in Annex I and requires notified body conformity assessment</Solution></arg></apply></dd>
         <dt key="Annex III, point 1"/><dd><apply template="doesNotApply"><arg var="scopeAssessment"/></apply></dd>
         <dt key="Annex III, point 2"/><dd><apply template="doesNotApply"><arg var="scopeAssessment"/></apply></dd>
         <dt key="Annex III, point 3"/><dd><apply template="doesNotApply"><arg var="scopeAssessment"/></apply></dd>
         <dt key="Annex III, point 4"/><dd><apply template="doesNotApply"><arg var="scopeAssessment"/></apply></dd>
         <dt key="Annex III, point 5"/>
-        <dd><apply template="doesNotApply"><arg><Evidence>Function specification: no triage of emergency calls and no eligibility decision for healthcare services</Evidence></arg></apply></dd>
+        <dd><apply template="doesNotApply"><arg><Solution>Function specification: no triage of emergency calls and no eligibility decision for healthcare services</Solution></arg></apply></dd>
         <dt key="Annex III, point 6"/><dd><apply template="doesNotApply"><arg var="scopeAssessment"/></apply></dd>
         <dt key="Annex III, point 7"/><dd><apply template="doesNotApply"><arg var="scopeAssessment"/></apply></dd>
         <dt key="Annex III, point 8"/><dd><apply template="doesNotApply"><arg var="scopeAssessment"/></apply></dd>
@@ -46,25 +46,25 @@
     <dt key="isLimitedRisk"/><dd var="false"/>
     <dt key="isGPAI"/><dd var="false"/>
     <dt key="notGpaiAssessment"/>
-    <dd><Evidence>Model architecture and capability assessment against Art. 3(63)</Evidence></dd>
+    <dd><Solution>Model architecture and capability assessment against Art. 3(63)</Solution></dd>
 
-    <dt key="risk_management"/><dd><Evidence>Clinical risk management system report (Art. 9)</Evidence></dd>
-    <dt key="data_governance"/><dd><Evidence>Medical training data governance audit (Art. 10)</Evidence></dd>
-    <dt key="technical_documentation"/><dd><Evidence>Annex IV technical documentation package (Art. 11)</Evidence></dd>
-    <dt key="record_keeping"/><dd><Evidence>Automatic logging specification and test report (Art. 12)</Evidence></dd>
-    <dt key="transparency_deployers"/><dd><Evidence>Instructions for use and transparency notice for deployers (Art. 13)</Evidence></dd>
-    <dt key="human_oversight"/><dd><Evidence>Clinical human oversight protocol (Art. 14)</Evidence></dd>
-    <dt key="accuracy_robustness"/><dd><Evidence>Diagnostic accuracy and robustness benchmark (Art. 15)</Evidence></dd>
-    <dt key="quality_management_system"/><dd><Evidence>ISO 13485-aligned quality management system certificate (Art. 17)</Evidence></dd>
-    <dt key="conformity_assessment"/><dd><Evidence>Notified body conformity assessment certificate (Art. 43)</Evidence></dd>
-    <dt key="ce_marking"/><dd><Evidence>CE marking affixation record (Art. 48)</Evidence></dd>
-    <dt key="declaration_of_conformity"/><dd><Evidence>EU declaration of conformity and EU database registration (Art. 49)</Evidence></dd>
+    <dt key="risk_management"/><dd><Solution>Clinical risk management system report (Art. 9)</Solution></dd>
+    <dt key="data_governance"/><dd><Solution>Medical training data governance audit (Art. 10)</Solution></dd>
+    <dt key="technical_documentation"/><dd><Solution>Annex IV technical documentation package (Art. 11)</Solution></dd>
+    <dt key="record_keeping"/><dd><Solution>Automatic logging specification and test report (Art. 12)</Solution></dd>
+    <dt key="transparency_deployers"/><dd><Solution>Instructions for use and transparency notice for deployers (Art. 13)</Solution></dd>
+    <dt key="human_oversight"/><dd><Solution>Clinical human oversight protocol (Art. 14)</Solution></dd>
+    <dt key="accuracy_robustness"/><dd><Solution>Diagnostic accuracy and robustness benchmark (Art. 15)</Solution></dd>
+    <dt key="quality_management_system"/><dd><Solution>ISO 13485-aligned quality management system certificate (Art. 17)</Solution></dd>
+    <dt key="conformity_assessment"/><dd><Solution>Notified body conformity assessment certificate (Art. 43)</Solution></dd>
+    <dt key="ce_marking"/><dd><Solution>CE marking affixation record (Art. 48)</Solution></dd>
+    <dt key="declaration_of_conformity"/><dd><Solution>EU declaration of conformity and EU database registration (Art. 49)</Solution></dd>
   </def>
 
   <def name="system" as="dl">
     <dt key="name"/><dd>Medical Diagnosis AI</dd>
     <dt key="functionInventoryEvidence"/>
-    <dd><Evidence>Annex IV technical documentation section 1(b): the device contains one AI component, the diagnostic support model</Evidence></dd>
+    <dd><Solution>Annex IV technical documentation section 1(b): the device contains one AI component, the diagnostic support model</Solution></dd>
     <dt key="functions"/>
     <dd><ol><li var="diagnosticSupport"/></ol></dd>
   </def>

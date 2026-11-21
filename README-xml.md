@@ -1,7 +1,7 @@
 # PGSN — Programmable Goal Structuring Notation
 
 PGSN is an XML-based language that extends GSN (Goal Structuring Notation) with programming constructs.
-GSN nodes (Goal, Strategy, Evidence) are treated as first-class values and can be combined with variables, templates, and classes.
+GSN nodes (Goal, Strategy, Solution) are treated as first-class values and can be combined with variables, templates, and classes.
 
 ---
 
@@ -9,7 +9,7 @@ GSN nodes (Goal, Strategy, Evidence) are treated as first-class values and can b
 
 Five properties hold everywhere in the language. The sections that follow describe the syntax; these describe what that syntax is a syntax for.
 
-**Everything is a value.** A Goal, a Strategy, a piece of Evidence, a class, a template — each is a value like a string or a list, and can be bound to a name, held in a list, passed to a template or returned from one. There are no name slots and no class-name strings to work around: wherever an element takes content, it takes an expression. See [Values](#values).
+**Everything is a value.** A Goal, a Strategy, a Solution, a class, a template — each is a value like a string or a list, and can be bound to a name, held in a list, passed to a template or returned from one. There are no name slots and no class-name strings to work around: wherever an element takes content, it takes an expression. See [Values](#values).
 
 **The language is purely functional.** Nothing is mutated and nothing is performed. A `<def>` binds a name for the scope that follows it and never changes what an earlier binding meant; binding the same name again shadows it rather than assigns to it. A document therefore denotes one value, and denotes the same value however many times it is evaluated. See [Definitions](#definitions-def).
 
@@ -363,8 +363,8 @@ value is a **variable name** bound to a class.
 **Typing is structural.** A value satisfies a type when its class declares at
 least the attributes and methods the type declares. Where the class came from
 does not enter into it: a class of your own that carries `description` and
-`defeaters` satisfies `Evidence` without inheriting from it, and a `Goal`
-satisfies `Evidence` too, since it declares those labels and more. Nothing
+`defeaters` satisfies `Solution` without inheriting from it, and a `Goal`
+satisfies `Solution` too, since it declares those labels and more. Nothing
 compares class *identities*, which is what makes the answer the same whichever
 copy of a class is asked about.
 
@@ -421,9 +421,9 @@ The following names are predefined; reference them with `<var name="..."/>` and 
 - Strings: `format_string`
 - Classes / objects: `define_class`, `instantiate`, `type_of`, `is_subtype`, `base_class`
 - Misc: `fix`, `repeat`, `undefined`
-- GSN constructors: `goal`, `strategy`, `evidence`, `context`, `assumption`, `defeater`, `undeveloped`, `immediate`, `evidence_as_goal`
-- GSN classes (long form): `goal_class`, `strategy_class`, `evidence_class`, `context_class`, `assumption_class`, `defeater_class`, `gsn_class`, `support_class`, `undeveloped_class`
-- GSN classes (short aliases): `Goal`, `Strategy`, `Evidence`, `Context`, `Assumption`, `Defeater`, `GSN`, `Support`
+- GSN constructors: `goal`, `strategy`, `solution`, `context`, `assumption`, `defeater`, `undeveloped`, `immediate`, `solution_as_goal`
+- GSN classes (long form): `goal_class`, `strategy_class`, `solution_class`, `context_class`, `assumption_class`, `defeater_class`, `gsn_class`, `support_class`, `undeveloped_class`
+- GSN classes (short aliases): `Goal`, `Strategy`, `Solution`, `Context`, `Assumption`, `Defeater`, `GSN`, `Support`
 
 Example (mapping a template over a list):
 
@@ -637,13 +637,13 @@ This becomes a `format_string` application. To write a literal brace, escape it 
 ```xml
 <template>
     <param name="c" positional="true"/>
-    <Evidence>Test result for component {c}</Evidence>
+    <Solution>Test result for component {c}</Solution>
 </template>
 ```
 
 ### GSN Leading Text as Description
 
-For GSN header elements (`Goal`, `Strategy`, `Evidence`, `Context`, `Assumption`), leading plain text is automatically treated as the `description`. It is the description whether or not the element also has child elements (such as a nested `<Strategy>`), and writing a `<description>` element says the same thing. `{name}` expansion applies here too.
+For GSN header elements (`Goal`, `Strategy`, `Solution`, `Context`, `Assumption`), leading plain text is automatically treated as the `description`. It is the description whether or not the element also has child elements (such as a nested `<Strategy>`), and writing a `<description>` element says the same thing. `{name}` expansion applies here too.
 
 ```xml
 <!-- these two forms are equivalent -->
@@ -661,7 +661,7 @@ For GSN header elements (`Goal`, `Strategy`, `Evidence`, `Context`, `Assumption`
 A header with no leading text takes a single value child as its description, so a computed description needs no `<description>` wrapper:
 
 ```xml
-<Evidence><expr>f"test report {i}"</expr></Evidence>
+<Solution><expr>f"test report {i}"</expr></Solution>
 ```
 
 A header carrying more than one value child is an error; say which one is the description by writing it out.
@@ -703,7 +703,7 @@ Every GSN node opens with a description, and any node may be challenged by a
 
 **Where they may appear.** A `Context` or an `Assumption` attaches to a `Goal`
 or to a `Strategy`, which are the two the standard allows — a strategy carries
-the assumption its reasoning depends on. `Evidence` takes neither, and neither
+the assumption its reasoning depends on. `Solution` takes neither, and neither
 does a `Defeater`. Writing one there is rejected by `PGSN.rng`; nothing in the
 document itself will say so.
 
@@ -717,7 +717,7 @@ document itself will say so.
 
     <!-- body: exactly one of the following -->
     <Strategy>...</Strategy>              <!-- supported by a Strategy -->
-    <Evidence>...</Evidence>              <!-- supported by Evidence -->
+    <Solution>...</Solution>              <!-- supported by a Solution -->
     <Goal>...</Goal>                      <!-- supported by sub-goals (one or more) -->
     <supportedBy var="strategy1"/>        <!-- supported by a variable reference -->
     <undeveloped/>                        <!-- not yet developed -->
@@ -726,7 +726,7 @@ document itself will say so.
 
 > **Note: writing sub-goals directly is sugar**
 > Listing several `<Goal>` elements directly under a Goal is a wrap by `immediate` (a special Strategy that bundles sub-goals).
-> In the PGSN core, a Goal's support must be either a Strategy or Evidence.
+> In the PGSN core, a Goal's support must be either a Strategy or a Solution.
 > To support a Goal with a list of goals computed at runtime, apply `immediate` explicitly to turn it into a Strategy.
 >
 > ```xml
@@ -763,15 +763,15 @@ A list (`ol`) can be passed to `subGoals` to specify sub-goals dynamically.
 </Strategy>
 ```
 
-### Evidence
+### Solution
 
-Evidence carries a description, and defeaters if its adequacy is challenged.
+A Solution presents a reference to an evidence item, as in GSN v3. It carries a description, and defeaters if its adequacy is challenged.
 
 ```xml
-<Evidence>
+<Solution>
     <description>test result report</description>
     <Defeater>the report predates the last release</Defeater>
-</Evidence>
+</Solution>
 ```
 
 ### Defeaters
@@ -781,23 +781,23 @@ GSN v3 adds a dialectic extension: a *defeater* records a doubt about part of an
 ```xml
 <Goal>the system is safe
     <Defeater>hazard H4 is unmitigated
-        <Evidence>incident report 2026-03</Evidence>
+        <Solution>incident report 2026-03</Solution>
     </Defeater>
     <Defeater>the test suite is out of date
         <Defeater>it was refreshed in revision 7</Defeater>
     </Defeater>
-    <Evidence>test report</Evidence>
+    <Solution>test report</Solution>
 </Goal>
 ```
 
-A `<Defeater>` is written like any other GSN node: leading text or a `<description>` gives the description, a nested `<Evidence>`, `<Strategy>`, `<Goal>` or `<supportedBy>` gives its support, and nested `<Defeater>` elements challenge it. Support is optional and defaults to undeveloped: a defeater that argues its case fills it in, one that merely states an objection leaves it out.
+A `<Defeater>` is written like any other GSN node: leading text or a `<description>` gives the description, a nested `<Solution>`, `<Strategy>`, `<Goal>` or `<supportedBy>` gives its support, and nested `<Defeater>` elements challenge it. Support is optional and defaults to undeveloped: a defeater that argues its case fills it in, one that merely states an objection leaves it out.
 
-Defeaters attach to strategies and to evidence as well as to goals:
+Defeaters attach to strategies and to solutions as well as to goals:
 
 ```xml
 <Strategy>argue over each hazard
     <Defeater>the hazard list is incomplete</Defeater>
-    <Goal>H1 is mitigated<Evidence>report H1</Evidence></Goal>
+    <Goal>H1 is mitigated<Solution>report H1</Solution></Goal>
 </Strategy>
 ```
 

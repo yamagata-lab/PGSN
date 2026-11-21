@@ -3,7 +3,7 @@
        R3 is intentionally absent — no evidence yet.
        Its goal will automatically appear as undeveloped in trace.xml. -->
   <def name="evidenceMap" as="dl">
-    <dt key="R1"/><dd><Evidence>Fault detection timing test</Evidence></dd>
-    <dt key="R2"/><dd><Evidence>Safety event log audit</Evidence></dd>
+    <dt key="R1"/><dd><Solution>Fault detection timing test</Solution></dd>
+    <dt key="R2"/><dd><Solution>Safety event log audit</Solution></dd>
   </def>
 </PGSNModule>

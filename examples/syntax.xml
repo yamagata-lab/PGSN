@@ -160,14 +160,14 @@
     <!-- GSN: a Goal supported by Evidence -->
     <def name="evidenceGoal" as="Goal">
         <description>X is secure</description>
-        <Evidence>operational track record</Evidence>
+        <Solution>operational track record</Solution>
     </def>
 
     <!-- the import that would bring in G1 is commented out above, so the
          goal is defined here instead -->
     <def name="G1" as="Goal">
         the connection is encrypted
-        <Evidence>TLS configuration review</Evidence>
+        <Solution>TLS configuration review</Solution>
     </def>
 
     <!-- GSN: a Strategy referencing sub-goals via a variable -->

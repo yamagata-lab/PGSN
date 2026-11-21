@@ -44,7 +44,7 @@ def test_it_works_wherever_a_value_is_expected(source, expected):
 
 def test_it_works_in_a_gsn_node():
     result = run('<Goal><description expr=\'f"requirement {i} is met"\'/>'
-                 '<Evidence expr=\'f"test report {i}"\'/></Goal>', TWO)
+                 '<Solution expr=\'f"test report {i}"\'/></Goal>', TWO)
     assert result["description"] == "requirement 2 is met"
     assert result["support"]["description"] == "test report 2"
 

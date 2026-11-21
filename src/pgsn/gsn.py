@@ -20,11 +20,11 @@ undeveloped_class = pgsn.dsl.define_class(inherit=support_class,
                                           name='Undeveloped',
                                           defaults={"description": ""})
 undeveloped = undeveloped_class()
-evidence_class = pgsn.dsl.define_class(inherit=support_class, name='Evidence')
+solution_class = pgsn.dsl.define_class(inherit=support_class, name='Solution')
 # A Context or an Assumption attaches to a Goal or a Strategy, which is what
 # lets a strategy carry the assumption its reasoning depends on -- GSN
 # Community Standard Figure 6 does exactly that with "All hazards have been
-# identified". Evidence takes neither: the standard attaches nothing to a
+# identified". A Solution takes neither: the standard attaches nothing to a
 # Solution.
 strategy_class = pgsn.dsl.define_class(inherit=support_class, name='Strategy',
                                           attributes=["assumptions",
@@ -63,10 +63,10 @@ _contexts = pgsn.dsl.variable('contexts')
 _sub_goals = pgsn.dsl.variable('sub_goals')
 _defeaters = pgsn.dsl.variable('defeaters')
 
-evidence = pgsn.dsl.lambda_abs_keywords(
+solution = pgsn.dsl.lambda_abs_keywords(
     arguments={'description': _d, 'defeaters': _defeaters},
     defaults=pgsn.dsl.record({'defeaters': pgsn.dsl.empty}),
-    body=evidence_class(description=_d, defeaters=_defeaters))
+    body=solution_class(description=_d, defeaters=_defeaters))
 strategy = pgsn.dsl.lambda_abs_keywords(
     arguments={'description': _d, 'sub_goals': _sub_goals,
                'assumptions': _assumptions, 'contexts': _contexts,
@@ -112,15 +112,15 @@ defeater = pgsn.dsl.lambda_abs_keywords(
 _goals = pgsn.dsl.variable('goals')
 immediate = pgsn.dsl.lambda_abs(_goals, strategy(description="immediate", sub_goals=_goals))
 
-_evd = pgsn.dsl.variable('evidence')
-evidence_as_goal = pgsn.dsl.lambda_abs(_evd, goal(description=_evd('description'), support=_evd))
+_sol = pgsn.dsl.variable('solution')
+solution_as_goal = pgsn.dsl.lambda_abs(_sol, goal(description=_sol('description'), support=_sol))
 
 # Keys for lists whose children should be attached directly to the parent.
 # An empty list therefore contributes nothing, which is what keeps a node
 # without contexts, assumptions or defeaters from showing empty entries.
 GSN_KEYS_TO_FLATTEN = {"support", "sub_goals", "contexts", "assumptions",
                        "defeaters"}
-GSN_TYPES = {"Goal", "Strategy", "Evidence", "Context", "Assumption",
+GSN_TYPES = {"Goal", "Strategy", "Solution", "Context", "Assumption",
              "Undeveloped", "Defeater"}
 
 # The kinds of node that challenge rather than support what holds them.
@@ -212,7 +212,6 @@ def gsn_tree(root_term: pgsn.pgsn_term.Term) -> Tree:
 GSN_SHAPES = {
         'Goal': 'box',
         'Strategy': 'polygon',
-        'Evidence': 'ellipse',  # Evidenceは円で表現することが多い
         'Solution': 'ellipse',  # Solutionも円で
         'Context': 'box',  # 本来は角丸だけど、まずは四角で
         'Assumption': 'ellipse',
@@ -393,7 +392,7 @@ def gsn_dot(gsn: pgsn.pgsn_term.Term,
                 edge_attrs['dir'] = 'back'
                 edge_attrs['style'] = 'dashed'
 
-            if parent_node_type == 'Goal' and node_type == 'Evidence':
+            if parent_node_type == 'Goal' and node_type == 'Solution':
                 edge_attrs['tailport'] = 's'
                 edge_attrs['headport'] = 'n'
                 edge_attrs['weight'] = '10'

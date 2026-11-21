@@ -280,13 +280,13 @@ def test_expr_composes_with_the_rest_of_the_document():
 def test_value_child_is_a_gsn_description():
     """A GSN header with no text takes a lone value child as its description."""
     result = run('<def name="i"><num>7</num></def>'
-                 '<Evidence><expr>f"test report {i}"</expr></Evidence>')
+                 '<Solution><expr>f"test report {i}"</expr></Solution>')
     assert result["description"] == "test report 7"
 
 
 def test_several_value_children_in_a_header_are_rejected():
     with pytest.raises(PGSNError, match="several value children"):
-        run("<Evidence><str>a</str><str>b</str></Evidence>")
+        run("<Solution><str>a</str><str>b</str></Solution>")
 
 
 def test_generating_sub_goals_by_recursion():
@@ -300,7 +300,7 @@ def test_generating_sub_goals_by_recursion():
             <arg><apply><var name="cons"/>
               <arg><Goal>
                 <description><expr>f"requirement {i} is met"</expr></description>
-                <Evidence><expr>f"test report {i}"</expr></Evidence>
+                <Solution><expr>f"test report {i}"</expr></Solution>
               </Goal></arg>
               <arg><apply><var name="goals"/>
                     <arg><expr>i - 1</expr></arg></apply></arg>

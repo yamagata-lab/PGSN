@@ -119,21 +119,21 @@ Each constructor takes keyword arguments and returns a term.
 |-------------|-----------|
 | `goal` | `description`, `support`, `contexts` (default empty), `assumptions` (default empty), `defeaters` (default empty) |
 | `strategy` | `description`, `sub_goals`, `contexts` (default empty), `assumptions` (default empty), `defeaters` (default empty) |
-| `evidence` | `description`, `defeaters` (default empty) |
+| `solution` | `description`, `defeaters` (default empty) |
 | `context` | `description` |
 | `assumption` | `description` |
 | `defeater` | `description`, `support` (default undeveloped), `defeaters` (default empty) |
 
 `support` has no default: an unsupported goal is written explicitly with `support=pgsn.undeveloped`.
 
-`contexts` and `assumptions` belong to a goal and to a strategy, which are the two the standard attaches them to. Evidence takes neither.
+`contexts` and `assumptions` belong to a goal and to a strategy, which are the two the standard attaches them to. A solution takes neither.
 
 `defeaters` is the dialectic extension of GSN v3: a defeater records a doubt about the node holding it rather than support for it. Every node type accepts one, and a defeater is itself a node, so challenges nest. The standard has no Defeater element — there a defeater is a Goal or Solution joined to its target by a Challenges relationship — but a language of values has no edges to carry that relationship, so PGSN makes the challenging role a class. One class covers both rebutting and undercutting defeaters: fill in `support` for a defeater that argues its case, leave it out for one that merely states an objection.
 
 Two helpers cover common shapes:
 
 - `immediate(goals)` — a strategy that simply carries a list of sub-goals
-- `evidence_as_goal(ev)` — a goal whose description and support both come from an evidence node
+- `solution_as_goal(s)` — a goal whose description and support both come from a solution node
 
 ```python
 import pgsn
@@ -145,7 +145,7 @@ g = pgsn.goal(
         description="Argue over properties",
         sub_goals=pgsn.list_term((
             pgsn.goal(description="Input is validated",
-                      support=pgsn.evidence(description="Static analysis report")),
+                      support=pgsn.solution(description="Static analysis report")),
             pgsn.goal(description="Output is sanitised",
                       support=pgsn.undeveloped),
         )),
@@ -159,14 +159,14 @@ Goal: System is secure
 ├── Context: Deployment: cloud
 └── Strategy: Argue over properties
     ├── Goal: Input is validated
-    │   └── Evidence: Static analysis report
+    │   └── Solution: Static analysis report
     └── Goal: Output is sanitised
         └── Undeveloped:
 ```
 
 ### Classes
 
-The class values behind the constructors are `gsn_class`, `goal_class`, `strategy_class`, `evidence_class`, `context_class`, `assumption_class`, `defeater_class`, `support_class` and `undeveloped_class`. Use them with `define_class` to derive your own node types:
+The class values behind the constructors are `gsn_class`, `goal_class`, `strategy_class`, `solution_class`, `context_class`, `assumption_class`, `defeater_class`, `support_class` and `undeveloped_class`. Use them with `define_class` to derive your own node types:
 
 ```python
 my_goal_class = pgsn.define_class(
@@ -191,7 +191,7 @@ pgsn.is_subtype(pgsn.type_of(node))(pgsn.goal_class).fully_eval().value
 
 Typing is structural: `is_subtype` compares the attribute and method names the
 two classes declare, and `inherit` plays no part. A class of your own
-satisfies `evidence_class` by carrying `description` and `defeaters`, and a
+satisfies `solution_class` by carrying `description` and `defeaters`, and a
 goal satisfies it too, since it declares those and more. There is no predicate
 that asks which class a value belongs to: two copies of one class cannot be
 relied on to compare equal, so the answer would depend on where the copies
@@ -210,7 +210,7 @@ A GSN template is an ordinary function returning a node, so `map_term` expands o
 ```python
 x = pgsn.variable("x")
 template = pgsn.lambda_abs(
-    x, pgsn.goal(description=x, support=pgsn.evidence(description=x)))
+    x, pgsn.goal(description=x, support=pgsn.solution(description=x)))
 
 requirements = pgsn.list_term((pgsn.string("R1"), pgsn.string("R2")))
 goals = pgsn.map_term(template)(requirements)

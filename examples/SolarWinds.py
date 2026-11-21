@@ -21,33 +21,33 @@ solarwinds = goal(description="Binary Repositoryが安全である",
                                                                                                                               sub_goals=[goal(description="Uses Resourceが安全",
                                                                                                                                               support=strategy(description="CI/CD Controller Usesが安全であるためには？",
                                                                                                                                                               sub_goals=[goal(description="P1",
-                                                                                                                                                                               support=evidence(description = "none")),
+                                                                                                                                                                               support=solution(description = "none")),
                                                                                                                                                                           goal(description="P2",
-                                                                                                                                                                               support=evidence(description = "none")),
+                                                                                                                                                                               support=solution(description = "none")),
                                                                                                                                                                           goal(description="P3",
-                                                                                                                                                                               support=evidence(description = "none")),
+                                                                                                                                                                               support=solution(description = "none")),
                                                                                                                                                                           goal(description="P4",
-                                                                                                                                                                               support=evidence(description = "none")),
+                                                                                                                                                                               support=solution(description = "none")),
                                                                                                                                                                           goal(description="P5",
-                                                                                                                                                                               support=evidence(description = "none"))]
+                                                                                                                                                                               support=solution(description = "none"))]
                                                                                                                                                               )
                                                                                                                                             ),
                                                                                                                                         goal(description="S1",
-                                                                                                                                             support=evidence(description = "none")),
+                                                                                                                                             support=solution(description = "none")),
                                                                                                                                         goal(description="S2",
-                                                                                                                                             support=evidence(description = "none")),
+                                                                                                                                             support=solution(description = "none")),
                                                                                                                                         goal(description="S3",
-                                                                                                                                             support=evidence(description = "none"))]
+                                                                                                                                             support=solution(description = "none"))]
                                                                                                                                      )
                                                                                                               ),
                                                                                                           goal(description="Jfrog Xray が安全",
                                                                                                                support=strategy(description="Uses Jfrog Xray が安全であるためには？",
                                                                                                                                 sub_goals=[goal(description="R1",
-                                                                                                                                             support=evidence(description = "none")),
+                                                                                                                                             support=solution(description = "none")),
                                                                                                                                         goal(description="R2",
-                                                                                                                                             support=evidence(description = "none")),
+                                                                                                                                             support=solution(description = "none")),
                                                                                                                                         goal(description="R3",
-                                                                                                                                             support=evidence(description = "none"))]
+                                                                                                                                             support=solution(description = "none"))]
                                                                                                                                 )
                                                                                                               )]
                                                                                                )
@@ -60,11 +60,11 @@ solarwinds = goal(description="Binary Repositoryが安全である",
                                                                                                                        sub_goals=[goal(description="Consumes Fetchが安全",
                                                                                                                                               support=strategy(description="Repository Consumesが安全であるためには？",
                                                                                                                                                               sub_goals=[goal(description="A1",
-                                                                                                                                                                               support=evidence(description = "none")),
+                                                                                                                                                                               support=solution(description = "none")),
                                                                                                                                                                           goal(description="A2",
-                                                                                                                                                                               support=evidence(description = "none")),
+                                                                                                                                                                               support=solution(description = "none")),
                                                                                                                                                                           goal(description="A3",
-                                                                                                                                                                               support=evidence(description = "none"))]
+                                                                                                                                                                               support=solution(description = "none"))]
                                                                                                                                                               )
                                                                                                                                        ),
                                                                                                                                         goal(description="Carries Out Fetchが安全",
@@ -72,41 +72,41 @@ solarwinds = goal(description="Binary Repositoryが安全である",
                                                                                                                                                               sub_goals=[goal(description="Uses Resourceが安全",
                                                                                                                                                                               support=strategy(description="Ballistaが安全であるためには？",
                                                                                                                                                                                                 sub_goals=[goal(description="P1",
-                                                                                                                                                                                                               support=evidence(description = "none")),
+                                                                                                                                                                                                               support=solution(description = "none")),
                                                                                                                                                                                                           goal(description="P2",
-                                                                                                                                                                                                               support=evidence(description = "none")),
+                                                                                                                                                                                                               support=solution(description = "none")),
                                                                                                                                                                                                           goal(description="P3",
-                                                                                                                                                                                                               support=evidence(description = "none")),
+                                                                                                                                                                                                               support=solution(description = "none")),
                                                                                                                                                                                                           goal(description="P4",
-                                                                                                                                                                                                               support=evidence(description = "none")),
+                                                                                                                                                                                                               support=solution(description = "none")),
                                                                                                                                                                                                           goal(description="P5",
-                                                                                                                                                                                                               support=evidence(description = "none"))]
+                                                                                                                                                                                                               support=solution(description = "none"))]
                                                                                                                                                                                               )
                                                                                                                                                                              ),
                                                                                                                                                                           goal(description="R1",
-                                                                                                                                                                               support=evidence(description = "none")),
+                                                                                                                                                                               support=solution(description = "none")),
                                                                                                                                                                           goal(description="R2",
-                                                                                                                                                                               support=evidence(description = "none")),
+                                                                                                                                                                               support=solution(description = "none")),
                                                                                                                                                                           goal(description="R3",
-                                                                                                                                                                               support=evidence(description = "none"))]
+                                                                                                                                                                               support=solution(description = "none"))]
                                                                                                                                                               )
                                                                                                                                             ),
                                                                                                                                        goal(description="A1",
-                                                                                                                                             support=evidence(description = "none")),
+                                                                                                                                             support=solution(description = "none")),
                                                                                                                                         goal(description="A2",
-                                                                                                                                             support=evidence(description = "none")),
+                                                                                                                                             support=solution(description = "none")),
                                                                                                                                         goal(description="A3",
-                                                                                                                                             support=evidence(description = "none"))]
+                                                                                                                                             support=solution(description = "none"))]
                                                                                                                       )
                                                                                                      )]
                                                                                     )
                                                                                     ),
                                                                                 goal(description="S1",
-                                                                                     support=evidence(description = "none")),
+                                                                                     support=solution(description = "none")),
                                                                                 goal(description="S2",
-                                                                                     support=evidence(description = "none")),
+                                                                                     support=solution(description = "none")),
                                                                                 goal(description="S3",
-                                                                                     support=evidence(description = "none"))]
+                                                                                     support=solution(description = "none"))]
                                                               )
                                                               ),
                                                           #Built Binary tree
@@ -124,39 +124,39 @@ solarwinds = goal(description="Binary Repositoryが安全である",
                                                                                                                                                                                                                          sub_goals=[goal(description="Uses Jfrog Artifactoryが安全",
                                                                                                                                                                                                                                           support=strategy(description="Developer Usesが安全であるためには？",
                                                                                                                                                                                                                                                          sub_goals=[goal(description="P1",
-                                                                                                                                                                                                                                                                           support=evidence(description = "none")),
+                                                                                                                                                                                                                                                                           support=solution(description = "none")),
                                                                                                                                                                                                                                                                       goal(description="P2",
-                                                                                                                                                                                                                                                                           support=evidence(description = "none")),
+                                                                                                                                                                                                                                                                           support=solution(description = "none")),
                                                                                                                                                                                                                                                                       goal(description="P3",
-                                                                                                                                                                                                                                                                           support=evidence(description = "none")),
+                                                                                                                                                                                                                                                                           support=solution(description = "none")),
                                                                                                                                                                                                                                                                       goal(description="P4",
-                                                                                                                                                                                                                                                                           support=evidence(description = "none")),
+                                                                                                                                                                                                                                                                           support=solution(description = "none")),
                                                                                                                                                                                                                                                                       goal(description="P5",
-                                                                                                                                                                                                                                                                           support=evidence(description = "none"))]
+                                                                                                                                                                                                                                                                           support=solution(description = "none"))]
                                                                                                                                                                                                                                                           )
                                                                                                                                                                                                                                          ),
                                                                                                                                                                                                                                     goal(description="R1",
-                                                                                                                                                                                                                                           support=evidence(description = "none")),
+                                                                                                                                                                                                                                           support=solution(description = "none")),
                                                                                                                                                                                                                                       goal(description="R2",
-                                                                                                                                                                                                                                           support=evidence(description = "none")),
+                                                                                                                                                                                                                                           support=solution(description = "none")),
                                                                                                                                                                                                                                       goal(description="R3",
-                                                                                                                                                                                                                                           support=evidence(description = "none"))]
+                                                                                                                                                                                                                                           support=solution(description = "none"))]
                                                                                                                                                                                                                            )
                                                                                                                                                                                                          ),
                                                                                                                                                                                                      goal(description="S1",
-                                                                                                                                                                                                           support=evidence(description = "none")),
+                                                                                                                                                                                                           support=solution(description = "none")),
                                                                                                                                                                                                       goal(description="S2",
-                                                                                                                                                                                                           support=evidence(description = "none")),
+                                                                                                                                                                                                           support=solution(description = "none")),
                                                                                                                                                                                                       goal(description="S3",
-                                                                                                                                                                                                           support=evidence(description = "none"))]
+                                                                                                                                                                                                           support=solution(description = "none"))]
                                                                                                                                                                                          )
                                                                                                                                                                     ),
                                                                                                                                                                 goal(description="R1",
-                                                                                                                                                                    support=evidence(description = "none")),
+                                                                                                                                                                    support=solution(description = "none")),
                                                                                                                                                                 goal(description="R2",
-                                                                                                                                                                   support=evidence(description = "none")),
+                                                                                                                                                                   support=solution(description = "none")),
                                                                                                                                                               goal(description="R3",
-                                                                                                                                                                   support=evidence(description = "none"))]
+                                                                                                                                                                   support=solution(description = "none"))]
                                                                                                                                                     )
                                                                                                                                  ),
                                                                                                                              #Carries Out Build tree
@@ -165,39 +165,39 @@ solarwinds = goal(description="Binary Repositoryが安全である",
                                                                                                                                                     sub_goals=[goal(description="Uses Resourceが安全",
                                                                                                                                                                         support=strategy(description="CI/CD Controller Usesが安全であるためには？",
                                                                                                                                                                                          sub_goals=[goal(description="P1",
-                                                                                                                                                                                                          support=evidence(description = "none")),
+                                                                                                                                                                                                          support=solution(description = "none")),
                                                                                                                                                                                                      goal(description="P2",
-                                                                                                                                                                                                          support=evidence(description = "none")),
+                                                                                                                                                                                                          support=solution(description = "none")),
                                                                                                                                                                                                      goal(description="P3",
-                                                                                                                                                                                                          support=evidence(description = "none")),
+                                                                                                                                                                                                          support=solution(description = "none")),
                                                                                                                                                                                                      goal(description="P4",
-                                                                                                                                                                                                          support=evidence(description = "none")),
+                                                                                                                                                                                                          support=solution(description = "none")),
                                                                                                                                                                                                      goal(description="P5",
-                                                                                                                                                                                                          support=evidence(description = "none"))]
+                                                                                                                                                                                                          support=solution(description = "none"))]
                                                                                                                                                                                          )
                                                                                                                                                                     ),
                                                                                                                                                                 goal(description="R1",
-                                                                                                                                                                    support=evidence(description = "none")),
+                                                                                                                                                                    support=solution(description = "none")),
                                                                                                                                                                 goal(description="R2",
-                                                                                                                                                                   support=evidence(description = "none")),
+                                                                                                                                                                   support=solution(description = "none")),
                                                                                                                                                                 goal(description="R3",
-                                                                                                                                                                   support=evidence(description = "none"))]
+                                                                                                                                                                   support=solution(description = "none"))]
                                                                                                                                                     )
                                                                                                                                   ),
                                                                                                                              goal(description="S1",
-                                                                                                                                   support=evidence(description = "none")),
+                                                                                                                                   support=solution(description = "none")),
                                                                                                                              goal(description="S2",
-                                                                                                                                   support=evidence(description = "none")),
+                                                                                                                                   support=solution(description = "none")),
                                                                                                                              goal(description="S3",
-                                                                                                                                   support=evidence(description = "none"))]
+                                                                                                                                   support=solution(description = "none"))]
                                                                                                                  )
                                                                                                ),
                                                                                             goal(description="A1",
-                                                                                                 support=evidence(description = "none")),
+                                                                                                 support=solution(description = "none")),
                                                                                             goal(description="A2",
-                                                                                                 support=evidence(description = "none")),
+                                                                                                 support=solution(description = "none")),
                                                                                             goal(description="A3",
-                                                                                                 support=evidence(description = "none"))]
+                                                                                                 support=solution(description = "none"))]
                                                                               )
                                                              ),
                                                           #Build Container Image tree
@@ -215,39 +215,39 @@ solarwinds = goal(description="Binary Repositoryが安全である",
                                                                                                                                                                                                                          sub_goals=[goal(description="Uses Jfrog Artifactoryが安全",
                                                                                                                                                                                                                                           support=strategy(description="Developer Usesが安全であるためには？",
                                                                                                                                                                                                                                                          sub_goals=[goal(description="P1",
-                                                                                                                                                                                                                                                                           support=evidence(description = "none")),
+                                                                                                                                                                                                                                                                           support=solution(description = "none")),
                                                                                                                                                                                                                                                                       goal(description="P2",
-                                                                                                                                                                                                                                                                           support=evidence(description = "none")),
+                                                                                                                                                                                                                                                                           support=solution(description = "none")),
                                                                                                                                                                                                                                                                       goal(description="P3",
-                                                                                                                                                                                                                                                                           support=evidence(description = "none")),
+                                                                                                                                                                                                                                                                           support=solution(description = "none")),
                                                                                                                                                                                                                                                                       goal(description="P4",
-                                                                                                                                                                                                                                                                           support=evidence(description = "none")),
+                                                                                                                                                                                                                                                                           support=solution(description = "none")),
                                                                                                                                                                                                                                                                       goal(description="P5",
-                                                                                                                                                                                                                                                                           support=evidence(description = "none"))]
+                                                                                                                                                                                                                                                                           support=solution(description = "none"))]
                                                                                                                                                                                                                                                           )
                                                                                                                                                                                                                                          ),
                                                                                                                                                                                                                                     goal(description="R1",
-                                                                                                                                                                                                                                           support=evidence(description = "none")),
+                                                                                                                                                                                                                                           support=solution(description = "none")),
                                                                                                                                                                                                                                       goal(description="R2",
-                                                                                                                                                                                                                                           support=evidence(description = "none")),
+                                                                                                                                                                                                                                           support=solution(description = "none")),
                                                                                                                                                                                                                                       goal(description="R3",
-                                                                                                                                                                                                                                           support=evidence(description = "none"))]
+                                                                                                                                                                                                                                           support=solution(description = "none"))]
                                                                                                                                                                                                                            )
                                                                                                                                                                                                          ),
                                                                                                                                                                                                      goal(description="S1",
-                                                                                                                                                                                                           support=evidence(description = "none")),
+                                                                                                                                                                                                           support=solution(description = "none")),
                                                                                                                                                                                                       goal(description="S2",
-                                                                                                                                                                                                           support=evidence(description = "none")),
+                                                                                                                                                                                                           support=solution(description = "none")),
                                                                                                                                                                                                       goal(description="S3",
-                                                                                                                                                                                                           support=evidence(description = "none"))]
+                                                                                                                                                                                                           support=solution(description = "none"))]
                                                                                                                                                                                          )
                                                                                                                                                                     ),
                                                                                                                                                                 goal(description="R1",
-                                                                                                                                                                    support=evidence(description = "none")),
+                                                                                                                                                                    support=solution(description = "none")),
                                                                                                                                                                 goal(description="R2",
-                                                                                                                                                                   support=evidence(description = "none")),
+                                                                                                                                                                   support=solution(description = "none")),
                                                                                                                                                               goal(description="R3",
-                                                                                                                                                                   support=evidence(description = "none"))]
+                                                                                                                                                                   support=solution(description = "none"))]
                                                                                                                                                     )
                                                                                                                                  ),
                                                                                                                              #Carries Out Build tree
@@ -256,39 +256,39 @@ solarwinds = goal(description="Binary Repositoryが安全である",
                                                                                                                                                     sub_goals=[goal(description="Uses Resourceが安全",
                                                                                                                                                                         support=strategy(description="CI/CD Controller Usesが安全であるためには？",
                                                                                                                                                                                          sub_goals=[goal(description="P1",
-                                                                                                                                                                                                          support=evidence(description = "none")),
+                                                                                                                                                                                                          support=solution(description = "none")),
                                                                                                                                                                                                      goal(description="P2",
-                                                                                                                                                                                                          support=evidence(description = "none")),
+                                                                                                                                                                                                          support=solution(description = "none")),
                                                                                                                                                                                                      goal(description="P3",
-                                                                                                                                                                                                          support=evidence(description = "none")),
+                                                                                                                                                                                                          support=solution(description = "none")),
                                                                                                                                                                                                      goal(description="P4",
-                                                                                                                                                                                                          support=evidence(description = "none")),
+                                                                                                                                                                                                          support=solution(description = "none")),
                                                                                                                                                                                                      goal(description="P5",
-                                                                                                                                                                                                          support=evidence(description = "none"))]
+                                                                                                                                                                                                          support=solution(description = "none"))]
                                                                                                                                                                                          )
                                                                                                                                                                     ),
                                                                                                                                                                 goal(description="R1",
-                                                                                                                                                                    support=evidence(description = "none")),
+                                                                                                                                                                    support=solution(description = "none")),
                                                                                                                                                                 goal(description="R2",
-                                                                                                                                                                   support=evidence(description = "none")),
+                                                                                                                                                                   support=solution(description = "none")),
                                                                                                                                                                 goal(description="R3",
-                                                                                                                                                                   support=evidence(description = "none"))]
+                                                                                                                                                                   support=solution(description = "none"))]
                                                                                                                                                     )
                                                                                                                                   ),
                                                                                                                              goal(description="S1",
-                                                                                                                                   support=evidence(description = "none")),
+                                                                                                                                   support=solution(description = "none")),
                                                                                                                              goal(description="S2",
-                                                                                                                                   support=evidence(description = "none")),
+                                                                                                                                   support=solution(description = "none")),
                                                                                                                              goal(description="S3",
-                                                                                                                                   support=evidence(description = "none"))]
+                                                                                                                                   support=solution(description = "none"))]
                                                                                                                  )
                                                                                                ),
                                                                                             goal(description="A1",
-                                                                                                 support=evidence(description = "none")),
+                                                                                                 support=solution(description = "none")),
                                                                                             goal(description="A2",
-                                                                                                 support=evidence(description = "none")),
+                                                                                                 support=solution(description = "none")),
                                                                                             goal(description="A3",
-                                                                                                 support=evidence(description = "none"))]
+                                                                                                 support=solution(description = "none"))]
                                                                               )
                                                                       )]
                                                                     )
@@ -303,23 +303,23 @@ solarwinds = goal(description="Binary Repositoryが安全である",
                                                                                                 sub_goals=[goal(description="Uses Resources が安全である",
                                                                                                                 support=strategy(description="CI/CD Controller Usesが安全であるためには?",
                                                                                                                                  sub_goals=[goal(description="P1",
-                                                                                                                                                support=evidence(description = "none")),
+                                                                                                                                                support=solution(description = "none")),
                                                                                                                                              goal(description="P2",
-                                                                                                                                                support=evidence(description = "none")),
+                                                                                                                                                support=solution(description = "none")),
                                                                                                                                              goal(description="P3",
-                                                                                                                                                support=evidence(description = "none")),
+                                                                                                                                                support=solution(description = "none")),
                                                                                                                                              goal(description="P4",
-                                                                                                                                                support=evidence(description = "none")),
+                                                                                                                                                support=solution(description = "none")),
                                                                                                                                              goal(description="P5",
-                                                                                                                                                support=evidence(description = "none"))]
+                                                                                                                                                support=solution(description = "none"))]
                                                                                                                                  )
                                                                                                                  ),
                                                                                                             goal(description="R1",
-                                                                                                                support=evidence(description = "none")),
+                                                                                                                support=solution(description = "none")),
                                                                                                             goal(description="R2",
-                                                                                                                support=evidence(description = "none")),
+                                                                                                                support=solution(description = "none")),
                                                                                                             goal(description="R3",
-                                                                                                                support=evidence(description = "none"))]
+                                                                                                                support=solution(description = "none"))]
                                                                                                )
                                                                                ),
                                                                            #AmazonS3 tree
@@ -328,37 +328,37 @@ solarwinds = goal(description="Binary Repositoryが安全である",
                                                                                                 sub_goals=[goal(description="Uses Resources が安全である",
                                                                                                                 support=strategy(description="CI/CD Controller Usesが安全であるためには?",
                                                                                                                                  sub_goals=[goal(description="P1",
-                                                                                                                                                support=evidence(description = "none")),
+                                                                                                                                                support=solution(description = "none")),
                                                                                                                                              goal(description="P2",
-                                                                                                                                                support=evidence(description = "none")),
+                                                                                                                                                support=solution(description = "none")),
                                                                                                                                              goal(description="P3",
-                                                                                                                                                support=evidence(description = "none")),
+                                                                                                                                                support=solution(description = "none")),
                                                                                                                                              goal(description="P4",
-                                                                                                                                                support=evidence(description = "none")),
+                                                                                                                                                support=solution(description = "none")),
                                                                                                                                              goal(description="P5",
-                                                                                                                                                support=evidence(description = "none"))]
+                                                                                                                                                support=solution(description = "none"))]
                                                                                                                                  )
                                                                                                                  ),
                                                                                                             goal(description="R1",
-                                                                                                                support=evidence(description = "none")),
+                                                                                                                support=solution(description = "none")),
                                                                                                             goal(description="R2",
-                                                                                                                support=evidence(description = "none")),
+                                                                                                                support=solution(description = "none")),
                                                                                                             goal(description="R3",
-                                                                                                                support=evidence(description = "none"))]
+                                                                                                                support=solution(description = "none"))]
                                                                                                )
                                                                                )]
                                                               )
                                              ),
                                          goal(description="S1",
-                                              support=evidence(description = "none")),
+                                              support=solution(description = "none")),
                                          goal(description="S2",
-                                              support=evidence(description = "none")),
+                                              support=solution(description = "none")),
                                          goal(description="S3",
-                                              support=evidence(description = "none"))]
+                                              support=solution(description = "none"))]
                                   )
                  )
 if __name__ == '__main__':
-    # n = gsn.pgsn_to_gsn(evidence_class, steps=10000)
+    # n = gsn.pgsn_to_gsn(solution_class, steps=10000)
     # print(json.dumps(gsn.python_val(n), sort_keys=True, indent=4))
     #print(s('sub_goals').fully_eval())
     SolarWinds = solarwinds.fully_eval()

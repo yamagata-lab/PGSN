@@ -2,7 +2,7 @@
     <!-- ===== leaf builder & shared leaf lists ===== -->
     <def name="leaf" as="template">
         <param name="d" positional="true"/>
-        <Goal><description var="d"/><Evidence>none</Evidence></Goal>
+        <Goal><description var="d"/><Solution>none</Solution></Goal>
     </def>
 
     <def name="pp" as="ol">

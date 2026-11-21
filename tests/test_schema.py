@@ -55,15 +55,15 @@ REJECTED = {
     "an element the language does not have":
         "<PGSN><bogus/></PGSN>",
     "a misspelled Defeater, which the compiler would drop in silence":
-        "<PGSN><Goal>g<Rebuttal>r</Rebuttal><Evidence>e</Evidence></Goal></PGSN>",
+        "<PGSN><Goal>g<Rebuttal>r</Rebuttal><Solution>e</Solution></Goal></PGSN>",
     "a <def> with nothing to bind":
         "<PGSN><def>x</def>v</PGSN>",
     "a <get> with no key":
         '<PGSN><get of="r"/></PGSN>',
     "a <send> with no method":
         '<PGSN><send to="r"/></PGSN>',
-    "a <Context> on an <Evidence>, which cannot hold one":
-        "<PGSN><Evidence>e<Context>c</Context></Evidence></PGSN>",
+    "a <Context> on an <Solution>, which cannot hold one":
+        "<PGSN><Solution>e<Context>c</Context></Solution></PGSN>",
     "a <Strategy> with no sub-goals":
         "<PGSN><Strategy>s</Strategy></PGSN>",
     "an <if> with no <else>":

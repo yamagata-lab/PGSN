@@ -160,14 +160,14 @@
     <!-- GSN: Evidence に支えられた Goal -->
     <def name="evidenceGoal" as="Goal">
         <description>システムXはセキュアである</description>
-        <Evidence>運用実績</Evidence>
+        <Solution>運用実績</Solution>
     </def>
 
     <!-- G1 を取り込む import は上でコメントアウトしてあるので、
          ここでゴールとして定義しておく -->
     <def name="G1" as="Goal">
         通信は暗号化されている
-        <Evidence>TLS 設定のレビュー</Evidence>
+        <Solution>TLS 設定のレビュー</Solution>
     </def>
 
     <!-- GSN: 変数経由でサブゴールを参照する Strategy -->

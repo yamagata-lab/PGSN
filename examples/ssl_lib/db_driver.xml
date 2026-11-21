@@ -10,14 +10,14 @@
 
     <!-- SOUP evaluation per IEC 62304 §8 -->
     <dt key="soup_evaluation"/>
-    <dd><Evidence>SOUP evaluation report: psycopg2 2.9.9 (IEC 62304 §8)</Evidence></dd>
+    <dd><Solution>SOUP evaluation report: psycopg2 2.9.9 (IEC 62304 §8)</Solution></dd>
 
     <!-- Hazard: data corruption via SQL injection -->
     <dt key="sql_injection"/>
     <dd>
       <Goal>Database is protected against SQL injection
         <Context>Parameterized queries enforced; raw string concatenation prohibited by code review</Context>
-        <Evidence>SQL injection penetration test report</Evidence>
+        <Solution>SQL injection penetration test report</Solution>
       </Goal>
     </dd>
 
@@ -26,7 +26,7 @@
     <dd>
       <Goal>Database access is restricted to authorised roles only
         <Context>PostgreSQL role-based access control; least-privilege principle applied</Context>
-        <Evidence>Access control configuration audit report</Evidence>
+        <Solution>Access control configuration audit report</Solution>
       </Goal>
     </dd>
   </def>
