@@ -527,12 +527,17 @@
     <element name="Strategy"><ref name="strategy_content"/></element>
   </define>
 
+  <!-- An <undeveloped/> among the sub-goals leaves the strategy undeveloped:
+       GSN v3 lets the undeveloped decorator apply to strategies. -->
   <define name="strategy_content">
     <ref name="description_pat"/>
     <ref name="annotations_pat"/>
     <choice>
       <oneOrMore>
-        <ref name="goal_pat"/>
+        <choice>
+          <ref name="goal_pat"/>
+          <element name="undeveloped"><empty/></element>
+        </choice>
       </oneOrMore>
       <element name="subGoals"><ref name="val_pat"/></element>
     </choice>

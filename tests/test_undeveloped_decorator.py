@@ -51,3 +51,17 @@ def test_an_unsupported_defeater_has_neither():
         "<Goal>safe<Defeater>H4</Defeater><Solution>report</Solution></Goal>"))
     assert "Defeater\nH4" in labels
     assert not any(UNDEVELOPED_DECORATOR in label for label in labels)
+
+
+def test_a_strategy_is_left_undeveloped_in_xml():
+    """An <undeveloped/> among the sub-goals is how a document says it."""
+    labels = _labels(_xml("<Goal>g<Strategy>s<undeveloped/></Strategy></Goal>"))
+    assert labels == ["Goal\ng", f"Strategy\ns\n{UNDEVELOPED_DECORATOR}"]
+
+
+def test_an_undeveloped_strategy_keeps_the_sub_goals_it_has():
+    labels = _labels(_xml(
+        "<Goal>g<Strategy>s<Goal>a<Solution>r</Solution></Goal>"
+        "<undeveloped/></Strategy></Goal>"))
+    assert f"Strategy\ns\n{UNDEVELOPED_DECORATOR}" in labels
+    assert "Goal\na" in labels

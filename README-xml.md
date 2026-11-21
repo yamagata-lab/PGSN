@@ -749,6 +749,12 @@ document itself will say so.
 </Strategy>
 ```
 
+An `<undeveloped/>` may stand among the written sub-goals, alone or beside `<Goal>` elements, for the part of the strategy not developed yet. The strategy is then undeveloped, which GSN v3 allows for strategies as well as goals, and a drawing marks it with the undeveloped decorator.
+
+```xml
+<Strategy>argue over each hazard<undeveloped/></Strategy>
+```
+
 A list (`ol`) can be passed to `subGoals` to specify sub-goals dynamically.
 
 ```xml
