@@ -35,10 +35,11 @@ dependencies = [
     "click>=8.2"
 ]
 
-# Only for checking the annotations while testing
-# (`pytest --typeguard-packages=pgsn`); PGSN itself never imports typeguard.
+# What running the tests needs. typeguard only checks the annotations
+# (`pytest --typeguard-packages=pgsn`); PGSN itself never imports it.
 [project.optional-dependencies]
 dev = [
+    "pytest",
     "typeguard>=4.4"
 ]
 
