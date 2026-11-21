@@ -376,7 +376,10 @@ def gsn_dot(gsn: pgsn.pgsn_term.Term,
             parent_node_type = parent_tag_parts[0] if len(parent_tag_parts) > 1 else 'Default'
 
             if node_type in ('Assumption', 'Context'):
-                edge_attrs['dir'] = 'back'
+                # InContextOf (GSN v3, Table 1:2-2) runs from the goal or the
+                # strategy to its context or assumption, and is drawn with a
+                # hollow arrowhead at the context or assumption.
+                edge_attrs['arrowhead'] = 'empty'
                 horizontal_pairs.append((parent_id, node_obj.identifier))
 
             if node_type in GSN_DEFEATER_TYPES:
