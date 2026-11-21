@@ -1106,9 +1106,12 @@ class LessThan(ConstMixin, Builtin):
 # accident. Refusing the question is not the same answer as `false`, and a
 # document that asks it stops where it asked.
 #
-# Two lists or two records are compared component by component, in order,
-# and the comparison stops at the first pair that differs: what comes after it
-# is not looked at.
+# Whether a term is data is known only once all of it has been evaluated. So
+# every component of both arguments is evaluated and checked before anything
+# is answered, even when the answer is already decided. A list of another
+# length, a record with other labels or a pair of components that differ makes
+# the answer `false`, but only once both arguments are known to be data. The
+# answer therefore does not depend on the order the components are looked at.
 _BASE_VALUES = (String, Integer, Boolean, Constant)
 
 
@@ -1123,52 +1126,50 @@ class Equal(ConstMixin, Builtin):
         for arg in args:
             if not isinstance(arg, (*_BASE_VALUES, List, Record)):
                 raise self._type_error("both arguments", "data", arg)
-        a, b = args
-        if isinstance(a, List) and isinstance(b, List):
-            if len(a.terms) != len(b.terms):
-                return Boolean.nameless(value=False)
-            return _components_equal(a, b, 0)
-        if isinstance(a, Record) and isinstance(b, Record):
-            if a._attributes.keys() != b._attributes.keys():
-                return Boolean.nameless(value=False)
-            labels = list(a._attributes)
-            return _components_equal(List.nameless(terms=tuple(a._attributes[k] for k in labels)),
-                                     List.nameless(terms=tuple(b._attributes[k] for k in labels)),
-                                     0)
-        if isinstance(a, (List, Record)) or isinstance(b, (List, Record)):
-            return Boolean.nameless(value=False)
-        return Boolean.nameless(value=a == b)
+        match args:
+            case (List(terms=xs), List(terms=ys)) if len(xs) == len(ys):
+                return _components_equal(args[0], args[1])
+            case (Record(_attributes=xs), Record(_attributes=ys)) if xs.keys() == ys.keys():
+                return _components_equal(List.nameless(terms=tuple(xs.values())),
+                                         List.nameless(terms=tuple(ys[k] for k in xs)))
+            case (List() | Record(), _) | (_, List() | Record()):
+                # The shapes differ. A term equals itself exactly when it is
+                # data, so comparing each argument with itself checks both.
+                both = List.nameless(terms=args)
+                return _components_equal(both, both, so_far=False)
+            case (a, b):
+                return Boolean.nameless(value=a == b)
 
 
 # Whether each component of `xs` from the `i`th on equals the component of
-# `ys` in the same place. The lists are passed on whole with the place, so a
-# step costs the same however long they are.
-def _components_equal(xs: List, ys: List, i: int) -> Term:
+# `ys` in the same place, and `so_far`. Every component is compared, whatever
+# the comparisons before it said. The lists are passed on whole with the
+# place, so a step costs the same however long they are.
+def _components_equal(xs: List, ys: List, i: int = 0, so_far: bool = True) -> Term:
     if i == len(xs.terms):
-        return Boolean.nameless(value=True)
+        return Boolean.nameless(value=so_far)
     equal = _spine(Equal.nameless(), [xs.terms[i], ys.terms[i]])
-    return _spine(_ComponentsEqual.nameless(), [equal, xs, ys, Integer.nameless(value=i)])
+    return _spine(_ComponentsEqual.nameless(),
+                  [equal, Boolean.nameless(value=so_far), xs, ys, Integer.nameless(value=i)])
 
 
-# The step of Equal that takes whether the `i`th components are equal, both
-# lists of components and `i`.
+# The step of Equal that takes whether the `i`th components are equal, whether
+# those before them were, both lists of components and `i`.
 @frozen
 class _ComponentsEqual(ConstMixin, Builtin):
 
     @classmethod
     def build(cls, is_named: bool, **kwarg) -> Term:
-        return super().build(arity=4, is_named=is_named, **kwarg)
+        return super().build(arity=5, is_named=is_named, **kwarg)
 
     def _reported_name(self) -> str:
         return "Equal"
 
     def _apply_args(self, args: tuple[Term, ...]) -> Term:
-        equal, xs, ys, i = args
+        equal, so_far, xs, ys, i = args
         if not isinstance(equal, Boolean):
             raise self._type_error("the components", "data", equal)
-        if not equal.value:
-            return equal
-        return _components_equal(xs, ys, i.value + 1)
+        return _components_equal(xs, ys, i.value + 1, so_far.value and equal.value)
 
 
 # The first two arguments of `builtin` must be a record and a label.
