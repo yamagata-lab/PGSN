@@ -37,7 +37,7 @@ pip install git+https://github.com/yamagata-lab/pgsn.git
 ```bash
 git clone https://github.com/yamagata-lab/PGSN.git
 cd PGSN
-pip install -e .
+pip install -e '.[dev]'
 ```
 
 condaを使ってライブラリの開発を行う場合
@@ -45,6 +45,8 @@ condaを使ってライブラリの開発を行う場合
 git clone https://github.com/yamagata-lab/PGSN.git
 cd PGSN
 conda env create -f environment.yml -n PGSN
+conda activate PGSN
+pip install -e '.[dev]'
 ```
 
 

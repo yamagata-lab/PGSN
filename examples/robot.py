@@ -1,17 +1,7 @@
 import pprint
 
-from typeguard import install_import_hook
-
 import pgsn.dsl
 import pgsn.gsn
-
-install_import_hook('robot')
-
-install_import_hook('gsn')
-install_import_hook('gsn')
-install_import_hook('helpers')
-install_import_hook('dsl')
-install_import_hook('stdlib')
 
 robot = pgsn.gsn.goal(description="There is no known vulnerability in the robot",
                            support=pgsn.gsn.strategy(description="Argument over each vulnerability",
