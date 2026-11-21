@@ -1512,10 +1512,14 @@ def _sub_goals(elem: ET.Element, unit: _Unit) -> Term:
 
     Writing them out as <Goal> children is the common case; <subGoals> holds a
     value instead, which is how a strategy over a generated list is expressed.
+    An <undeveloped/> stands among the sub-goals for the part of the strategy
+    not developed yet, which is how a strategy is left undeveloped: GSN v3
+    lets the undeveloped decorator apply to strategies as well as goals.
     """
-    written = [c for c in elem if c.tag == "Goal"]
+    written = [c for c in elem if c.tag in ("Goal", "undeveloped")]
     if written:
-        return list_term(tuple(_e_goal(c, unit) for c in written))
+        return list_term(tuple(_e_goal(c, unit) if c.tag == "Goal"
+                               else undeveloped for c in written))
     computed = elem.find("subGoals")
     if computed is not None:
         return _content(computed, unit)

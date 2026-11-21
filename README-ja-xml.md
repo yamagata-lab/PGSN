@@ -737,6 +737,12 @@ GSN ノードはどれも説明（description）から始まり、どれも `Def
 </Strategy>
 ```
 
+並べて書いたサブゴールの中には、単独でも `<Goal>` と並べても、`<undeveloped/>` を置けます。戦略のうちまだ展開していない部分を表し、その戦略は未展開になります。GSN v3 では Goal だけでなく Strategy も未展開にでき、図では未展開の印が付きます。
+
+```xml
+<Strategy>ハザードごとに議論する<undeveloped/></Strategy>
+```
+
 `subGoals` にリスト（`ol`）を渡すことでサブゴールを動的に指定できます。
 
 ```xml
