@@ -18,8 +18,9 @@ import re
 import pytest
 
 from pgsn import pgsn_term
-from pgsn.dsl import (base_class, define_class, div, equal, format_string,
-                      if_then_else, index, integer, integer_sum, is_subtype,
+from pgsn.dsl import (base_class, cons, define_class, div, empty, equal,
+                      format_string, if_then_else, index, integer, integer_sum,
+                      is_empty, is_subtype,
                       lambda_abs,
                       less_than, list_term, map_term, minus, mod, plus,
                       python_value, record, remove_attribute, string, true,
@@ -261,6 +262,49 @@ def test_the_reason_is_not_shared_with_other_terms():
 def test_readback_shows_the_reason():
     with pytest.raises(ValueError, match="PGSNValueError: Div: division by zero"):
         python_value(_evaluate(div(1)(0)))
+
+
+# ---------------------------------------------------------------------------
+# A builtin refusing a stuck argument names why the argument is stuck
+#
+# Where a document leaves a gap, the gap flows on into whatever uses it, and
+# evaluation comes to rest at the last builtin that needed a value. Reported on
+# its own, that is "Cons: the second argument must be a list" for a record that
+# never answered a question: true, and far from the mistake.
+# ---------------------------------------------------------------------------
+
+_missing = record({'a': integer(1)})(string('b'))
+_MISSING = "PGSNKeyError: Record: there is no label 'b'"
+
+
+def test_a_stuck_argument_gives_the_cause():
+    stuck = _evaluate(plus(_missing)(integer(1)))
+    assert stuck.meta_info["cause"] == _MISSING
+
+
+def test_the_cause_is_the_first_reason_in_the_chain():
+    """The missing label reaches `cons` through a conditional, as an answer
+    missing from a record reaches a list of defeaters."""
+    term = cons(integer(1))(if_then_else(is_empty(_missing))(empty)(empty))
+    assert _evaluate(term).meta_info["cause"] == _MISSING
+
+
+def test_an_unbound_name_is_a_cause():
+    stuck = _evaluate(plus(variable('y'))(integer(1)).remove_name())
+    assert stuck.meta_info["cause"] == "name 'y' is not defined"
+
+
+def test_an_argument_of_the_wrong_type_has_no_cause():
+    stuck = _evaluate(plus(string('a'))(integer(1)))
+    assert "error" in stuck.meta_info
+    assert "cause" not in stuck.meta_info
+
+
+def test_readback_shows_the_cause():
+    with pytest.raises(ValueError, match=re.escape(
+            "Plus: both arguments must be integers, got App, "
+            f"which was stuck on {_MISSING}")):
+        python_value(_evaluate(plus(_missing)(integer(1))))
 
 
 # ---------------------------------------------------------------------------

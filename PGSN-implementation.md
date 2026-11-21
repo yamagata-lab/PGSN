@@ -136,6 +136,17 @@ these are caught. Any other exception is a fault of the interpreter and
 escapes, and so do the step budget and Python's recursion limit, which would
 stop bounding anything if they turned into stuck terms.
 
+A builtin that refuses an argument because the argument is itself stuck says
+why it is stuck as well. The refusal carries the argument's own reason -- the
+`cause` it was recorded with, its `error`, or the name of the unbound variable
+at its head -- and the application records it under `cause`. Every stuck
+application therefore knows the first reason in the chain that led to it, at
+the cost of one look at the argument, and readback reports it next to the
+error: a record that never answered a question reaches a list of defeaters as
+`Cons: the second argument must be a list, got App, which was stuck on
+PGSNKeyError: Record: there is no label '...'`, rather than as the first half
+alone. The path is still where the term came to rest.
+
 ### 1.5 Notes for a virtual machine
 
 A machine with environments and closures removes substitution, and with it the
