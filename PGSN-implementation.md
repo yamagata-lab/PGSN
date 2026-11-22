@@ -22,7 +22,7 @@ is not discussed here.
 2. *Desugaring* expands the shorthands (`var=`, `expr=`, `as=`, `<if>`, `<cases>`).
 3. What is left, the *deep syntax*, is compiled element by element into a term.
    The term is wrapped in a scope that binds the predefined names it uses, and every
-   imported module is bound once at the head of the entry document (§4).
+   imported module is bound once at the head of the entry point (§4).
 4. Names are replaced by de Bruijn indices, and the machine evaluates the term
    to a weak normal form, which it returns as a term (§1).
 5. *Readback* converts that term: `python_value` to Python values, and
@@ -35,7 +35,8 @@ is not discussed here.
    evaluated (§1.4). A *predefined name* is a name the processor binds for
    every document, such as `map_term`, `if_then_else`, `fold`, `goal` or `fix`.
    Some predefined names denote a builtin; others denote a term built from
-   builtins.
+   builtins. The READMEs call every predefined name a builtin; this document
+   keeps the two apart.
 2. *Data* is a base value — a string, an integer, a boolean, a named constant —
    or a list or a record whose components are data. It is what `equal`
    compares (§2.1).
@@ -125,7 +126,7 @@ recursive binding form, and would change which documents terminate.
 
 ### 1.3 Where evaluation stops
 
-The machine itself stops at a weak head normal form. `normalize` then takes the
+The machine itself stops at a weak head normal form. The machine's `normalize` then takes the
 value to the weak normal form of §1.1: it forces, in turn, every thunk the
 value holds outside an abstraction — the fields of a term with fields, and the
 arguments of an application that cannot proceed. The fields are therefore
@@ -309,7 +310,8 @@ by accident.
 
 A name is always compiled to a variable, and what it refers to is decided by
 the enclosing bindings. The predefined names are supplied by a scope that
-wraps each compilation unit. A predefined name is therefore an ordinary
+wraps each compilation unit — the entry point and each module it imports. A
+predefined name is therefore an ordinary
 binding: a `<def>` or a parameter with the same name shadows it, as any
 binding shadows an outer one.
 
@@ -338,8 +340,6 @@ Which alias belongs to which predefined name is an implementation detail and
 is deliberately absent from the documentation, this file included. What the
 language guarantees is only that a name beginning with an underscore is
 reserved.
-
-A name in an `<expr>` resolves as a `<var>` would at the same place (§5.5).
 
 ### 3.3 Rebinding is shadowing
 
@@ -378,7 +378,7 @@ of the module, so a module imported with the same arguments means the same in
 every document that imports it. A `<PGSN>` document may still leave a name
 free; nothing moves it, and readback reports the name.
 
-A binding-position `<from>` binds the applied module to a reserved name and
+A `<from>` used as a binding (one with `import`) binds the applied module to a reserved name and
 projects each imported name from it, so the module occupies one position in the
 compiled term however many names are taken from it. Rebinding that reserved
 name for the next `<from>` in the same block is harmless, because each
@@ -497,7 +497,8 @@ a Japanese name is a name; Python's keywords are not names. The parser checks a
 name with the same function the attributes are checked with, so every name a
 `<def>` can bind can be written in an expression. Operators, `True` and
 `False` go through the reserved aliases (§3.2) and always mean the predefined
-operations.
+operations. `/` is rejected rather than read as `//`, so that it stays free for
+true division should a floating point type be added.
 
 A field of bare text is an expression too, read by the same parser, and the
 fields of text and of an f-string are found by one scanner. The two differ in
@@ -537,7 +538,10 @@ Validating is worth the trouble because it catches what evaluating cannot: the
 compiler ignores a child element or an attribute it does not recognize, and the
 schema rejects both (known_issues.md). `tests/test_schema.py` runs every file
 under `examples/` through the validator when one is installed, and is the only
-thing that keeps the schema in step with the compiler.
+thing that keeps the schema in step with the compiler. Validating before
+compiling would close the gap where it opens, and would stop the tag sets the
+compilers filter on from being the only thing that decides what a document may
+contain.
 
 `"builtin"` stays in `_VALUE_TAGS` although there is no `<builtin>` element. A
 GSN element with neither leading text nor a `<description>` takes a lone value
@@ -666,4 +670,5 @@ Sharing is what keeps a module cheap: a name imported with
 and a definition of the module that the document does not use takes none.
 
 `tests/test_examples.py` evaluates every entry point without fixing what they
-produce, since they are material rather than specification.
+produce, since they are material rather than specification. The four full EU
+AI Act cases are marked `slow` and run only under `pytest -m slow`.

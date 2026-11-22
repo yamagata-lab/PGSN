@@ -6,7 +6,7 @@
 import pgsn
 ```
 
-`pgsn.__all__` が公開 API のすべてです。そこに載っていないもの（サブモジュール `pgsn.dsl`・`pgsn.gsn`・`pgsn.pgsn_term`・`pgsn.pgsn_xml`・`pgsn.helpers`・`pgsn.config`・`pgsn.jail`・`pgsn.cli` を含む）は内部実装で、予告なく変更されることがあります。下の関数と項のほかに、`__version__` と `LABEL_WIDTH` も入っています。`LABEL_WIDTH` はノードのラベルを既定で折り返す桁数で、`gsn_dot` と `save_gsn` の `label_width` と、`pgsn render --label-width` の既定値です。
+`pgsn.__all__` が公開 API のすべてです。そこに載っていないもの（サブモジュール `pgsn.dsl`・`pgsn.gsn`・`pgsn.pgsn_term`・`pgsn.pgsn_xml`・`pgsn.helpers`・`pgsn.config`・`pgsn.jail`・`pgsn.cli` を含む）は内部実装で、予告なく変更されることがあります。下の関数と項のほかに、`__version__` と `LABEL_WIDTH` も入っています。`LABEL_WIDTH` はノードのラベルを折り返す桁数のデフォルト値で、`gsn_dot` と `save_gsn` の `label_width` と、`pgsn render --label-width` のデフォルト値です。
 
 入り口は2つあります。XML ドキュメントを読み込む（`load_xml` がコンパイルと評価までします）か、Python で項を組み立てて `fully_eval()` で評価するかです。どちらでも評価済みの項が得られ、そこから先は[結果の読み出し](#結果の読み出し)の関数で扱います。パッケージがここに書いたのと違う動きをするところは、[known_issues-ja.md](known_issues-ja.md) に挙げてあります。この文書の英語版は [README-api.md](README-api.md) です。
 
@@ -82,7 +82,7 @@ pgsn.plus(pgsn.integer(1), pgsn.integer(2))   # まとめて渡しても同じ
 pgsn.goal(description=..., support=...)       # キーワードのレコード
 ```
 
-レコードやオブジェクトは、ラベルに適用して読みます。`pgsn.record({"a": pgsn.integer(1)})("a")` は `1` に評価され、ゴールを `"description"` に適用するとその説明が得られます。
+レコードやオブジェクトは、ラベルに適用して読みます。`pgsn.record({"a": pgsn.integer(1)})("a")` は `1` に評価され、Goal を `"description"` に適用するとその説明が得られます。
 
 引数に渡した Python の値は項に変換されます。`str` は `string`、`int` は `integer`、`bool` は `boolean`、`list` と `tuple` は `list_term`、`dict` は `record` になり、中身も再帰的に変換されます。それ以外の値は `TypeError` になります。`list_term` と `record` 自身は項しか受け取りません（`pgsn.list_term((pgsn.string("a"),))`）。
 
@@ -176,7 +176,7 @@ top = pgsn.goal(description="All requirements are met",
 | `is_empty` | `is_empty(xs)` | `xs` が空かどうか |
 | `concat` | `concat(xs)(ys)` | `xs` の後に `ys` を続けたリスト |
 | `map_term` | `map_term(f)(xs)` | 各要素に `f` を適用したリスト |
-| `fold`・`foldr` | `fold(f)(z)(xs)` | 右畳み込み。`fold(f)(z)([x1, x2])` は `f(x1)(f(x2)(z))`。`fold` は `foldr` の別名 |
+| `fold`・`foldr` | `fold(f)(z)(xs)` | 右畳み込み。`fold(f)(z)([x1, x2])` は `f(x1)(f(x2)(z))`。`fold` は `foldr` の別名で、左畳み込みは無い |
 | `list_all` | `list_all(p)(xs)` | すべての要素で `p` が成り立つかどうか |
 | `empty` | `empty` | 空リスト |
 | `true`・`false` | | 真偽値 |
@@ -214,7 +214,7 @@ top = pgsn.goal(description="All requirements are met",
 | `assumption` | `description` |
 | `defeater` | `description`・`support`（デフォルトは undeveloped）・`defeaters`（デフォルトは空） |
 
-`undeveloped` はコンストラクタではなく値で、まだ展開していない Goal の支持を表します。`support` にデフォルト値は無いので、支持の無い Goal は `support=pgsn.undeveloped` と書きます。
+`undeveloped` はコンストラクタではなく値で、未展開の Goal の支持を表します。`support` にデフォルト値は無いので、支持の無い Goal は `support=pgsn.undeveloped` と書きます。
 
 `contexts` と `assumptions` は Goal と Strategy が持ちます。GSN v3 がこの2つのノードに付けるからです。Solution はどちらも取りません。
 
@@ -222,7 +222,7 @@ top = pgsn.goal(description="All requirements are met",
 
 よく使う形のための補助が2つあります。
 
-- `immediate(goals)` — サブゴールのリストをそのまま持つだけの Strategy。説明は文字列 `immediate` で、ほかの Strategy と同じく描かれ、検査されます。
+- `immediate(goals)` — サブゴールのリストをそのまま持つだけの Strategy。出力にどう現れるかは [known_issues-ja.md](known_issues-ja.md) に挙げてあります。
 - `solution_as_goal(s)` — 説明と支持の両方を Solution から取る Goal。
 
 ```python
@@ -437,12 +437,13 @@ pgsn.load_xml("other.xml", config=other_cfg)   # この呼び出しだけ上書�
 | 例外 | 送出するもの | 場合 |
 |---|---|---|
 | `PGSNError` | `load_xml`・`load_xml_string` | 整形式のドキュメントをコンパイラが拒むとき。値が期待される位置の知らない要素、不正な名前や予約された名前、循環 import、拒否された import や見つからない import、`<PGSN>` 以外のルート要素 |
-| `JailError` | `Jails`・`Config`・`configure`・`Jails.root_of` | 不正な jail 名、存在しないかディレクトリでないルート、表に無い jail 名。コンパイル中に起きた場合は `PGSNError` に変換される |
+| `JailError` | `Jails`・`Config`・`configure`・`Jails.root_of` | mapping でない jail の表、不正な jail 名、存在しないかディレクトリでないルート、表に無い jail 名。コンパイル中に起きた場合は `PGSNError` に変換される |
 | `xml.etree.ElementTree.ParseError` | `load_xml`・`load_xml_string` | ドキュメントが整形式の XML でない |
 | `FileNotFoundError` | `load_xml` | ドキュメントのファイルそのものが無い |
 | `LambdaInterpreterError` | `fully_eval`・`load_xml`・`load_xml_string` | `steps` の上限に達した。`e.args[0]` は `'Reduction did not terminate'` |
-| `TypeError` | 項の構築、`Config`・`configure`・`get_config`・`load_xml` | 項に対応しない Python の値（`float`・`None`）、または種類の違う設定 |
+| `TypeError` | 項の構築、`Config`・`configure`・`get_config`・`load_xml`・`load_xml_string` | 項に対応しない Python の値（`float`・`None`）、または種類の違う設定 |
 | `ValueError` | `python_value`・`gsn_tree`・`gsn_dot`・`save_gsn`・`gsn_violations` | 結果が値を持たない。メッセージは評価が止まった位置をパスで示す |
+| `graphviz.ExecutableNotFound` | `save_gsn`、`gsn_dot` のグラフを画像にするとき | Graphviz のプログラムが入っていない |
 
 ```python
 try:

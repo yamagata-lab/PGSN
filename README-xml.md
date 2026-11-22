@@ -112,13 +112,13 @@ Goal: The braking system is acceptably safe
 Done.
 ```
 
-The pieces used here are described in the reference: `<def>` in [Definitions](#definitions-def), `<ol>` and `<dl>` in [Lists](#lists-ol) and [Records](#records-dl), `{h.name}` in [Format strings in text](#format-strings-in-text), `<template>` in [Templates and application](#templates-and-application), and the `as` and `expr` attributes in [Shorthand attributes](#shorthand-attributes). A template can also live in a file of its own and be imported by several documents; see [Documents and modules](#documents-and-modules).
+The pieces used here are described in the reference: `<def>` in [Definitions](#definitions-def), `<ol>` and `<dl>` in [Lists](#lists-ol) and [Records](#records-dl), `{h.name}` in [Format strings in text](#format-strings-in-text), `<template>` in [Templates and application](#templates-and-application), `<param>` and `positional` in [Parameters](#parameters-param), `map_term` in [Builtins](#builtins), and the `as` and `expr` attributes in [Shorthand attributes](#shorthand-attributes). A template can also live in a file of its own and be imported by several documents; see [Documents and modules](#documents-and-modules).
 
 ---
 
 ## GSN elements
 
-GSN elements are values: they can be bound to names, held in lists, passed to templates and returned from them.
+GSN elements are values: they can be bound to names, held in lists, passed to templates and returned from them. The examples below refer to named values with the `var` attribute, short for `<var name="…"/>` ([Shorthand attributes](#shorthand-attributes)). GSN v3 elements that PGSN does not have, such as Justification, are listed in [known_issues.md](known_issues.md).
 
 ### Descriptions
 
@@ -143,7 +143,7 @@ An element with no leading text takes a single value child as its description, s
 <Solution><expr>f"test report {i}"</expr></Solution>
 ```
 
-An element with more than one value child is an error; say which one is the description by writing it out.
+An element with more than one value child is an error; put the description in a `<description>` element.
 
 A description that is empty or blank, `<description/>` included, is not a compile error. It is the empty string ([Literals](#literals)), and the [GSN check](#checking-against-gsn-v3) reports it, as it does a blank description computed while the document is evaluated.
 
@@ -166,7 +166,7 @@ A description that is empty or blank, `<description/>` included, is not a compil
 
 A goal has exactly one support. A `<Goal>` with none is undeveloped, as if `<undeveloped/>` were written.
 
-Several `<Goal>` elements written directly under a Goal are shorthand: they are wrapped by `immediate`, which makes a Strategy holding them. That Strategy appears in the output with the description `immediate`. To support a goal with a list of goals computed while the document is evaluated, apply `immediate` to the list yourself:
+One or more `<Goal>` elements written directly under a Goal are shorthand: they are wrapped by `immediate`, which makes a Strategy holding them. How that Strategy shows in the output is listed in [known_issues.md](known_issues.md). To support a goal with a list of goals computed while the document is evaluated, apply `immediate` to the list yourself:
 
 ```xml
 <Goal>
@@ -291,6 +291,8 @@ A GSN element evaluates to an object of a GSN class, whose attributes can be rea
 | `Solution`, `Context`, `Assumption` | `description`, `defeaters` |
 | `Defeater` | `description`, `defeaters`, `support` |
 
+`Context` and `Assumption` declare `defeaters`, but neither element takes a `<Defeater>`.
+
 ### Checking against GSN v3
 
 A document can put any value in any position, so a structure can evaluate and still not be one the GSN Community Standard, Version 3 (GSN v3) allows. `pgsn doc` and `pgsn render` check the result against the rules a document can break, and print a warning for each element that breaks one, with its identifier and its position in the tree:
@@ -339,9 +341,20 @@ The examples in this section bind names with `<def name="x">` and refer to them 
 
 > **Key principle: bare text becomes a String literal.**
 > When you write text directly inside an element, it is a `String` value.
-> `<inherit>Goal</inherit>` does not refer to the Goal class — it produces the
-> string `"Goal"`, which is not a class. To refer to a variable, use `<var>` or
-> the `var=` shorthand attribute.
+> `<li>goal1</li>` does not refer to a goal bound to `goal1` — it is the string
+> `"goal1"`. To refer to a variable, use `<var>` or the `var=` shorthand
+> attribute.
+
+```xml
+<!-- WRONG: the sub-goal is the string "goal1", not the goal bound to goal1;
+     the GSN check warns "a strategy is supported by goals, not by text" -->
+<subGoals><ol><li>goal1</li></ol></subGoals>
+
+<!-- CORRECT: var= is shorthand for a variable reference -->
+<subGoals><ol><li var="goal1"/></ol></subGoals>
+```
+
+The same holds for classes: `<inherit>Goal</inherit>` produces the string `"Goal"`, which is not a class.
 
 ```xml
 <!-- WRONG: text content becomes the string "Goal", not the class itself -->
@@ -442,7 +455,7 @@ The builtin names are bound the same way, in the outermost scope, so a document 
 
 ### Local definitions
 
-Use `<def>` elements inside a `<div>` to scope definitions locally. The last item of the `<div>` is its value.
+Use `<def>` elements inside a `<div>` to scope definitions locally. The last item of the `<div>` is its value. A `<from>` may stand among the `<def>` elements; the names it imports are bound for the rest of the block.
 
 ```xml
 <div>
@@ -477,7 +490,7 @@ Use `<def>` elements inside a `<div>` to scope definitions locally. The last ite
 </def>
 ```
 
-The recursion must stop through a conditional ([`<if>` or `<cases>`](#conditionals-if-cases)): only the branch taken is evaluated. Only the definition itself is made visible, so two definitions cannot refer to each other.
+The recursion must stop through a conditional ([`<if>` or `<cases>`](#conditionals-if-cases)): only the branch taken is evaluated. Only the definition itself is made visible; mutual recursion is listed in [known_issues.md](known_issues.md).
 
 ### Variables (var)
 
@@ -586,7 +599,7 @@ Writing arithmetic with `<apply>` is heavy, so `<expr>` accepts expressions writ
 
 ### What may appear in an expression
 
-The grammar is a part of Python's expressions, read the way Python reads them.
+The grammar is a subset of Python's expression syntax, read the way Python reads it.
 
 | | |
 |---|---|
@@ -630,7 +643,7 @@ An f-string field is an expression. A conversion (`!r`), a format specification 
 
 Ordering (`<`, `<=`, `>`, `>=`) compares integers only, so `"a" < "b"` has no value.
 
-Equality (`==`, `!=`) compares data: base values — a string, an integer, a boolean, `undefined` — and lists and records built out of them. So `"a" == "a"` is `True`, while two functions, two classes or two GSN nodes have no value when compared, just as `"a" < "b"` has none.
+Equality (`==`, `!=`) compares data: base values — a string, an integer, a boolean, `undefined` — and lists and records built out of them. So `"a" == "a"` is `True`, while two functions, two classes or two GSN elements have no value when compared, just as `"a" < "b"` has none.
 
 To test whether a list is empty, apply `is_empty`. Comparing the list with `empty` answers only for a list of data.
 
@@ -818,7 +831,7 @@ An `<object>` must give every attribute of the class that has no default, and no
 
 ### Reading a label (get)
 
-`<get>` reads a label of a record or an object. The `key` attribute names the label, and `of` names a variable holding the receiver. The three forms below are the same:
+`<get>` reads a label of a record or an object. The `key` attribute names the label, and `of` names a variable holding the receiver. The three forms below are the same, since reading a label is applying the record to it:
 
 ```xml
 <get key="x" of="my_record"/>
@@ -1033,7 +1046,7 @@ Symbolic links are expanded before the containment check, so a link planted insi
 
 ## Builtins
 
-The following names are predefined; refer to them with `<var name="..."/>` and apply them with `<apply>` or in an `<expr>`. Each is the builtin term the `pgsn` Python package exports under the same name, and [README-api.md](README-api.md#builtin-terms) gives the arguments each takes; the short class aliases exist only in XML. The Python functions that build terms (`string`, `lambda_abs`, `let`, …) and the loading functions have no XML counterpart, because the XML elements do their work.
+The following names are predefined; refer to them with `<var name="..."/>` and apply them with `<apply>` or in an `<expr>`. Each, except the short class aliases, which exist only in XML, is the builtin term the `pgsn` Python package exports under the same name, and [README-api.md](README-api.md#builtin-terms) gives the arguments each takes. The Python functions that build terms (`string`, `lambda_abs`, `let`, …) and the loading functions have no XML counterpart, because the XML elements do their work.
 
 | Kind | Names |
 |---|---|
@@ -1070,13 +1083,13 @@ Five properties hold everywhere in the language; the sections above describe the
 
 **A missing value is reported where it is needed, not where it occurs.** Reading a name that is not defined, a record label that does not exist, or a value that fails a `typeOf` check is not an error at that point: the part of the argument that depends on it simply has no value. When `pgsn doc` or `pgsn render` needs that value to print or draw the argument, it reports an error with the path to the place where the value is missing, for example
 
-    Error: PGSN term cannot be converted to a Python value at path '<root>.support': name 's' is not defined.
+    Error: PGSN term cannot be converted to a Python value at path '<root>.support': name 's' is not defined. Term (first 200 chars): …
 
 A template that has not been given all its arguments is not a value either, and is reported the same way. A part that nothing needs is never evaluated, so a mistake in it goes unreported. Malformed XML and refused imports are different: they are reported as soon as the document is read.
 
 **The only way out is `import`, and it is confined.** A document reads no file, reaches no network and consults no clock. Its one connection to anything outside itself is `<from>`, which may name only a file inside the directory tree the document is confined to, or inside a jail registered by whoever ran PGSN. See [Import paths and jails](#import-paths-and-jails). Confinement concerns what a document can reach, not what it consumes: PGSN does not limit the memory or the time a document uses, so run a document you did not write in a virtual machine or a container that limits them.
 
-**Only data can be compared.** Equality compares base values — strings, integers, booleans, `undefined` — and the lists and records built out of them. Two functions, two classes or two GSN nodes have no value when compared. A value carries no address and no timestamp, so a copy cannot be told apart from the original, and neither can two nodes written with the same description. See [Comparing values](#comparing-values).
+**Only data can be compared.** Equality compares base values — strings, integers, booleans, `undefined` — and the lists and records built out of them. Two functions, two classes or two GSN elements have no value when compared. A value carries no address and no timestamp, so a copy cannot be told apart from the original, and neither can two elements written with the same description. See [Comparing values](#comparing-values).
 
 ---
 
@@ -1092,7 +1105,7 @@ The attribute column lists each element's own attributes. Any element with conte
 | `<import>` | empty | `name`, `as` | [Import](#import-from) |
 | `<def>` | one value | `name`, `typeOf`, `recursive` | [Definitions](#definitions-def) |
 | `<var>` | empty | `name`, `typeOf` | [Variables](#variables-var) |
-| `<div>` | `<def>`, then one value | – | [Local definitions](#local-definitions) |
+| `<div>` | `<from>` and `<def>`, then one value | – | [Local definitions](#local-definitions) |
 | `<num>` | a decimal integer | – | [Literals](#literals) |
 | `<str>` | text, taken as written | – | [Literals](#literals) |
 | `<expr>` | an expression | – | [Expressions](#expressions-expr) |
@@ -1105,14 +1118,14 @@ The attribute column lists each element's own attributes. Any element with conte
 | `<cases>` | `<case>`, then `<else>` | – | [Conditionals](#conditionals-if-cases) |
 | `<case>` | `<cond>`, `<then>` | – | [Conditionals](#conditionals-if-cases) |
 | `<cond>`, `<then>`, `<else>` | one value | – | [Conditionals](#conditionals-if-cases) |
-| `<template>` | `<param>`, `<def>`, then one value | – | [Template definition](#template-definition-template) |
+| `<template>` | `<param>`, then `<from>` and `<def>`, then one value | – | [Template definition](#template-definition-template) |
 | `<param>` | a default value, or empty | `name`, `positional` | [Parameters](#parameters-param) |
 | `<apply>` | the function (or `template=`), then `<arg>` | `template` | [Template application](#template-application-apply) |
 | `<arg>` | one value, or empty | `name` | [Template application](#template-application-apply) |
 | `<class>` | `<inherit>`, `<attribute>`, `<method>` | `name` | [Class definition](#class-definition-class) |
 | `<inherit>` | a class | – | [Class definition](#class-definition-class) |
 | `<attribute>` | a default value or an attribute's value, or empty | `name` | [Class definition](#class-definition-class), [Objects](#objects-object) |
-| `<method>` | `<param>`, then one value | `name` | [Class definition](#class-definition-class) |
+| `<method>` | `<param>`, then `<from>` and `<def>`, then one value | `name` | [Class definition](#class-definition-class) |
 | `<object>` | `<instanceOf>`, then `<attribute>` | – | [Objects](#objects-object) |
 | `<instanceOf>` | a class | – | [Objects](#objects-object) |
 | `<get>` | the receiver (or `of=`) | `key`, `of` | [Reading a label](#reading-a-label-get) |

@@ -176,7 +176,7 @@ These are terms, not Python functions: they are values you apply, one argument a
 | `is_empty` | `is_empty(xs)` | whether `xs` is empty |
 | `concat` | `concat(xs)(ys)` | `xs` followed by `ys` |
 | `map_term` | `map_term(f)(xs)` | `f` applied to every element |
-| `fold`, `foldr` | `fold(f)(z)(xs)` | a right fold: `fold(f)(z)([x1, x2])` is `f(x1)(f(x2)(z))`. `fold` is another name for `foldr` |
+| `fold`, `foldr` | `fold(f)(z)(xs)` | a right fold: `fold(f)(z)([x1, x2])` is `f(x1)(f(x2)(z))`. `fold` is another name for `foldr`; there is no left fold |
 | `list_all` | `list_all(p)(xs)` | whether `p` holds for every element |
 | `empty` | `empty` | the empty list |
 | `true`, `false` | | the booleans |
@@ -222,7 +222,7 @@ Each constructor takes keyword arguments and returns a term.
 
 Two helpers cover common shapes:
 
-- `immediate(goals)` — a strategy that simply carries a list of sub-goals. Its description is the string `immediate`, and it is drawn and checked like any strategy.
+- `immediate(goals)` — a strategy that simply carries a list of sub-goals. How it shows in the output is listed in [known_issues.md](known_issues.md).
 - `solution_as_goal(s)` — a goal whose description and support both come from a solution node.
 
 ```python
@@ -437,12 +437,13 @@ The default is a convenience, not a security boundary. What confines a document 
 | Exception | Raised by | When |
 |---|---|---|
 | `PGSNError` | `load_xml`, `load_xml_string` | the compiler rejects a well-formed document: an unknown element where a value is expected, an invalid or reserved name, a circular import, a rejected or missing import, a root element other than `<PGSN>` |
-| `JailError` | `Jails`, `Config`, `configure`, `Jails.root_of` | an invalid jail name, a missing or non-directory root, an unknown jail name; during compilation it is converted to `PGSNError` |
+| `JailError` | `Jails`, `Config`, `configure`, `Jails.root_of` | a jail table that is not a mapping, an invalid jail name, a missing or non-directory root, an unknown jail name; during compilation it is converted to `PGSNError` |
 | `xml.etree.ElementTree.ParseError` | `load_xml`, `load_xml_string` | the document is not well-formed XML |
 | `FileNotFoundError` | `load_xml` | the document file itself does not exist |
 | `LambdaInterpreterError` | `fully_eval`, `load_xml`, `load_xml_string` | the `steps` limit is reached; `e.args[0]` is `'Reduction did not terminate'` |
-| `TypeError` | term construction, `Config`, `configure`, `get_config`, `load_xml` | a Python value with no term counterpart (a `float`, `None`), or a configuration of the wrong kind |
+| `TypeError` | term construction, `Config`, `configure`, `get_config`, `load_xml`, `load_xml_string` | a Python value with no term counterpart (a `float`, `None`), or a configuration of the wrong kind |
 | `ValueError` | `python_value`, `gsn_tree`, `gsn_dot`, `save_gsn`, `gsn_violations` | the result has no value; the message names the path where evaluation stopped |
+| `graphviz.ExecutableNotFound` | `save_gsn`, rendering a `gsn_dot` graph | the Graphviz programs are not installed |
 
 ```python
 try:

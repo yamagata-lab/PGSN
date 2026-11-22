@@ -41,10 +41,12 @@ says.
    4. Leading text and a value child: the child is dropped.
 8. **`<dl>` accepts irregular entries.**
    1. `<dt key="k">text</dt>`: the text is ignored.
-   2. A `<dd>` without a `<dt>` before it is dropped.
-   3. Two `<dt>` in a row: the second is taken as the value of the first, as a
-      string.
-   4. A key given twice: the last entry wins.
+   2. `<dt>` and `<dd>` are not told apart: the children are taken two by
+      two, the first of each pair as the label and the second as the value.
+      So two `<dt>` in a row make the second the value of the first, as a
+      string; a `<dd>` with no `<dt>` before it is taken as a label; and a
+      last child left without a partner is dropped.
+   3. A key given twice: the last entry wins.
 9. **`typeOf` on a `<param>` is ignored.** A parameter takes no `typeOf`; check
    the value where it is used.
 
@@ -69,17 +71,19 @@ does not validate a document against it.
 
 ## GSN
 
-13. **Sub-goals written directly under a Goal show up as a Strategy named
-    `immediate`.** Several `<Goal>` elements under a `<Goal>`, and an explicit
+13. **Sub-goals written directly under a Goal show up as a Strategy whose
+    description is `immediate`.** One or more `<Goal>` elements under a
+    `<Goal>`, and an explicit
     application of `immediate`, are supported by a Strategy whose description
     is the string `immediate`. It appears in `pgsn doc`, in the drawing and in
     the identifiers of the GSN check.
 14. **`context` and `assumption` drop defeaters (Python API).**
     `context(description="c", defeaters=[...])` evaluates to a context whose
     `defeaters` list is empty.
-15. **A record can pass for a GSN node.** Readback recognizes a node by its
-    marker label, so a plain record with the label `__Goal__` reads back as a
-    goal.
+15. **A record can pass for a GSN node in `python_value`.** `python_value`
+    marks a node with a label such as `__Goal__`, so a plain record carrying
+    that label and a goal's other labels converts to the same Python value as
+    a goal. `gsn_tree` and `gsn_violations` do not take it for one.
 16. **The language is not yet shaped after the GSN metamodel.** The output
     follows GSN v3, but the language does not.
     1. A Goal has a single support; GSN v3 lets several strategies or
@@ -97,7 +101,9 @@ does not validate a document against it.
     `Undeveloped` and `Defeater` included, satisfies `typeOf="Solution"`.
     There is no check that a node is a Goal rather than merely goal-shaped,
     and when two class definitions written in different places are the same
-    class is not decided.
+    class is not decided, nor how the provenance of either is established.
+    Class names cannot settle it, since names given in documents written apart
+    from each other are not unique.
 
 ## Evaluation
 
@@ -113,7 +119,8 @@ does not validate a document against it.
     the same error as running out of steps.
 20. **A deep enough structure stops with Python's `RecursionError`.** The
     evaluator itself does not use the Python stack, but the passes before and
-    after it (the removal of names, `python_value`, `gsn_tree`) recurse.
+    after it (the XML front end, the removal of names, `python_value`,
+    `gsn_tree`) recurse.
 21. **The step-limit error is a raw dump.** When the budget runs out, `pgsn`
     prints `Error: ('Reduction did not terminate', …)` followed by the internal
     form of the term, often several kilobytes long. In Python,
@@ -127,17 +134,19 @@ does not validate a document against it.
 
 ## Error messages
 
-24. **The brace errors of an f-string double the advice.** An unclosed `{` in
-    an f-string in `<expr>` is reported with `write '{{{{' for a literal
-    brace`; the escape is `{{` (and `}}` for `}`).
+24. **The brace errors of an f-string double the advice.** An unclosed `{`,
+    or a `}` that closes no field, in an f-string in `<expr>` is reported with
+    `write '{{{{' for a literal brace` (or `'}}}}'`); the escape is `{{` (and
+    `}}` for `}`).
 25. **A block with bindings and no value is reported as `Unknown expression:
     <def>`.** The message does not say that the value is missing.
 26. **A `<param>` in the wrong place in a module is reported as
     `<PGSNModule> takes <def> and <from> before its value, found <param>`,**
     although a module has no value.
 27. **Some failures are reported as `unexpected term type App`** rather than
-    with the reason, for example `<inherit>Goal</inherit>` (a string where a
-    class is expected).
+    with the reason, for example an `<object>` whose class has
+    `<inherit>Goal</inherit>` (a string where a class is expected); the class
+    on its own is reported with the reason.
 
 ## Python API
 
