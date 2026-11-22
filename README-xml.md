@@ -689,6 +689,10 @@ Every GSN node opens with a description, and any node may be challenged by a
 `Defeater`. A `Goal` and a `Strategy` may also be annotated with `Context` and
 `Assumption` elements.
 
+A description that is empty or blank, `<description/>` included, is not a
+compile error. It is the empty string, and the GSN check of `pgsn doc` and
+`pgsn render` reports it, as it does a blank description computed at run time.
+
 ```xml
 <!-- description: either a description element or plain text -->
 <description>description text</description>

@@ -67,10 +67,14 @@ def test_a_goal_where_a_defeater_belongs():
 
 @pytest.mark.parametrize("body, description", [
     ("<Goal><undeveloped/></Goal>", "''"),
+    ("<Goal><description/><undeveloped/></Goal>", "''"),
+    ("<Goal><description>  </description><undeveloped/></Goal>", "''"),
+    ("<Goal>g<Context><description/></Context><undeveloped/></Goal>", "''"),
     ("<Goal>g<Context><ol><li>a</li></ol></Context><undeveloped/></Goal>",
      "['a']"),
 ])
 def test_an_element_that_states_nothing(body, description):
+    # An empty description compiles; the check is what reports it.
     violations = _violations(body)
     assert len(violations) == 1
     assert violations[0].endswith(

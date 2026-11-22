@@ -680,6 +680,8 @@ GSN ノードは通常の値と同列に扱われます。クラスとして継�
 GSN ノードはどれも説明（description）から始まり、どれも `Defeater` で異議を立てられます。
 `Goal` と `Strategy` はさらに `Context` と `Assumption` で注釈を付けられます。
 
+説明が空や空白だけでも（`<description/>` も含めて）コンパイルエラーにはなりません。空文字列になり、`pgsn doc` と `pgsn render` の GSN の検査が報告します。実行時に計算された説明が空のときと同じです。
+
 ```xml
 <!-- 説明（description 要素、または先頭のテキスト） -->
 <description>説明文</description>
