@@ -25,6 +25,8 @@ Five properties hold everywhere in the language. The sections that follow descri
 
 PGSN has two root elements: `<PGSN>` for standalone documents and `<PGSNModule>` for reusable modules. A document is a file with the extension `.xml`; that is what `pgsn` accepts as input.
 
+The XML schema of the language is experimental. It does not yet describe the language exactly, and `pgsn` does not validate a document against it; this document is what defines the syntax.
+
 ### `<PGSN>` — standalone document
 
 Produces a single value. Does **not** accept `<param>`.
@@ -58,6 +60,8 @@ Accepts parameters from the caller. `<param>` must appear first.
 ## Values
 
 In PGSN, **everything is a value**. Every element that accepts content expects an **expression** — something that evaluates to a value. There are no special "name slots" or "class name strings" built into the language.
+
+The examples in this section bind names with `<def name="x">` and refer to them with `<var name="x"/>`; [Definitions](#definitions-def) and [Variables](#variables-var) describe the two.
 
 > **Key principle: bare text becomes a String literal.**
 > When you write text directly inside an element, it is parsed as a `String` value.
@@ -373,8 +377,7 @@ document has no value to give, and the error names the path it stopped at.
 
 `<param>` does not take `typeOf`: a parameter is bound by a lambda, and a
 guard on it would have to be planted in the body. Check the value where it is
-used instead. The compiler ignores `typeOf` on a `<param>` without a word;
-only `PGSN.rng` rejects it.
+used instead. The compiler ignores `typeOf` on a `<param>` without a word.
 
 ### Local Definitions
 
@@ -712,8 +715,8 @@ Every GSN node opens with a description, and any node may be challenged by a
 **Where they may appear.** A `Context` or an `Assumption` attaches to a `Goal`
 or to a `Strategy`, which are the two the standard allows — a strategy carries
 the assumption its reasoning depends on. `Solution` takes neither, and neither
-does a `Defeater`. Writing one there is rejected by `PGSN.rng`; `pgsn` itself
-drops it without a word.
+does a `Defeater`. One written there is not an error: `pgsn` drops it without
+a word.
 
 ### Goal
 
@@ -732,7 +735,7 @@ drops it without a word.
 </Goal>
 ```
 
-A goal has exactly one support. A `<Goal>` with none is an error: a goal not developed yet says so with `<undeveloped/>`. The compiler keeps the first one written and drops any further support without a word; only `PGSN.rng` rejects such a document.
+A goal has exactly one support. A `<Goal>` with none is an error: a goal not developed yet says so with `<undeveloped/>`. The compiler keeps the first one written and drops any further support without a word.
 
 > **Note: writing sub-goals directly is sugar**
 > Listing several `<Goal>` elements directly under a Goal is a wrap by `immediate` (a special Strategy that bundles sub-goals).
