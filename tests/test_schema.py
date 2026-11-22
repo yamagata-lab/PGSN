@@ -91,3 +91,12 @@ def test_the_schema_accepts_an_undeveloped_strategy(tmp_path):
     path.write_text("<PGSN><Goal>g<Strategy>s<undeveloped/></Strategy></Goal></PGSN>")
     result = VALIDATE(path)
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_the_schema_accepts_an_empty_arg(tmp_path):
+    """An empty <arg/> calls a template with its keyword parameters at their
+    defaults."""
+    path = tmp_path / "doc.xml"
+    path.write_text('<PGSN><apply template="f"><arg>a</arg><arg/></apply></PGSN>')
+    result = VALIDATE(path)
+    assert result.returncode == 0, result.stdout + result.stderr
