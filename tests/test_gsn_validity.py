@@ -110,7 +110,7 @@ _EMPTY_STRATEGY = ('<PGSN><def name="none"><ol/></def>'
 def test_doc_warns_and_writes_the_document(tmp_path):
     source = tmp_path / "doc.xml"
     source.write_text(_EMPTY_STRATEGY)
-    result = CliRunner().invoke(cli, ["doc", str(source)])
+    result = CliRunner().invoke(cli, ["doc", str(source), "-o", "-"])
     assert result.exit_code == 0
     assert "Warning: S1 at <root>.support" in result.output
     assert "Goal: g" in result.output
@@ -119,7 +119,7 @@ def test_doc_warns_and_writes_the_document(tmp_path):
 def test_strict_stops_without_writing(tmp_path):
     source = tmp_path / "doc.xml"
     source.write_text(_EMPTY_STRATEGY)
-    result = CliRunner().invoke(cli, ["doc", str(source), "--strict"])
+    result = CliRunner().invoke(cli, ["doc", str(source), "-o", "-", "--strict"])
     assert result.exit_code == 1
     assert "Error: S1 at <root>.support" in result.output
     assert "Goal: g" not in result.output

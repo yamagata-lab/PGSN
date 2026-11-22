@@ -1144,7 +1144,18 @@ def _expr(elem: ET.Element, unit: _Unit) -> Term:
 
 
 def _e_var(elem: ET.Element, _unit: _Unit) -> Term:
-    return _resolve(elem.get("name"), elem.get("typeOf"))
+    """A reference to a name.
+
+    `as="var"` produces a `<var>` with no name, since `as` moves the content
+    and leaves the attributes where they were, so the message says so.
+    """
+    name = elem.get("name")
+    if name is None:
+        raise PGSNError(
+            "<var> needs a 'name' attribute naming the variable, as in "
+            '<var name="x"/>. as="var" cannot supply it: `as` moves the '
+            "content and leaves the attributes behind.")
+    return _resolve(name, elem.get("typeOf"))
 
 
 def _e_num(elem: ET.Element, _unit: _Unit) -> Term:

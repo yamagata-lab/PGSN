@@ -8,13 +8,13 @@ that failed from one that succeeded if the status is not 0 as well.
 import pytest
 from click.testing import CliRunner
 
-from pgsn.cli import cli
+from pgsn.cli import _message, cli
 
 _UNBOUND = "<PGSN><Goal><var name='nope'/><undeveloped/></Goal></PGSN>"
 _MALFORMED = "<PGSN><Goal>"
 
 
-@pytest.mark.parametrize("command", [["doc"], ["render", "-o", "-"]])
+@pytest.mark.parametrize("command", [["doc", "-o", "-"], ["render", "-o", "-"]])
 def test_a_document_that_does_not_evaluate(tmp_path, command):
     source = tmp_path / "doc.xml"
     source.write_text(_UNBOUND)
@@ -24,7 +24,7 @@ def test_a_document_that_does_not_evaluate(tmp_path, command):
     assert "name 'nope' is not defined" in result.output
 
 
-@pytest.mark.parametrize("command", [["doc"], ["render", "-o", "-"], ["compile"]])
+@pytest.mark.parametrize("command", [["doc", "-o", "-"], ["render", "-o", "-"], ["compile"]])
 def test_a_document_that_does_not_compile(tmp_path, command):
     source = tmp_path / "doc.xml"
     source.write_text(_MALFORMED)
@@ -36,6 +36,28 @@ def test_a_document_that_does_not_compile(tmp_path, command):
 def test_a_document_that_succeeds(tmp_path):
     source = tmp_path / "doc.xml"
     source.write_text("<PGSN><Goal>g<undeveloped/></Goal></PGSN>")
-    result = CliRunner().invoke(cli, ["doc", str(source)])
+    result = CliRunner().invoke(cli, ["doc", str(source), "-o", "-"])
     assert result.exit_code == 0
     assert "Goal: g" in result.output
+
+
+def test_doc_needs_an_output(tmp_path):
+    source = tmp_path / "doc.xml"
+    source.write_text("<PGSN><Goal>g<undeveloped/></Goal></PGSN>")
+    result = CliRunner().invoke(cli, ["doc", str(source)])
+    assert result.exit_code == 2
+    assert "Missing option '--output'" in result.output
+
+
+def test_doc_writes_a_file(tmp_path):
+    source = tmp_path / "doc.xml"
+    source.write_text("<PGSN><Goal>g<undeveloped/></Goal></PGSN>")
+    target = tmp_path / "out.txt"
+    result = CliRunner().invoke(cli, ["doc", str(source), "-o", str(target)])
+    assert result.exit_code == 0
+    assert "Goal: g" in target.read_text()
+
+
+def test_an_error_without_a_message_names_its_kind():
+    assert _message(AssertionError()) == "AssertionError"
+    assert _message(ValueError("bad")) == "bad"

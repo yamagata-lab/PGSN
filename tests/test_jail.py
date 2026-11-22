@@ -437,7 +437,7 @@ def test_cli_doc_without_jail_fails(tmp_path):
 def test_cli_rejects_jail_for_python_input(tmp_path):
     src = write(tmp_path / "main.py", "main = 1\n")
     result = CliRunner().invoke(
-        cli, ["doc", str(src), "--jail", f"lib={tmp_path}"])
+        cli, ["doc", str(src), "-o", "-", "--jail", f"lib={tmp_path}"])
     assert result.exit_code != 0
     assert "--jail applies to .xml input only" in result.output
 
@@ -445,13 +445,13 @@ def test_cli_rejects_jail_for_python_input(tmp_path):
 def test_cli_rejects_jail_for_json_input(tmp_path):
     src = write(tmp_path / "main.json", '{"__type__": "String", "value": "x"}')
     result = CliRunner().invoke(
-        cli, ["doc", str(src), "--jail", f"lib={tmp_path}"])
+        cli, ["doc", str(src), "-o", "-", "--jail", f"lib={tmp_path}"])
     assert result.exit_code != 0
     assert "--jail applies to .xml input only" in result.output
 
 
 def test_cli_rejects_malformed_jail(tmp_path):
     src = write(tmp_path / "main.xml", "<PGSN>hi</PGSN>")
-    result = CliRunner().invoke(cli, ["doc", str(src), "--jail", "lib"])
+    result = CliRunner().invoke(cli, ["doc", str(src), "-o", "-", "--jail", "lib"])
     assert result.exit_code != 0
     assert "NAME=PATH" in result.output

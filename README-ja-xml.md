@@ -285,7 +285,7 @@ import の時点で名前を選び出すのは上の形式の役目なので、2
 ここで `lib` はディスク上のディレクトリ名ではなく jail 名です。コマンドラインまたは API で与えた jail テーブルを使って解決されます。
 
 ```console
-$ pgsn doc main.xml --jail lib=/opt/pgsn-lib
+$ pgsn doc main.xml -o - --jail lib=/opt/pgsn-lib
 ```
 
 ```python
