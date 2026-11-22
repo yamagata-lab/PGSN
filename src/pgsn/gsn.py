@@ -1,5 +1,6 @@
 import textwrap
 import uuid
+from dataclasses import dataclass
 from treelib import Tree
 import treelib
 import graphviz
@@ -150,6 +151,15 @@ import uuid
 
 # Tree と pgsn は君のモジュールでインポートされている前提だね
 
+def _gsn_type(data) -> str | None:
+    """The GSN kind of a value `python_value` gave with its inheritance chain:
+    the first class in the chain that is a GSN kind, or None."""
+    if not isinstance(data, dict):
+        return None
+    return next((cls for cls in data.get("__parent_classes__", [])
+                 if cls in GSN_TYPES), None)
+
+
 def gsn_tree(root_term: pgsn.pgsn_term.Term) -> Tree:
     tree = Tree()
     # 継承チェーンを含めてPythonの辞書に変換
@@ -159,11 +169,8 @@ def gsn_tree(root_term: pgsn.pgsn_term.Term) -> Tree:
         node_id = str(uuid.uuid4())
 
         if isinstance(data, dict):
-            # 血脈（親クラスのリスト）を取り出す
-            parent_classes = data.get("__parent_classes__", [])
-
             # その血脈の中に、GSN_TYPES に該当する起源があるかを探す
-            gsn_type = next((cls for cls in parent_classes if cls in GSN_TYPES), None)
+            gsn_type = _gsn_type(data)
 
             # 実際のクラス名（派生クラス名。GSN以外のオブジェクト表示用として残す）
             class_name_key = next(
@@ -442,3 +449,130 @@ def save_gsn(gsn: pgsn.pgsn_term.Term,
 
     dot = gsn_dot(gsn, label_width=label_width)
     dot.render(filename, view=view, format=image_format, cleanup=cleanup)
+
+
+@dataclass(frozen=True)
+class GSNViolation:
+    """A place where an evaluated structure breaks a rule of GSN v3.
+
+    `path` is written the way readback reports a stuck term, and `identifier`
+    is the one the drawing heads the element with, None for the place where
+    no element stands.
+    """
+    path: str
+    identifier: str | None
+    message: str
+
+    def __str__(self) -> str:
+        where = f"{self.identifier} at {self.path}" if self.identifier else self.path
+        return f"{where}: {self.message}"
+
+
+def gsn_violations(gsn: pgsn.pgsn_term.Term) -> list[GSNViolation]:
+    """The rules of GSN v3 the evaluated structure `gsn` breaks.
+
+    The language lets a document put any value anywhere, so a structure that
+    evaluates can still be one GSN does not allow: a string where a goal's
+    support should be, a strategy whose computed sub-goals came out empty.
+    The rules checked are the ones a document can break:
+
+    1. SupportedBy runs from a goal to a strategy, a solution or sub-goals,
+       and from a strategy to goals (Table 1:2-2). A goal's or a defeater's
+       support is a strategy, a solution or undeveloped, and a strategy's
+       sub-goals are goals or undeveloped.
+    2. InContextOf runs to contexts and assumptions (Table 1:2-2).
+    3. A strategy describes the inference between a goal and its supporting
+       goals (Table 1:2-1), so it has at least one.
+    4. What challenges is a goal or a solution (1:6.2.2); in PGSN, a defeater.
+    5. Every element states something (1:2.1), so its description is
+       non-empty text.
+    6. The structure is headed by a goal.
+
+    Identifiers are unique and the structure is acyclic by construction, and
+    how a statement is phrased (1:2.3) is not a thing to check mechanically.
+    """
+    data = pgsn.dsl.python_value(gsn, with_inherit_chain=True)
+    found: list[GSNViolation] = []
+    numbered = {kind: 0 for kind in GSN_IDENTIFIER_PREFIXES}
+
+    if _gsn_type(data) != "Goal":
+        found.append(GSNViolation("<root>", None,
+                                  "the structure is not headed by a goal"))
+
+    plain = {str: "text", bool: "a boolean", int: "a number",
+             list: "a list", dict: "a record"}
+
+    def named(value) -> str:
+        return (_gsn_type(value) or plain.get(type(value))
+                or type(value).__name__)
+
+    # The walk visits values in the order gsn_tree adds them, so it numbers
+    # the elements as the drawing does.
+    def walk(value, path: str):
+        kind = _gsn_type(value)
+        identifier = None
+        if kind in GSN_IDENTIFIER_PREFIXES:
+            numbered[kind] += 1
+            identifier = f"{GSN_IDENTIFIER_PREFIXES[kind]}{numbered[kind]}"
+
+        def broken(message: str):
+            found.append(GSNViolation(path, identifier, message))
+
+        if kind is not None and kind != "Undeveloped":
+            description = value.get("description")
+            if not isinstance(description, str) or not description.strip():
+                broken(f"the {kind.lower()} must state something in its "
+                       f"description, which is {description!r}")
+        if kind in ("Goal", "Defeater") and "support" in value:
+            support = named(value["support"])
+            if support not in ("Strategy", "Solution", "Undeveloped"):
+                broken(f"a {kind.lower()} is supported by a strategy, a "
+                       f"solution or sub-goals, not by {support}")
+        if kind == "Strategy" and "sub_goals" in value:
+            sub_goals = value["sub_goals"]
+            if not isinstance(sub_goals, list):
+                broken(f"a strategy's sub-goals are a list, not {named(sub_goals)}")
+            else:
+                if not sub_goals:
+                    broken("a strategy relates a goal to supporting goals, "
+                           "but this one has none")
+                for i, sub_goal in enumerate(sub_goals):
+                    if named(sub_goal) not in ("Goal", "Undeveloped"):
+                        found.append(GSNViolation(
+                            f"{path}.sub_goals[{i}]", identifier,
+                            f"a strategy is supported by goals, "
+                            f"not by {named(sub_goal)}"))
+        if kind in ("Goal", "Strategy"):
+            for key, wanted in (("contexts", "Context"),
+                                ("assumptions", "Assumption")):
+                for i, item in enumerate(value.get(key, [])):
+                    if named(item) != wanted:
+                        found.append(GSNViolation(
+                            f"{path}.{key}[{i}]", identifier,
+                            f"the {key} of a {kind.lower()} are "
+                            f"{wanted.lower()}s, not {named(item)}"))
+        if kind is not None:
+            for i, item in enumerate(value.get("defeaters", [])):
+                if named(item) != "Defeater":
+                    found.append(GSNViolation(
+                        f"{path}.defeaters[{i}]", identifier,
+                        f"what challenges an element is a defeater, "
+                        f"not {named(item)}"))
+
+        if isinstance(value, dict):
+            for key, item in value.items():
+                if key.startswith("__") and key.endswith("__"):
+                    continue
+                if kind and key == "description":
+                    continue
+                if key in GSN_KEYS_TO_FLATTEN and isinstance(item, list):
+                    for i, element in enumerate(item):
+                        walk(element, f"{path}.{key}[{i}]")
+                else:
+                    walk(item, f"{path}.{key}")
+        elif isinstance(value, list):
+            for i, element in enumerate(value):
+                walk(element, f"{path}[{i}]")
+
+    walk(data, "<root>")
+    return found

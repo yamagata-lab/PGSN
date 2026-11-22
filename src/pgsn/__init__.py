@@ -6,7 +6,8 @@ This module is the public API.  It exposes three groups of names:
   combine with (`string`, `record`, `lambda_abs`, `map_term`, ...);
 * constructors for GSN nodes and classes, together with the functions that
   turn an evaluated term into something readable (`python_value`, `gsn_tree`,
-  `gsn_dot`, `save_gsn`);
+  `gsn_dot`, `save_gsn`) and check it against the rules of GSN
+  (`gsn_violations`);
 * the XML front end (`load_xml`, `load_xml_string`) and its configuration
   (`Config`, `Jails`, `configure`).
 
@@ -135,6 +136,9 @@ from pgsn.gsn import (
     gsn_dot,
     save_gsn,
     LABEL_WIDTH,
+    # Checking
+    gsn_violations,
+    GSNViolation,
 )
 
 from pgsn.pgsn_xml import PGSNError, load_xml, load_xml_string
@@ -240,4 +244,6 @@ __all__ = [
     "gsn_dot",
     "save_gsn",
     "LABEL_WIDTH",
+    "gsn_violations",
+    "GSNViolation",
 ]

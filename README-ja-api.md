@@ -249,6 +249,15 @@ dot.render("out", format="svg", cleanup=True)
 
 そのままファイルに書き出します。
 
+### `gsn_violations(term)`
+
+評価した構造が GSN v3 の規則を破っている箇所を、`GSNViolation`（`path`・`identifier`・`message`）のリストで返します。空のリストなら違反はありません。`path` は読み戻しが詰まった項を報告するときと同じ書き方で、`identifier` は図がその要素に付ける識別子です。規則は `pgsn doc` が検査するものと同じです（[README-ja.md](README-ja.md) のコマンドラインインタープリターの節）。
+
+```python
+for v in pgsn.gsn_violations(evaluated):
+    print(v)   # S1 at <root>.support: a strategy relates a goal to ...
+```
+
 ---
 
 ## XML の読み込み
