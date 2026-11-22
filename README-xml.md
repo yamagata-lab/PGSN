@@ -1,6 +1,6 @@
 # PGSN — Programmable Goal Structuring Notation
 
-PGSN is an XML-based language that extends GSN (Goal Structuring Notation) with programming constructs.
+This document specifies the XML syntax of PGSN, which extends GSN (Goal Structuring Notation) with programming constructs.
 GSN nodes (Goal, Strategy, Solution) are treated as first-class values and can be combined with variables, templates, and classes.
 
 ---
@@ -23,7 +23,7 @@ Five properties hold everywhere in the language. The sections that follow descri
 
 ## Document Structure
 
-PGSN has two root elements: `<PGSN>` for standalone documents and `<PGSNModule>` for reusable modules.
+PGSN has two root elements: `<PGSN>` for standalone documents and `<PGSNModule>` for reusable modules. A document is a file with the extension `.xml`; that is what `pgsn` accepts as input.
 
 ### `<PGSN>` — standalone document
 
@@ -237,13 +237,13 @@ Brings names from external PGSN files into scope. A document can only reach file
 ### Single import
 
 ```xml
-<from file="security.pgsn" import="secureGoal" as="G1"/>
+<from file="security.xml" import="secureGoal" as="G1"/>
 ```
 
 ### Multiple imports
 
 ```xml
-<from file="evidence.pgsn">
+<from file="evidence.xml">
     <import name="auditEvidence"/>
     <import name="testReport" as="TR"/>
 </from>
@@ -252,7 +252,7 @@ Brings names from external PGSN files into scope. A document can only reach file
 ### Import with parameters
 
 ```xml
-<from file="other.pgsn">
+<from file="other.xml">
     <import name="someGoal" as="G2"/>
     <arg name="A1" var="A1"/>
     <arg name="threshold" var="threshold"/>
@@ -264,7 +264,7 @@ Brings names from external PGSN files into scope. A document can only reach file
 A `<from>` written where a value is expected denotes the module's record, with nothing selected out of it. A module is then an ordinary value: bind it with `<def>`, hold it in a list, pass it to a template.
 
 ```xml
-<def name="lib"><from file="security.pgsn"/></def>
+<def name="lib"><from file="security.xml"/></def>
 <get key="secureGoal" of="lib"/>
 ```
 
@@ -277,16 +277,16 @@ A document is confined to a directory tree, and `file` may only name a file insi
 **Relative paths** are resolved against the directory of the document doing the importing:
 
 ```xml
-<from file="modules/security.pgsn" import="secureGoal"/>
-<from file="../shared/evidence.pgsn" import="auditEvidence"/>
+<from file="modules/security.xml" import="secureGoal"/>
+<from file="../shared/evidence.xml" import="auditEvidence"/>
 ```
 
-`..` is permitted, but only as long as the result stays inside the confinement root. The root of a document opened directly by path is the directory that document lives in, so by default a document can reach its neighbours and their subdirectories, and nothing above them.
+`..` is permitted, but only as long as the result stays inside the confinement root. The root of a document opened directly by path is the registered jail that contains it, if there is one, and otherwise the directory the document lives in, so by default a document can reach its neighbours and their subdirectories, and nothing above them.
 
 **Jailed paths** start with `/` and name a *jail* — a directory root registered by whoever runs PGSN:
 
 ```xml
-<from file="/lib/security.pgsn" import="secureGoal"/>
+<from file="/lib/security.xml" import="secureGoal"/>
 ```
 
 Here `lib` is a jail name, not a directory on disk. It is resolved against the jail table supplied on the command line or through the API:
@@ -302,7 +302,7 @@ cfg = pgsn.Config(jails={"lib": "/opt/pgsn-lib"})
 term = pgsn.load_xml("main.xml", config=cfg)
 ```
 
-A document has no way to name a jail that was not registered, and no way to reach the real filesystem layout behind one. Jail names may contain letters, digits, `_` and `-` only.
+A document has no way to name a jail that was not registered, and no way to reach the real filesystem layout behind one. Jail names may contain only ASCII letters, digits, `_` and `-`.
 
 Once an import crosses into a jail, that jail becomes the confinement root for the imported module. A module inside a jail may import its neighbours relatively, but cannot climb out with `..` — not even back into the tree of the document that imported it. Crossing from one jail to another always requires naming the target jail explicitly.
 
@@ -312,9 +312,9 @@ The following are rejected:
 |------|--------|
 | `../../etc/passwd` | leaves the confinement root |
 | `/etc/passwd` | `etc` is not a registered jail |
-| `/lib/../secret.pgsn` | `..` is not allowed in a jailed path |
-| `/lib/link.pgsn` where `link.pgsn` is a symlink out of the jail | resolves outside the jail root |
-| `C:\lib\mod.pgsn` | absolute paths must name a jail |
+| `/lib/../secret.xml` | `..` is not allowed in a jailed path |
+| `/lib/link.xml` where `link.xml` is a symlink out of the jail | resolves outside the jail root |
+| `C:\lib\mod.xml` | backslashes are not allowed |
 
 Symbolic links are expanded before the containment check, so a link planted inside a jail cannot be used to escape it.
 
@@ -373,7 +373,8 @@ document has no value to give, and the error names the path it stopped at.
 
 `<param>` does not take `typeOf`: a parameter is bound by a lambda, and a
 guard on it would have to be planted in the body. Check the value where it is
-used instead.
+used instead. The compiler ignores `typeOf` on a `<param>` without a word;
+only `PGSN.rng` rejects it.
 
 ### Local Definitions
 
@@ -412,15 +413,15 @@ References a previously defined name.
 
 ### Built-ins
 
-The following names are predefined; reference them with `<var name="..."/>` and apply them via `apply`. They are exactly the values the `pgsn` Python package exports, so anything usable from Python is usable here under the same name.
+The following names are predefined; reference them with `<var name="..."/>` and apply them with `<apply>`. Each is the builtin term the `pgsn` Python package exports under the same name (see [README-api.md](README-api.md#builtin-terms)), except the short class aliases, which exist only in XML. The Python functions that build terms (`string`, `lambda_abs`, `let`, …) and the loading functions have no XML counterpart, because the XML elements do their work.
 
 - List operations: `cons`, `head`, `tail`, `index`, `is_empty`, `concat`, `map_term`, `fold`, `foldr`, `list_all`, `empty`
 - Booleans: `true`, `false`, `if_then_else`, `boolean_and`, `boolean_or`, `boolean_not`, `equal`, `less_than`, `guard`
-- Integers: `plus`, `minus`, `times`, `div`, `mod`, `integer_sum`
+- Integers: `plus`, `minus`, `times`, `div`, `mod`, `integer_sum`, `repeat`
 - Records: `has_label`, `add_attribute`, `remove_attribute`, `overwrite_record`, `empty_record`
 - Strings: `format_string`
 - Classes / objects: `define_class`, `instantiate`, `type_of`, `is_subtype`, `base_class`
-- Misc: `fix`, `repeat`, `undefined`
+- Misc: `fix`, `undefined`
 - GSN constructors: `goal`, `strategy`, `solution`, `context`, `assumption`, `defeater`, `undeveloped`, `immediate`, `solution_as_goal`
 - GSN classes (long form): `goal_class`, `strategy_class`, `solution_class`, `context_class`, `assumption_class`, `defeater_class`, `gsn_class`, `support_class`, `undeveloped_class`
 - GSN classes (short aliases): `Goal`, `Strategy`, `Solution`, `Context`, `Assumption`, `Defeater`, `GSN`, `Support`
@@ -631,7 +632,7 @@ record whose labels are computed is built with `add_attribute` instead.
 
 ### Format Strings in Text
 
-Wherever text is allowed, you can embed in-scope variables with the `{name}` notation.
+Wherever text stands for a value, you can embed in-scope variables with the `{name}` notation.
 This becomes a `format_string` application. To write a literal brace, escape it as `{{` or `}}`.
 
 ```xml
@@ -696,7 +697,7 @@ Every GSN node opens with a description, and any node may be challenged by a
 
 **Context vs Assumption**
 
-`Context` and `Assumption` are both documentation elements attached to the header; each holds a single value (text, a variable reference, an object, a list, and so on).
+`Context` and `Assumption` are both documentation elements attached to the header; each holds a single value (text, a variable reference, an object, a list, and so on). The GSN check of `pgsn doc` and `pgsn render`, however, reports any value that is not a non-blank string as a breach (an error under `--strict`), since GSN gives every element a statement.
 
 - `Context` describes the setting or subject matter in which the argument is made.
 - `Assumption` states an assumption the argument relies on.
@@ -704,8 +705,8 @@ Every GSN node opens with a description, and any node may be challenged by a
 **Where they may appear.** A `Context` or an `Assumption` attaches to a `Goal`
 or to a `Strategy`, which are the two the standard allows — a strategy carries
 the assumption its reasoning depends on. `Solution` takes neither, and neither
-does a `Defeater`. Writing one there is rejected by `PGSN.rng`; nothing in the
-document itself will say so.
+does a `Defeater`. Writing one there is rejected by `PGSN.rng`; `pgsn` itself
+drops it without a word.
 
 ### Goal
 
@@ -724,9 +725,11 @@ document itself will say so.
 </Goal>
 ```
 
+A goal has exactly one support. The compiler keeps the first one written and drops any further support without a word; only `PGSN.rng` rejects such a document.
+
 > **Note: writing sub-goals directly is sugar**
 > Listing several `<Goal>` elements directly under a Goal is a wrap by `immediate` (a special Strategy that bundles sub-goals).
-> In the PGSN core, a Goal's support must be either a Strategy or a Solution.
+> In the PGSN core, a Goal's support is a Strategy, a Solution or undeveloped.
 > To support a Goal with a list of goals computed at runtime, apply `immediate` explicitly to turn it into a Strategy.
 >
 > ```xml
@@ -852,7 +855,7 @@ A complete example combining parameters and imports.
     <param name="threshold">100</param>
 
     <!-- bring in a goal from another file -->
-    <from file="security.pgsn" import="secureGoal" as="G1"/>
+    <from file="security.xml" import="secureGoal" as="G1"/>
 
     <def name="mainStrategy" as="Strategy">
         verified through testing and review
@@ -866,9 +869,10 @@ A complete example combining parameters and imports.
     <def name="main" as="Goal">
         <description>the system is secure</description>
         <Assumption>no zero-day attacks</Assumption>
+        <Assumption>at most {threshold} requests per second</Assumption>
         <supportedBy var="mainStrategy"/>
     </def>
 </PGSNModule>
 ```
 
-A module that receives `param` values uses `<PGSNModule>` rather than `<PGSN>` (which ends with a single value); `param` may appear only at the top of `<PGSNModule>`.
+A module that receives `param` values uses `<PGSNModule>` rather than `<PGSN>` (which ends with a single value); `param` may appear only at the top of `<PGSNModule>`. A module cannot be given to `pgsn doc` directly: import it from a `<PGSN>` document, for example `<from file="module.xml" import="main"/>`.

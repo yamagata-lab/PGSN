@@ -6,7 +6,7 @@
 import pgsn
 ```
 
-`pgsn.__all__` が公開 API のすべてです。そこに載っていないもの — サブモジュール `pgsn.dsl`、`pgsn.gsn`、`pgsn.pgsn_term`、`pgsn.pgsn_xml`、`pgsn.helpers`、`pgsn.cli` を含む — は内部実装であり、予告なく変更されることがあります。
+`pgsn.__all__` が公開 API のすべてです。そこに載っていないもの — サブモジュール `pgsn.dsl`、`pgsn.gsn`、`pgsn.pgsn_term`、`pgsn.pgsn_xml`、`pgsn.helpers`、`pgsn.cli` を含む — は内部実装であり、予告なく変更されることがあります。下の関数と項のほかに、`__version__` と `LABEL_WIDTH` も入っています。`LABEL_WIDTH` は `gsn_dot` がノードのラベルを既定で折り返す桁数で、`pgsn render --label-width` の既定値でもあります。
 
 入り口は 2 つあります。Python で項を組み立てるか、XML ドキュメントから読み込むか。どちらも `Term` を返し、そこから先は共通です。
 
@@ -34,7 +34,7 @@ pgsn.plus(pgsn.integer(1), pgsn.integer(2))   # 同じ意味
 pgsn.goal(description=..., support=...)       # キーワードのレコード
 ```
 
-項が期待される位置では Python の値が自動的にキャストされるので、引数としては `pgsn.string("a")` と `"a"` は同じように使えます。
+引数として渡した Python の値は自動的にキャストされるので、引数としては `pgsn.string("a")` と `"a"` は同じように使えます。`list_term` と `record` には項を渡してください。
 
 ### 評価
 
@@ -45,7 +45,7 @@ term.fully_eval(steps=5000)  # 上限を自分で決める
 
 項は全部組み立ててから、1 回だけ評価します。評価が返すのは読み出すための結果で、`python_value` や `gsn_tree`、描画に渡します。別の項を組み立てる材料にはなりません。結果を何かに適用したり、引数として渡したりする使いかたはサポートしておらず、動きません。
 
-`steps` は安全のための上限です。評価器が関数か組み込みを引数に適用するたびに 1 ステップと数え、上限に達すると評価はエラーで止まります。普通のドキュメントなら既定の上限で足ります。大きなドキュメントが上限に達したときだけ増やしてください。ステップの数えかたは今後の版で変わることがあります。
+`steps` は安全のための上限です。評価器が関数か組み込みを引数に適用するたびに 1 ステップと数え、上限に達すると評価は[例外](#例外)で述べるエラーで止まります。普通のドキュメントなら既定の上限で足ります。大きなドキュメントが上限に達したときだけ増やしてください。ステップの数えかたは今後の版で変わることがあります。
 
 項の中の誤り（レコードに無いラベル、種類の合わない引数、定義されていない名前）があっても、評価はエラーで止まりません。その部分はそのまま残り、エラーになるのは結果を読み出すときです。`python_value` が、評価が先へ進めなかった位置を示します。理由は [PGSN-implementation.md](PGSN-implementation.md) にあります。
 
@@ -86,7 +86,7 @@ pgsn.python_value(double(pgsn.integer(21)).fully_eval())   # 42
 
 ## 組み込みの項
 
-これらは Python の関数ではなく項です。適用して使う値です。XML 側もまったく同じ名前を公開しています（[README-ja-xml.md](README-ja-xml.md)）。
+これらは Python の関数ではなく項です。適用して使う値です。XML も同じ組み込みを同じ名前で束縛し、クラスの短い別名 `Goal`・`Strategy` などを加えています（[README-ja-xml.md](README-ja-xml.md)）。
 
 **リスト** — `cons`・`head`・`tail`・`index`・`is_empty`・`concat`・`map_term`・`fold`・`foldr`・`list_all`・`empty`
 
@@ -116,18 +116,18 @@ pgsn.python_value(double(pgsn.integer(21)).fully_eval())   # 42
 
 | コンストラクタ | 引数 |
 |--------------|------|
-| `goal` | `description`・`support`・`contexts`（既定は空）・`assumptions`（既定は空）・`defeaters`（既定は空） |
-| `strategy` | `description`・`sub_goals`・`contexts`（既定は空）・`assumptions`（既定は空）・`defeaters`（既定は空） |
-| `solution` | `description`・`defeaters`（既定は空） |
+| `goal` | `description`・`support`・`contexts`（デフォルトは空）・`assumptions`（デフォルトは空）・`defeaters`（デフォルトは空） |
+| `strategy` | `description`・`sub_goals`・`contexts`（デフォルトは空）・`assumptions`（デフォルトは空）・`defeaters`（デフォルトは空） |
+| `solution` | `description`・`defeaters`（デフォルトは空） |
 | `context` | `description` |
 | `assumption` | `description` |
-| `defeater` | `description`・`support`（既定は undeveloped）・`defeaters`（既定は空） |
+| `defeater` | `description`・`support`（デフォルトは undeveloped）・`defeaters`（デフォルトは空） |
 
 `support` に既定値はありません。支持のないゴールは `support=pgsn.undeveloped` と明示的に書きます。
 
-`contexts` と `assumptions` はゴールと戦略が持ちます。規格がこの2つに付けるからです。Solution はどちらも取りません。
+`contexts` と `assumptions` は Goal と Strategy が持ちます。規格がこの2つに付けるからです。Solution はどちらも取りません。
 
-`defeaters` は GSN v3 の dialectic extension です。defeater は、それを保持するノードへの支持ではなく疑いを記録します。どのノード型も defeater を持てますし、defeater 自身もノードなので反証は入れ子になります。規格そのものには Defeater 要素はなく、defeater は Challenges 関係で対象に繋がった Goal または Solution ですが、値の言語には関係を担う辺がないため、PGSN では攻撃するという役割をクラスとして表現しています。rebutting と undercutting は 1 クラスで足ります。対抗論拠を伴うなら `support` を埋め、異議を述べるだけなら省略します。
+`defeaters` は GSN v3 の dialectic extension です。defeater は、それを保持するノードへの支持ではなく疑いを記録します。どのノード型も defeater を持てますし、defeater 自身もノードなので、それにも異議を立てられます。規格そのものには Defeater 要素はなく、defeater は Challenges 関係で対象に繋がった Goal または Solution ですが、値の言語には関係を担う辺がないため、PGSN では攻撃するという役割をクラスとして表現しています。rebutting と undercutting のどちらも 1 つのクラスで表します。根拠を示して異議を立てるなら `support` を埋め、異議を述べるだけなら省略します。
 
 よく使う形のための補助が 2 つあります。
 
@@ -165,7 +165,7 @@ Goal: System is secure
 
 ### クラス
 
-コンストラクタの背後にあるクラス値は `gsn_class`・`goal_class`・`strategy_class`・`solution_class`・`context_class`・`assumption_class`・`defeater_class`・`support_class`・`undeveloped_class` です。`define_class` と組み合わせて独自のノード型を派生させられます。
+コンストラクタの背後にあるクラス値は `gsn_class`・`goal_class`・`strategy_class`・`solution_class`・`context_class`・`assumption_class`・`defeater_class`・`support_class`・`undeveloped_class` です。`define_class` と組み合わせて独自のノード型を派生させられます。`inherit` は必須です。ほかに親のないクラスには `pgsn.base_class` を指定してください。
 
 ```python
 my_goal_class = pgsn.define_class(
@@ -177,7 +177,7 @@ my_goal_class = pgsn.define_class(
 
 `name` はそのクラスが何と呼ばれるかで、オブジェクトはその名前で報告されます（下の
 `__ClassName__` キー）。ラベルであって何かと比較されることはありませんが、インスタンスを
-読み出すつもりのクラスには必要です。無いと何として報告すればよいかが無くなります。継承もされません。
+読み出すつもりのクラスには必要です。無いと何として報告すればよいかが決まらないからです。名前は継承されません。
 
 `type_of` はオブジェクトのクラスを返し、`is_subtype` は2つのクラスを比べます。
 値を型と照合するときはこう書きます（`node` は自分で組んだ項です）。
@@ -233,7 +233,7 @@ print(tree.show(stdout=False, sorting=False))   # テキスト表示
 tree.to_json(sort=False)                        # JSON
 ```
 
-treelib は指定しないと兄弟をタグ順に並べ替えるので、並べ替えないよう渡してください。リストの順序は文書が述べていることの一部で、`python_value` はその順序で報告します。`pgsn doc` も同じオプションを渡しています。
+treelib は指定しないと兄弟をタグ順に並べ替えるので、`sorting=False`・`sort=False` で並べ替えないよう指定してください。リストの順序は文書が述べていることの一部で、`python_value` はその順序で報告します。`pgsn doc` も同じオプションを渡しています。
 
 ### `gsn_dot(term, layout_attrs=None)`
 
@@ -250,7 +250,7 @@ dot.render("out", format="svg", cleanup=True)
 
 ### `gsn_violations(term)`
 
-評価した構造が GSN v3 の規則を破っている箇所を、`GSNViolation`（`path`・`identifier`・`message`）のリストで返します。空のリストなら違反はありません。`path` は読み戻しが詰まった項を報告するときと同じ書き方で、`identifier` は図がその要素に付ける識別子です。規則は `pgsn doc` が検査するものと同じです（[README-ja.md](README-ja.md) のコマンドラインインタープリターの節）。
+評価した構造が GSN v3 の規則を破っている箇所を、`GSNViolation`（`path`・`identifier`・`message`）のリストで返します。空のリストなら違反はありません。`path` は読み出しが詰まった項を報告するときと同じ書き方で、`identifier` は図がその要素に付ける識別子です。規則は `pgsn doc` が検査するものと同じです（[README-ja.md](README-ja.md) の「GSN の規則の検査」）。
 
 ```python
 for v in pgsn.gsn_violations(evaluated):
@@ -287,11 +287,11 @@ cfg = pgsn.Config(jails={"lib": "/opt/pgsn-lib"})
 term = pgsn.load_xml("main.xml", config=cfg)
 ```
 
-パス指定で開いたドキュメントが登録済みの jail のどれにも属さない場合、そのドキュメント自身のディレクトリが封じ込め範囲になります。相対 import は封じ込めルートの内側に留まる限り `..` を使えます。シンボリックリンクは検証前に展開され、jail 経由で辿ったモジュールはその jail の外に出られません。
+パス指定で開いたドキュメントが登録済みの jail のどれにも属さない場合、そのドキュメント自身のディレクトリが封じ込めルートになります。相対 import は封じ込めルートの内側に留まる限り `..` を使えます。シンボリックリンクは検証前に展開され、jail 経由で辿ったモジュールはその jail の外に出られません。
 
 #### `Jails(roots)`
 
-名前からパスへの辞書から作る不変のテーブルです。ルートは構築時に一度だけ検証・解決されるので、ディレクトリが存在しなければ import 時ではなくその場で `JailError` になります。名前に使えるのは英数字と `_`、`-` です。
+名前からパスへの辞書から作る不変のテーブルです。ルートは構築時に一度だけ検証・解決されるので、ディレクトリが存在しなければ import 時ではなくその場で `JailError` になります。名前に使えるのは ASCII の英数字と `_`、`-` です。
 
 ```python
 jails = pgsn.Jails({"lib": "/opt/pgsn-lib", "proj": "./modules"})
@@ -330,7 +330,7 @@ jail パス（`/lib/...`）はどちらの場合も使えます。
 
 ## 例外
 
-`PGSNError` はドキュメントのコンパイル中に起きるすべてを表します。構文の誤り、未知の要素、循環 import、そして拒否されたすべての import パスです。`JailError` は jail 定義そのものの不正を表し、`Jails` の構築時に送出されます。コンパイル中に起きた場合は `PGSNError` に変換されるので、読み込みの周りは `PGSNError` を捕まえれば足ります。
+`PGSNError` は、整形式のドキュメントをコンパイラが拒むときのエラーです。未知の要素、不正な名前、循環 import、そして拒否されたすべての import パスです。`JailError` は jail 定義そのものの不正を表し、`Jails` の構築時に送出されます。コンパイル中に起きた場合は `PGSNError` に変換されます。次の3つは `PGSNError` ではありません。整形式でない XML は `xml.etree.ElementTree.ParseError` を送出します。`steps` の上限に達すると、メッセージが `Reduction did not terminate` で始まるエラーが送出されます。値を持たない結果は、それを読み出すもの（`python_value`・`gsn_tree`・`gsn_dot`・`save_gsn`・`gsn_violations`）が `ValueError` を送出し、評価が止まった位置をパスで示します。
 
 ```python
 try:

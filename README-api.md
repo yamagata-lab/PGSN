@@ -6,7 +6,7 @@ Everything supported is reachable from the top-level package:
 import pgsn
 ```
 
-`pgsn.__all__` is the complete public surface. Anything not listed there — including the submodules `pgsn.dsl`, `pgsn.gsn`, `pgsn.pgsn_term`, `pgsn.pgsn_xml`, `pgsn.helpers` and `pgsn.cli` — is implementation detail and may change without notice.
+`pgsn.__all__` is the complete public surface. Anything not listed there — including the submodules `pgsn.dsl`, `pgsn.gsn`, `pgsn.pgsn_term`, `pgsn.pgsn_xml`, `pgsn.helpers` and `pgsn.cli` — is implementation detail and may change without notice. Besides the functions and terms below, it holds `__version__` and `LABEL_WIDTH`, the column at which `gsn_dot` wraps node labels by default (the default of `pgsn render --label-width` too).
 
 There are two ways in: build a term in Python, or load one from an XML document. Both produce a `Term`, and everything downstream is the same.
 
@@ -34,7 +34,7 @@ pgsn.plus(pgsn.integer(1), pgsn.integer(2))   # same thing
 pgsn.goal(description=..., support=...)       # keyword record
 ```
 
-Python values are cast automatically where a term is expected, so `pgsn.string("a")` and `"a"` are interchangeable as arguments.
+Python values are cast automatically when passed as arguments, so `pgsn.string("a")` and `"a"` are interchangeable there; `list_term` and `record` need terms.
 
 ### Evaluation
 
@@ -45,7 +45,7 @@ term.fully_eval(steps=5000)  # with a limit of your own
 
 Build the whole term first, then evaluate it once. What evaluation returns is a result to read: pass it to `python_value`, `gsn_tree` or a renderer. It is not material for building another term — applying it to something, or passing it as an argument, is not supported and does not work.
 
-`steps` is a safety limit. One step is one application, by the evaluator, of a function or a builtin to its arguments, and evaluation stops with an error when the limit is reached. The default is enough for ordinary documents; raise it only when a large one reaches it. How steps are counted may change in a future version.
+`steps` is a safety limit. One step is one application, by the evaluator, of a function or a builtin to its arguments, and evaluation stops with the error described under [Errors](#errors) when the limit is reached. The default is enough for ordinary documents; raise it only when a large one reaches it. How steps are counted may change in a future version.
 
 A mistake in the term — a label the record does not have, an argument of the wrong kind, a name that is not defined — does not stop evaluation with an error. That part of the term is left as it is, and the error comes when you read the result: `python_value` reports where evaluation could not go on. [PGSN-implementation.md](PGSN-implementation.md) explains why.
 
@@ -86,7 +86,7 @@ pgsn.python_value(double(pgsn.integer(21)).fully_eval())   # 42
 
 ## Builtin terms
 
-These are terms, not Python functions: they are values you apply. XML exposes exactly the same names — see [README-xml.md](README-xml.md).
+These are terms, not Python functions: they are values you apply. XML binds the same builtins under the same names, and adds the short class aliases `Goal`, `Strategy`, … — see [README-xml.md](README-xml.md).
 
 **Lists** — `cons`, `head`, `tail`, `index`, `is_empty`, `concat`, `map_term`, `fold`, `foldr`, `list_all`, `empty`
 
@@ -165,7 +165,7 @@ Goal: System is secure
 
 ### Classes
 
-The class values behind the constructors are `gsn_class`, `goal_class`, `strategy_class`, `solution_class`, `context_class`, `assumption_class`, `defeater_class`, `support_class` and `undeveloped_class`. Use them with `define_class` to derive your own node types:
+The class values behind the constructors are `gsn_class`, `goal_class`, `strategy_class`, `solution_class`, `context_class`, `assumption_class`, `defeater_class`, `support_class` and `undeveloped_class`. Use them with `define_class` to derive your own node types. `inherit` is required; use `pgsn.base_class` for a class with no other parent.
 
 ```python
 my_goal_class = pgsn.define_class(
@@ -254,7 +254,7 @@ Renders straight to a file.
 
 ### `gsn_violations(term)`
 
-Returns the places where an evaluated structure breaks a rule of GSN v3, as a list of `GSNViolation` (`path`, `identifier`, `message`); an empty list means none. `path` is written the way readback reports a stuck term, and `identifier` is the one the drawing gives the element. The rules are those `pgsn doc` checks (see the Command-line interface in [README.md](README.md)).
+Returns the places where an evaluated structure breaks a rule of GSN v3, as a list of `GSNViolation` (`path`, `identifier`, `message`); an empty list means none. `path` is written the way readback reports a stuck term, and `identifier` is the one the drawing gives the element. The rules are those `pgsn doc` checks (see [Checking against GSN](README.md#checking-against-gsn) in README.md).
 
 ```python
 for v in pgsn.gsn_violations(evaluated):
@@ -295,7 +295,7 @@ A document opened by path that lies in no registered jail is confined to its own
 
 #### `Jails(roots)`
 
-An immutable table built from a mapping of name to path. Roots are validated and resolved once, at construction time; a missing directory raises `JailError` immediately rather than at import time. Names may contain letters, digits, `_` and `-`.
+An immutable table built from a mapping of name to path. Roots are validated and resolved once, at construction time; a missing directory raises `JailError` immediately rather than at import time. Names may contain only ASCII letters, digits, `_` and `-`.
 
 ```python
 jails = pgsn.Jails({"lib": "/opt/pgsn-lib", "proj": "./modules"})
@@ -334,7 +334,7 @@ Jailed imports (`/lib/...`) work either way.
 
 ## Errors
 
-`PGSNError` covers everything raised while compiling a document: malformed syntax, unknown elements, circular imports, and every rejected import path. `JailError` covers invalid jail definitions — it is raised by `Jails` at construction time, and is converted to `PGSNError` when it happens during compilation, so catching `PGSNError` around a load is sufficient.
+`PGSNError` covers what the compiler rejects in a well-formed document: unknown elements, invalid names, circular imports and every rejected import path. `JailError` covers invalid jail definitions: `Jails` raises it at construction time, and it is converted to `PGSNError` when it happens during compilation. Three other failures are not `PGSNError`. A file that is not well-formed XML raises `xml.etree.ElementTree.ParseError`. Reaching the `steps` limit raises an error whose message begins `Reduction did not terminate`. A result with no value raises `ValueError` from whichever reader asks for it (`python_value`, `gsn_tree`, `gsn_dot`, `save_gsn`, `gsn_violations`), naming the path where evaluation stopped.
 
 ```python
 try:
