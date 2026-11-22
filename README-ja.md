@@ -69,6 +69,16 @@ Done.
 
 他のコマンドとオプションは `pgsn --help` を参照してください。
 
+### GSN の規則の検査
+
+`pgsn doc` と `pgsn render` は、評価した構造を GSN v3 の規則のうち文書が破りうるものに照らし、違反を要素の識別子とパスを添えて警告として報告します。
+
+```shell
+Warning: S1 at <root>.support: a strategy relates a goal to supporting goals, but this one has none
+```
+
+規則は次のとおりです。Goal の支えは Strategy・Solution・サブゴールのどれかで、Strategy の支えは Goal であること。contexts と assumptions の中身がそれぞれ Context と Assumption であること。Strategy がサブゴールを1つ以上持つこと。反論する要素が Defeater であること。どの要素も何かを述べていること。構造の一番上が Goal であること。`--strict` を付けると違反はエラーになり、何も書き出さずに 0 以外の終了コードで終わります。
+
 ### XML import のための jail
 
 XML ドキュメントは他のドキュメントを import できますが、既定では自身のディレクトリ配下のファイルにしか届きません。共有モジュール群へのアクセスを許可するには、それを *jail*（名前の付いたディレクトリルート）として登録し、ドキュメント側からは `/<名前>/...` で参照します。

@@ -72,6 +72,16 @@ Done.
 
 Use `pgsn --help` for the other commands and options.
 
+### Checking against GSN
+
+`pgsn doc` and `pgsn render` check the evaluated structure against the rules of GSN v3 that a document can break, and report each breach as a warning naming the element's identifier and its path:
+
+```shell
+Warning: S1 at <root>.support: a strategy relates a goal to supporting goals, but this one has none
+```
+
+The rules: a goal is supported by a strategy, a solution or sub-goals, and a strategy by goals; contexts and assumptions are what they say; a strategy has at least one sub-goal; what challenges an element is a defeater; every element states something; the structure is headed by a goal. With `--strict` a breach is an error: the command writes nothing and exits with a non-zero status.
+
 ### Jails for XML imports
 
 An XML document may import other documents. By default it can only reach files under its own directory. To grant access to a shared library of modules, register it as a *jail* — a named directory root — and refer to it from the document as `/<name>/...`:

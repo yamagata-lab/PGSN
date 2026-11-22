@@ -253,6 +253,15 @@ dot.render("out", format="svg", cleanup=True)
 
 Renders straight to a file.
 
+### `gsn_violations(term)`
+
+Returns the places where an evaluated structure breaks a rule of GSN v3, as a list of `GSNViolation` (`path`, `identifier`, `message`); an empty list means none. `path` is written the way readback reports a stuck term, and `identifier` is the one the drawing gives the element. The rules are those `pgsn doc` checks (see the Command-line interface in [README.md](README.md)).
+
+```python
+for v in pgsn.gsn_violations(evaluated):
+    print(v)   # S1 at <root>.support: a strategy relates a goal to ...
+```
+
 ---
 
 ## Loading XML
