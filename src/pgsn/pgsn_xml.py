@@ -1423,15 +1423,22 @@ def _gsn_header(elem: ET.Element, unit: _Unit) -> _Header:
 
 
 def _support_of(elem: ET.Element, unit: _Unit) -> Term:
-    """What supports a node: its first support-bearing child, or nothing.
+    """What supports a node: its first support-bearing child.
 
-    A node with nothing under it is undeveloped, which is also what
-    `<undeveloped/>` says in so many words. Sub-goals written directly under a
-    node are gathered into one immediate strategy, that being the shorthand
-    for an inference which needs no name of its own.
+    A goal must say what supports it, and one left undeveloped says so with
+    `<undeveloped/>`: the processor does not fill in what a document leaves
+    out. A defeater with nothing under it merely states an objection, so its
+    support is undeveloped. Sub-goals written directly under a node are
+    gathered into one immediate strategy, that being the shorthand for an
+    inference which needs no name of its own.
     """
     body = [c for c in elem if c.tag in _SUPPORT_TAGS]
     if not body:
+        if elem.tag == "Goal":
+            raise PGSNError(
+                "<Goal> needs a support: a <Strategy>, a <Solution>, "
+                "sub-goals, a <supportedBy>, or <undeveloped/> for a goal "
+                "not developed yet")
         return undeveloped
     first = body[0]
     match first.tag:
