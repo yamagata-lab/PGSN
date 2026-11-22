@@ -245,9 +245,8 @@ def test_class_inheritance(tmp_path):
 # ------------------------------------------------------------------ #
 
 def test_type_of_admits_a_goal(tmp_path):
-    """The check that used to stall. `goal_class` defaults `support` to an
-    application, and the predicate behind the old `instanceOf` compared
-    classes structurally, so it answered False for every goal.
+    """`typeOf` compares the labels a class declares, so a goal satisfies
+    Goal whatever the defaults of its class hold.
     """
     result = run("""
     <PGSN>
@@ -354,6 +353,32 @@ def test_goal_undeveloped(tmp_path):
     </PGSN>""", tmp_path)
     assert gsn_type(result) == "Goal"
     assert result["description"] == "system is safe"
+
+
+@pytest.mark.parametrize("goal", [
+    "<Goal>system is safe</Goal>",
+    "<Goal>system is safe<Context>c</Context></Goal>",
+    "<Goal><description>system is safe</description></Goal>",
+], ids=["bare", "with a context only", "description element only"])
+def test_a_goal_without_support_is_an_error(goal, tmp_path):
+    """A goal says what supports it; the processor does not fill in
+    undeveloped for one that says nothing."""
+    with pytest.raises(PGSNError, match="<Goal> needs a support"):
+        run(f"<PGSN>{goal}</PGSN>", tmp_path)
+
+
+def test_a_sub_goal_without_support_is_an_error(tmp_path):
+    with pytest.raises(PGSNError, match="<Goal> needs a support"):
+        run("<PGSN><Goal>g<Strategy>s<Goal>sub</Goal></Strategy></Goal></PGSN>",
+            tmp_path)
+
+
+def test_a_goal_of_goal_class_needs_its_support():
+    """`goal_class` has no default for `support`, so instantiating it without
+    one leaves the object unbuilt, with the reason."""
+    stuck = pgsn.instantiate(pgsn.goal_class, description="g").fully_eval()
+    with pytest.raises(ValueError, match="exactly the attributes of class Goal"):
+        python_value(stuck)
 
 
 # ------------------------------------------------------------------ #
