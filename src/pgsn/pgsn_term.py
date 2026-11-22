@@ -375,18 +375,10 @@ class App(Term):
 @frozen
 class Builtin(Term, ABC):
 
-    arity: int = field(validator=[helpers.not_none, helpers.non_negative])
-
-    # The arity of every builtin of the class, given to `build`. None for a
-    # builtin whose arity depends on what it was built for, which is then
-    # passed to `build` with the rest.
-    fixed_arity: ClassVar[int | None] = None
-
-    @classmethod
-    def build(cls, is_named: bool, **kwarg) -> Term:
-        if cls.fixed_arity is None:
-            return super().build(is_named=is_named, **kwarg)
-        return super().build(arity=cls.fixed_arity, is_named=is_named, **kwarg)
+    # How many arguments the builtin takes. A builtin of a fixed arity sets it
+    # on its class; one whose arity depends on what it was built for computes
+    # it from its fields.
+    arity: ClassVar[int]
 
     # The result of applying the builtin to exactly `arity` arguments, a term
     # the evaluator goes on to evaluate. When the arguments do not meet its
@@ -460,7 +452,7 @@ def _why_stuck(t: Term) -> str | None:
 
 @frozen
 class Unary(Builtin, ABC):
-    fixed_arity = 1
+    arity = 1
 
     @abstractmethod
     def _apply_arg(self, arg: Term) -> Term:
@@ -472,7 +464,7 @@ class Unary(Builtin, ABC):
 
 @frozen
 class ZeroAry(Builtin, ABC):
-    fixed_arity = 0
+    arity = 0
 
     # A constant takes no argument.
     def _apply_args(self, _) -> Term:
@@ -700,7 +692,7 @@ class DefineClass(ConstMixin, Unary):
         if unknown:
             raise PGSNKeyError(f"DefineClass: unknown parameters {sorted(unknown)}")
         labels = tuple(k for k in _CLASS_PARAMETERS if k in params)
-        definition = _ClassDefinition.nameless(labels=labels, arity=len(labels))
+        definition = _ClassDefinition.nameless(labels=labels)
         return _spine(definition, [params[k] for k in labels])
 
 
@@ -711,6 +703,10 @@ class _ClassDefinition(ConstMixin, Builtin):
     # How many names of attributes follow the parameters; None until the list
     # of attributes has been evaluated.
     attribute_count: int | None = field(default=None)
+
+    @property
+    def arity(self) -> int:
+        return len(self.labels) + (self.attribute_count or 0)
 
     def _reported_name(self) -> str:
         return "DefineClass"
@@ -728,8 +724,7 @@ class _ClassDefinition(ConstMixin, Builtin):
             attributes = params["attributes"].terms
             if attributes:
                 definition = _ClassDefinition.nameless(
-                    labels=self.labels, attribute_count=len(attributes),
-                    arity=len(self.labels) + len(attributes))
+                    labels=self.labels, attribute_count=len(attributes))
                 return _spine(definition, [*args, *attributes])
         names = args[len(self.labels):]
         for k in names:
@@ -783,7 +778,7 @@ class IsSubtype(ConstMixin, Builtin):
     `inherit` is not consulted either: a class is a subtype of every class
     whose labels it covers, related to it or not.
     """
-    fixed_arity = 2
+    arity = 2
 
     def _apply_args(self, args: tuple[Term, ...]) -> Term:
         sub, sup = (self._expect(arg, PGSNClass, "both arguments", "classes") for arg in args)
@@ -843,7 +838,7 @@ class Instance(ConstMixin, Unary):
 
 @frozen
 class Cons(ConstMixin, Builtin):
-    fixed_arity = 2
+    arity = 2
 
     def _apply_args(self, args: tuple[Term, ...]) -> Term:
         tail = self._expect(args[1], List, "the second argument", "a list")
@@ -881,7 +876,7 @@ class IsEmpty(ConstMixin, Unary):
 
 @frozen
 class Index(ConstMixin, Builtin):
-    fixed_arity = 2
+    arity = 2
 
     # A negative index counts from the end, as in Python.
     def _apply_args(self, args: tuple[Term,...]) -> Term:
@@ -896,7 +891,7 @@ class Index(ConstMixin, Builtin):
 
 @frozen
 class Map(ConstMixin, Builtin):
-    fixed_arity = 2
+    arity = 2
 
     def _apply_args(self, args: tuple[Term,...]) -> Term:
         fun = args[0]
@@ -914,7 +909,7 @@ def _two_integers(builtin: Builtin, args: tuple[Term, ...]) -> tuple[int, int]:
 
 @frozen
 class Plus(ConstMixin, Builtin):
-    fixed_arity = 2
+    arity = 2
 
     def _apply_args(self, args: tuple[Term, ...]) -> Term:
         i1, i2 = _two_integers(self, args)
@@ -923,7 +918,7 @@ class Plus(ConstMixin, Builtin):
 
 @frozen
 class Minus(ConstMixin, Builtin):
-    fixed_arity = 2
+    arity = 2
 
     def _apply_args(self, args: tuple[Term, ...]) -> Term:
         i1, i2 = _two_integers(self, args)
@@ -932,7 +927,7 @@ class Minus(ConstMixin, Builtin):
 
 @frozen
 class Times(ConstMixin, Builtin):
-    fixed_arity = 2
+    arity = 2
 
     def _apply_args(self, args: tuple[Term, ...]) -> Term:
         i1, i2 = _two_integers(self, args)
@@ -941,7 +936,7 @@ class Times(ConstMixin, Builtin):
 
 @frozen
 class Div(ConstMixin, Builtin):
-    fixed_arity = 2
+    arity = 2
 
     # A zero divisor leaves the application stuck.
     def _apply_args(self, args: tuple[Term, ...]) -> Term:
@@ -953,7 +948,7 @@ class Div(ConstMixin, Builtin):
 
 @frozen
 class Mod(ConstMixin, Builtin):
-    fixed_arity = 2
+    arity = 2
 
     # A zero divisor leaves the application stuck.
     def _apply_args(self, args: tuple[Term, ...]) -> Term:
@@ -966,7 +961,7 @@ class Mod(ConstMixin, Builtin):
 # Control flow
 @frozen
 class IfThenElse(ConstMixin, Builtin):
-    fixed_arity = 3
+    arity = 3
 
     # An integer counts as true when it is positive.
     def _apply_args(self, terms: tuple[Term,...]) -> Term:
@@ -979,7 +974,7 @@ class IfThenElse(ConstMixin, Builtin):
 # guard b t only progresses b is true
 @frozen
 class Guard(ConstMixin, Builtin):
-    fixed_arity = 2
+    arity = 2
 
     def _apply_args(self, terms: tuple[Term,...]) -> Term:
         self._expect(terms[0], Boolean, "the condition", "a boolean")
@@ -992,7 +987,7 @@ class Guard(ConstMixin, Builtin):
 # syntax are derived from this one and from Equal.
 @frozen
 class LessThan(ConstMixin, Builtin):
-    fixed_arity = 2
+    arity = 2
 
     def _apply_args(self, args: tuple[Term, ...]) -> Term:
         i1, i2 = _two_integers(self, args)
@@ -1020,7 +1015,7 @@ _BASE_VALUES = (String, Integer, Boolean, Constant)
 
 @frozen
 class Equal(ConstMixin, Builtin):
-    fixed_arity = 2
+    arity = 2
 
     def _apply_args(self, args: tuple[Term,...]) -> Term:
         for arg in args:
@@ -1056,7 +1051,7 @@ def _components_equal(xs: List, ys: List, i: int = 0, so_far: bool = True) -> Te
 # those before them were, both lists of components and `i`.
 @frozen
 class _ComponentsEqual(ConstMixin, Builtin):
-    fixed_arity = 5
+    arity = 5
 
     def _reported_name(self) -> str:
         return "Equal"
@@ -1076,7 +1071,7 @@ def _record_and_label(builtin: Builtin, args: tuple[Term, ...]) -> tuple[dict, s
 
 @frozen
 class HasLabel(ConstMixin, Builtin):
-    fixed_arity = 2
+    arity = 2
 
     def _apply_args(self, terms: tuple[Term, ...]) -> Term:
         attrs, label = _record_and_label(self, terms)
@@ -1085,7 +1080,7 @@ class HasLabel(ConstMixin, Builtin):
 
 @frozen
 class AddAttribute(ConstMixin, Builtin):
-    fixed_arity = 3
+    arity = 3
 
     def _apply_args(self, terms: tuple[Term,...]) -> Term:
         attrs, label = _record_and_label(self, terms)
@@ -1095,7 +1090,7 @@ class AddAttribute(ConstMixin, Builtin):
 
 @frozen
 class RemoveAttribute(ConstMixin, Builtin):
-    fixed_arity = 2
+    arity = 2
 
     def _apply_args(self, terms: tuple[Term,...]) -> Term:
         attrs, label = _record_and_label(self, terms)
@@ -1109,7 +1104,7 @@ class RemoveAttribute(ConstMixin, Builtin):
 # replacing a field of the first with the same label in its place.
 @frozen
 class OverwriteRecord(ConstMixin, Builtin):
-    fixed_arity = 2
+    arity = 2
 
     def _apply_args(self, terms: tuple[Term,...]) -> Term:
         r1, r2 = (self._expect(t, Record, "both arguments", "records") for t in terms)
@@ -1127,7 +1122,7 @@ _FORMAT_PIECE = re.compile(r"\{\{|\}\}|\{([^{}]*)\}|[{}]|[^{}]+")
 
 @frozen
 class Formatter(ConstMixin, Builtin):
-    fixed_arity = 2
+    arity = 2
 
     # The text between the fields is found here; the fields are then evaluated
     # as the arguments of `_Format`, as many as the format string names.
@@ -1151,7 +1146,7 @@ class Formatter(ConstMixin, Builtin):
                 texts[-1] += piece
         if not labels:
             return String.nameless(value=texts[0])
-        format_ = _Format.nameless(texts=tuple(texts), labels=tuple(labels), arity=len(labels))
+        format_ = _Format.nameless(texts=tuple(texts), labels=tuple(labels))
         return _spine(format_, [fields[label] for label in labels])
 
 
@@ -1161,6 +1156,10 @@ class Formatter(ConstMixin, Builtin):
 class _Format(ConstMixin, Builtin):
     texts: tuple[str, ...] = field(validator=helpers.not_none)
     labels: tuple[str, ...] = field(validator=helpers.not_none)
+
+    @property
+    def arity(self) -> int:
+        return len(self.labels)
 
     def _reported_name(self) -> str:
         return "Formatter"
