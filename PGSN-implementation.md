@@ -21,6 +21,10 @@ record, the attributes of an object, the arguments of an application that
 cannot proceed — while the body of an abstraction is left as it was written.
 An abstraction is a value.
 
+An application *cannot proceed*, and is called *stuck*, when its head is a
+free variable or a builtin that refuses the arguments it was given (§1.4). A
+stuck application is part of the result like a value.
+
 This is weaker than a normal form, in which no redex is left anywhere, and
 stronger than a weak head normal form, in which a list or record is a value
 whatever its contents are. It is exactly what the readers of a result need:
@@ -50,7 +54,8 @@ abstractions never asks the question, and `equal` refuses a variable in any
 case, since it compares data only (§1.5).
 
 **A function held in data has no normal form.** Lists and records may hold
-functions — a module is a record of templates, a class is a record of methods —
+functions — a module is a record of templates, a class holds its methods and
+defaults —
 and recursion is encoded with a fixed-point combinator, which has no normal
 form of its own. Insisting on a normal form for such a value means not
 terminating on it.
@@ -81,7 +86,9 @@ call-by-value machine would need another fixed-point combinator or a
 recursive binding form, and would change which documents terminate.
 
 **Where evaluation stops.** The machine itself stops at a weak head normal
-form. `normalize` then takes the value to the weak normal form of §1.1: it
+form. Here and below, *data* is a term with fields: a list, a record, a class
+or an object. §1.5 and §1.6 use the narrower sense the language gives the word, in
+which only lists, records and base values are data. `normalize` then takes the value to the weak normal form of §1.1: it
 forces, in turn, every thunk the value holds outside an abstraction — the
 fields of data, and the arguments of an application that cannot proceed. The
 fields of data are therefore evaluated only when the data is part of the
@@ -102,20 +109,22 @@ machine again to get them. It returns a term that applies an internal builtin
 to those fields, and the machine carries on with that term, so those values
 are evaluated by the same rules as everything else.
 
-Nothing calls the machine from inside itself, and the machine, `normalize`
-and the way back to a term described next are loops, so the depth of the
-Python stack does not grow with what the machine evaluates. The passes before and after
-evaluation still recurse — the removal of names, `python_value`, `gsn_tree` —
-and a structure deep enough for them stops with Python's `RecursionError`.
-
 **Back to a term.** What `fully_eval` returns is a term again. A thunk
 that was forced is replaced by its value, and one that was never forced by
 the term it was made from, with its environment put in place of its free
 indices. The result is the weak normal form, which `python_value` and the GSN
 conversions read.
 
+Nothing calls the machine from inside itself, and the machine and `normalize`
+are loops. Turning the state back into a term loops over thunks and recurses
+only into the syntax of one term at a time, so the depth of the Python stack
+does not grow with what the machine evaluates. The passes before and after
+evaluation still recurse — the removal of names, `python_value`, `gsn_tree` —
+and a structure deep enough for them stops with Python's `RecursionError`.
+
 **Steps.** The budget counts two transitions of the machine: an abstraction
-taking an argument off the stack, and a builtin being applied. Pushing an
+taking an argument off the stack, and a builtin being applied and giving a
+result. Pushing an
 argument, looking up a variable and updating a cell are not counted. A step
 is not a unit of time, since applying a builtin costs whatever the builtin
 does.
@@ -134,7 +143,8 @@ abstraction, which is already a value, so evaluating it does nothing. The
 builtin selects one of the two abstractions, and the application to a dummy
 argument evaluates the one that won.
 
-When the condition never becomes a boolean, the builtin refuses it and the
+When the condition never becomes a boolean or an integer (a positive integer
+counts as true), the builtin refuses it and the
 application cannot proceed. Its arguments are then part of the result (§1.2),
 but they are abstractions, so nothing under them is evaluated (§1.1), and the
 application is reported stuck where it stands.
@@ -169,77 +179,78 @@ recursion limit, which would stop bounding anything if they turned into stuck
 terms.
 
 A builtin that refuses an argument because the argument is itself stuck says
-why it is stuck as well. The refusal carries the argument's own reason -- the
+why it is stuck as well. The refusal carries the argument's own reason — the
 `cause` it was recorded with, its `error`, or the name of the unbound variable
-at its head -- and the application records it under `cause`. Every stuck
+at its head — and the application records it under `cause`. Every stuck
 application therefore knows the first reason in the chain that led to it, at
 the cost of one look at the argument, and readback reports it next to the
-error: a record that never answered a question reaches a list of defeaters as
-`Cons: the second argument must be a list, got App, which was stuck on
-PGSNKeyError: Record: there is no label '...'`, rather than as the first half
-alone. The path is still where the term came to rest.
+error: a missing label whose lookup is consed onto a list of defeaters is
+reported as `evaluation stopped here: PGSNTypeError: Cons: the second argument
+must be a list, got App, which was stuck on PGSNKeyError: Record: there is no
+label 'missing'`, rather than as the first half alone. The path reported is
+that of the outer application, where evaluation came to rest, not that of the
+cause.
 
-### 1.5 Two rules that compare terms
+### 1.5 Equality compares data only
 
-Two rules of the language ask whether terms are the same. Both are answered
-without the evaluator having to decide what it is for two terms to be the
-same:
+`equal` compares data and declines everything else, so the evaluator never
+has to decide what it is for two terms of any other kind to be the same. A
+term is comparable when it is a base value — a string, an integer, a boolean,
+a named constant — or a list or a record whose components are comparable in
+turn; the leaves of a comparable term are therefore always base values.
+Anything else leaves the application stuck, so the question is refused rather
+than answered wrongly. Both sides are evaluated in full and checked to be data
+before anything is answered, so the answer does not depend on the order of the
+components: `equal [goal] empty` is refused, not `false`.
 
-- **Equality.** `equal` compares data and declines everything else. A term is
-  comparable when it is a base value — a string, an integer, a boolean, a
-  named constant — or a list or a record whose components are comparable in
-  turn; the leaves of a comparable term are therefore always base values.
-  Anything else leaves the application stuck, so the question is refused
-  rather than answered wrongly. Both sides are evaluated in full and checked
-  to be data before anything is answered, so the answer does not depend on
-  the order of the components: `equal [goal] empty` is refused, not `false`.
+Structural equality of data is well defined. Equality of functions is not
+definable, and comparing closures structurally is meaningless. Comparing them
+by identity is not referentially transparent: `let f = λx.x in equal f f` and
+`equal (λx.x) (λx.x)` would differ. Identity is the worse answer here for a
+second reason: the machine holds a binding read twice in one cell, so identity
+would make sharing, which is there for speed, change what a document means.
+And a notation whose premise is that code is collected from several places
+needs the same definition, written in two of them, to be the same value.
+Structure gives that; identity cannot.
 
-  Structural equality of data is well defined. Equality of functions is not
-  definable, and comparing closures structurally is meaningless. Comparing
-  them by identity is not referentially transparent: `let f = λx.x in equal f
-  f` and `equal (λx.x) (λx.x)` would differ. Identity is the worse answer here
-  for a second reason: the machine holds a binding read twice in one cell, so
-  identity would make sharing, which is there for speed, change what a
-  document means. And a notation whose premise is that code is collected from
-  several places needs the same definition, written in two of them, to be the
-  same value. Structure gives that; identity cannot.
+The components are compared once they have values, so `equal [plus 1 1] [2]`
+is `true`. And `foldr` asks for its base case with `is_empty`, a question about
+the list and not about its elements, since a list of GSN nodes cannot be
+compared with `empty`.
 
-  The components are compared once they have values, so `equal [plus 1 1]
-  [2]` is `true`. And `foldr` asks for its base case with `is_empty`, a
-  question about the list and not about its elements, since a list of GSN
-  nodes cannot be compared with `empty`.
-- **Class identity.** There is none to decide. Comparing classes
-  structurally would answer differently for the same class reached along two
-  paths once its defaults had been evaluated to different degrees — every
-  class whose defaults hold a term that is not a value, `goal_class` among
-  them through its `undeveloped` default. So a type is checked with
-  `is_subtype`, which compares the attribute and method *names* the two
-  classes declare and looks at nothing else. Names belong to a class's shape
-  rather than its contents, so the answer is the same however far either side
-  has been evaluated, and the evaluator is free to represent a class however
-  it likes as long as it can report those names. From XML the check is
-  reached through `typeOf`, which compiles to `guard(is_subtype(…))`.
+### 1.6 Classes have no identity
 
-  Typing is therefore structural. `inherit` is not consulted: a class
-  satisfies every type whose labels it covers, related to it or not, so a
-  `Goal` satisfies `Solution` by declaring `description` and `defeaters` and
-  more besides. What cannot be asked is which class a value belongs to. The
-  inheritance chain is still readable through `python_value`, and `gsn_tree`
-  classifies nodes by the names it finds there, but that is a readback
-  facility rather than a rule of the language.
+There is none to decide. A structural comparison of classes would have to
+compare their defaults and methods. Methods are functions, which have no
+equality, and defaults hold objects (`goal_class`'s `undeveloped`), which are
+not data. Comparing the terms as they stand instead would make the answer
+depend on how far evaluation had got. So a type is checked with `is_subtype`,
+which compares the attribute and method *names* the two classes declare and
+looks at nothing else. Names belong to a class's shape rather than its
+contents, so the answer is the same however far either side has been
+evaluated, and the evaluator is free to represent a class however it likes as
+long as it can report those names. From XML the check is reached through
+`typeOf`, which compiles to `guard(is_subtype(…))`.
 
-  That readback is what a class's name is for. A class carries the name its
-  author gave it — `<class name="...">`, or `define_class(name=...)` — and an
-  object is reported under it. The name is not inherited, nothing in the
-  language compares one class's name with another's, and `is_subtype` does not
-  look at it, so it is a label and not an identity. An object whose class has
-  no name cannot be converted at all, since there is nothing to report it as:
-  a limit of the readback rather than a claim about the value.
+Typing is therefore structural. `inherit` is not consulted: a class satisfies
+every type whose labels it covers, related to it or not, so a `Goal` satisfies
+`Solution` by declaring `description` and `defeaters` and more besides. What
+cannot be asked is which class a value belongs to. The inheritance chain is
+still readable through `python_value`, and `gsn_tree` classifies nodes by the
+names it finds there, but that is a readback facility rather than a rule of
+the language.
 
-  A class is not data and neither is an object, and `equal` declines both, so
-  the structural comparison of classes cannot come back through equality:
-  what makes two classes the same is left open (§7) rather than decided by
-  accident.
+That readback is what a class's name is for. A class carries the name its
+author gave it — `<class name="...">`, or `define_class(name=...)` — and an
+object is reported under it. The name is not inherited, nothing in the
+language compares one class's name with another's, and `is_subtype` does not
+look at it, so it is a label and not an identity. An object whose class has no
+name cannot be converted at all, since there is nothing to report it as: a
+limit of the readback rather than a claim about the value.
+
+A class is not data and neither is an object, and `equal` declines both, so
+the structural comparison of classes cannot come back through equality: what
+makes two classes the same is left open (§7) rather than decided by accident.
 
 ## 2. Names and scope
 
@@ -247,9 +258,9 @@ same:
 
 A name is always compiled to a variable, and what it refers to is decided by
 the enclosing bindings. The builtins are supplied by a scope that wraps each
-compilation unit. Earlier the compiler substituted builtin names inline, which
-made them impossible to bind: a `<def>` or a parameter named after a builtin
-produced a binding nobody could refer to, silently.
+compilation unit. A builtin's name is therefore an ordinary binding: a `<def>`
+or a parameter named after a builtin shadows it, as any binding shadows an
+outer one.
 
 Only the names a unit actually leaves free are bound. Binding the whole table
 instead would mean the same thing — a name never mentioned cannot be observed —
@@ -268,7 +279,9 @@ two names: its own, which a document may rebind like any other, and a reserved
 alias, which it may not, because names beginning with an underscore are
 rejected in source documents. Desugaring goes through the reserved alias.
 The check that rejects such names therefore has to run on the document as
-written, before desugaring has introduced any of its own (§4.2).
+written, before desugaring has introduced any of its own (§4.2). Because
+desugaring reaches builtins this way, the language needs no element for naming
+a builtin past a rebinding.
 
 Which alias belongs to which builtin is an implementation detail and is
 deliberately absent from the documentation, this file included. What the
@@ -280,7 +293,9 @@ reserved.
 `<expr>` is parsed by Python's parser, so a name that Python cannot parse as
 an identifier could be introduced by a `<def>` and then never referred to from
 an expression. The check is `str.isidentifier()` plus the underscore rule, so
-it is not restricted to ASCII: a Japanese name is a name.
+it is not restricted to ASCII: a Japanese name is a name. Python's keywords
+pass that check and still cannot be written in an expression, so a binding
+named `lambda` or `if` can be referred to with `<var>` only.
 
 ### 2.4 Rebinding is shadowing
 
@@ -288,12 +303,6 @@ The bindings of a block fold into nested `let`s, so a later binding covers an
 earlier one and nothing is overwritten. The value of a binding is read in the
 scope before it, which is why `<def name="x"><var name="x"/></def>` refers to
 the outer `x` and why self-reference needs `recursive="true"`.
-
-### 2.5 The `<builtin>` tag was removed
-
-It existed only so that an expression could reach an operator that the document
-had not rebound. The reserved aliases do that, so the tag had no remaining
-purpose.
 
 ## 3. Modules
 
@@ -315,11 +324,12 @@ none of the others (§1.2), so a module costs what the document uses of it.
 
 Each module carries a builtin scope of its own, and a module that still has a
 free name once its builtins are bound is rejected. Moving the module to the
-head of the document is what makes this necessary: the compiled term is named,
-so a free name in a module would be bound by whatever happens to be in scope
-there. Rejecting it is what keeps the importing document's names from reaching
-inside a module, and a module's argument the same in every system that imports
-it with the same arguments. A `<PGSN>` document may still leave a name free;
+head of the document is what makes this necessary: the compiled term still
+refers to variables by name (names become de Bruijn indices only at
+evaluation), so a free name in a module would be bound by whatever happens to
+be in scope at the head. Rejecting it keeps the importing document's names out
+of the module, so a module imported with the same arguments means the same in
+every document that imports it. A `<PGSN>` document may still leave a name free;
 nothing moves it, and the readback reports the name.
 
 A binding-position `<from>` binds the applied module to a reserved name and
@@ -352,7 +362,8 @@ already exists.
 
 That promise is kept by the order of the passes, not only by the rules. A
 document becomes a term in four stages, alternating between a form the
-document takes and a pass over it: the surface syntax as written; desugaring;
+document takes and a pass over it: the surface syntax as written, where the
+reserved-name check runs (§2.2); desugaring;
 the deep syntax that pass leaves behind; and the compilers that read deep
 syntax and build terms.
 
@@ -364,28 +375,23 @@ belong to a single element — `template` on `<apply>`, `key` and `of` on
 `<get>`, `method` and `to` on `<send>`. Those are not shorthand, and nothing
 before their own element's compiler touches them.
 
-The two kinds of rule used to be interleaved: expand `expr=`, rewrite the
-element-specific attributes, expand `var=`. The generic rules then met
-elements the specific ones had already restructured, and the result was an
-asymmetry with no rule behind it. `<apply template="f" var="x"/>` was
-rejected, because rewriting `template` had already inserted a child and the
-`var` rule refused to expand beside one, while `<get label="k" var="r"/>` —
-`label` being the spelling of what is now `key` —
-the same combination, on an element whose rewriting happened to rename an
-attribute rather than add a child — quietly worked. Ordering the passes
-removes the question rather than answering it: a shorthand now expands to
-exactly the longhand it stands for, on every element, and the two spellings
-are judged by the same compiler afterwards. Where that expansion is not
-meaningful, the error comes from the element's compiler and says the same
-thing for both spellings.
+The order is what keeps the two kinds of rule apart. Run after an
+element-specific rewrite, a generic rule would meet an element already
+restructured. Rewriting `template=` inserts a child, and `var=` beside content
+is an error, so the shorthand would fail on one element and work on another,
+with no rule behind the difference. With every generic rule first, a shorthand
+expands to exactly the longhand it stands for, on every element, and both
+spellings are judged by the same compiler. Where the expansion is not
+meaningful, as in `<apply template="f" var="x"/>`, the error comes from that
+compiler and is the same for both spellings.
 
 Two consequences are worth recording. An `<apply>` with no arguments is the
 function itself rather than an error: application is binary, so an empty
 argument list applies nothing, and `<apply template="f"/>` is another way of
 writing `<var name="f"/>`. And anything that is not an `<arg>` in an argument
-list is now an error where it used to be skipped — skipping is precisely what
-would turn `<apply template="f" var="x"/>` into an application of `f` to
-nothing at all.
+list is an error rather than something skipped, since skipping is what would
+turn `<apply template="f" var="x"/>` into an application of `f` to nothing at
+all.
 
 ### 4.3 Content is a sequence of items
 
@@ -401,20 +407,18 @@ the text of the element. XML puts it in the *tail* of the binding, so
 <div><def name="x"><num>1</num></def>hello</div>
 ```
 
-has no text on `<div>` at all: `hello` hangs off `<def>`. Every reader that
-asked for `elem.text` therefore missed exactly the values that follow a
-binding — which is where a block's value always is. Reading content in one
-place, as a sequence, removes the class of mistake rather than its instances:
-a block is its bindings and then its last item, an application is its first
-item and then its arguments, and each item is a child element or a run of
-text, indifferently.
+has no text on `<div>` at all: `hello` hangs off `<def>`. A reader that asked
+for `elem.text` would miss exactly the values that follow a binding, which is
+where a block's value always is. Reading content in one place (`_items`), as a
+sequence, removes that class of mistake: a block is its bindings and then its
+last item, an application is its first item and then its arguments, and each
+item is a child element or a run of text, indifferently.
 
-The positions this settled were the value of `<PGSN>` and of `<div>` after a
-binding, a `<div>` holding nothing but text, the body of a `<template>` or a
-`<method>` after its parameters, and the function of an `<apply>` and the
-receiver of a `<send>`. Applying a string is stuck rather than useful, but
-the document now means what it says, and the stuck term is reported with the
-position it came to rest at.
+The positions that depend on this are the value of `<PGSN>` and of `<div>`
+after a binding, a `<div>` holding only text, the body of a `<template>` or a
+`<method>` after its parameters, the function of an `<apply>` and the receiver
+of a `<send>`. Text in the function position is a string, so applying it is
+stuck, and the stuck term is reported where it came to rest.
 
 ### 4.4 The schema describes the surface syntax
 
@@ -422,40 +426,37 @@ position it came to rest at.
 it has to describe the surface form rather than what desugaring leaves behind.
 Two decisions follow.
 
-A shorthand attribute stands in place of the content it abbreviates, so it is
-written as a *choice* against that content rather than as an addition to it.
-The schema used to declare `template` on `<apply>`, `of` on `<get>` and `to`
-on `<send>` as optional attributes beside a required value — which is the
-mistake §4.2 describes, made a second time in another notation.
+An attribute that stands for content is written as a *choice* against that
+content, not as an addition to it. That holds for the shorthands (`var=`,
+`expr=`), which stand for the whole content, and for the element-specific
+attributes `template` on `<apply>`, `of` on `<get>` and `to` on `<send>`, each
+of which stands for one item: the function or the receiver. Declared as an
+optional attribute beside a required value, such an attribute would admit a
+document that gives the item twice and reject none.
 
 `as` names an element to wrap the content in, so what follows it is that
 element's content model. Each element's content is therefore a named pattern
 that the element and `as` both refer to. What RELAX NG cannot say is which
 element `as` named, because a schema cannot branch on an attribute's value. So
-the `as` branch is the choice of every content model, and each is still
-checked internally: a document may write a `<dl>`'s content under `as="ol"`
-and the schema will not object, though the compiler will.
+the `as` branch accepts the content model of any element. The content is
+checked against whichever model it matches, not the one `as` names: a document
+may write a `<dl>`'s content under `as="ol"` and the schema will not object,
+though the compiler will.
 
 Validating is worth the trouble because it catches what evaluating cannot. The
 compiler ignores a child element it does not recognise, so a `<Defeater>`
 spelled `<Rebuttal>` yields a document with one defeater fewer and no
-complaint, while the schema rejects it. `tests/test_schema.py` runs every
-example through the validator for that reason, and to keep the schema from
-drifting again: it had drifted badly, four of the twenty-six documents
-validating when the test was written.
+complaint, while the schema rejects it. `tests/test_schema.py` runs every file
+under `examples/` through the validator, and is the only thing that keeps the
+schema in step with the compiler.
 
 ### 4.5 A record label is spelled `key`
 
-A record label is a string in a namespace of its own, and it used to be written
-differently in almost every element that takes one: `key` on `<dt>`, `label` on
-`<get>`, `name` on `<attribute>`, `method` on `<send>`, the text of a `<dt>`, or
-a string value passed to the record itself. Six spellings for one concept leave
-no rule to remember, so the wrong guess is the normal case — and the wrong guess
-used to fail without naming the attribute it was about.
-
-`key` is now the spelling wherever a record label is written as such: `<dt key=>`
-builds an entry and `<get key=>` reads it back, so a label is read with the word
-it was written with. `name` keeps the other job, which is to name a thing:
+A record label is a string in a namespace of its own. Where a label is written
+as an attribute it is spelled `key`: `<dt key=>` builds an entry and
+`<get key=>` reads it back, so a label is read with the word it was written
+with, and one concept has one spelling to remember. A `<dt>` may also give its
+label as text. `name` has the other job, which is to name a thing:
 bindings (`<def>`, `<param>`, `<var>`, `<arg>`), the class's own name, and the
 members a class declares (`<attribute name=>`, `<method name=>`). A declaration
 names a member the way a lambda names a parameter; the selection that reads it
@@ -469,24 +470,15 @@ computed label needs nothing new — it is written as that application. The
 attribute holds a literal, which is why it is an attribute and not a value
 position.
 
-The old spelling is not carried as an error. While the language is young
-enough to rename things, a document written against the old one is told
-nothing about the rename: `label` is an unknown attribute, unknown attributes
-are dropped in silence, and the element then fails for want of a `key`. That
-silence is the same gap §7 describes for an unrecognised child element, and
-validating before compiling is what closes both.
+The compiler drops attributes it does not know without a word, so a misspelt
+label attribute (`<get label="k">`) is not reported as such: the element fails
+for want of a `key`. That is the same gap §7 describes for an unrecognised
+child element, and validating before compiling closes both.
 
 ### 4.6 A list is ordered, and there is one kind of it
 
-Sub-goals, contexts, assumptions and defeaters are `List` terms, and nothing in
-the language used to say whether the order of their elements carried meaning.
-The implementation answered the question twice, differently. `python_value`
-returned the elements in the order the document gave them, while every
-rendering path sorted them alphabetically: `gsn_tree` builds a `treelib.Tree`,
-and treelib sorts siblings by tag unless told otherwise. That reached
-`tree.show` (`pgsn doc`), `tree.to_json` (`pgsn doc -d json`) and the
-`expand_tree` walk in `gsn_dot` (`pgsn render`), so all three command-line
-outputs reordered what the Python API did not.
+Sub-goals, contexts, assumptions and defeaters are `List` terms, and the order
+of their elements is part of what a document says.
 
 The GSN Community Standard does not settle it. It defines the node types and
 the SupportedBy and InContextOf relations, and assigns no meaning to the order
@@ -497,8 +489,14 @@ The answer is that the order is part of what the document says. It is the
 reading that costs nothing — a document that does not care about the order of
 its sub-goals loses nothing by having it preserved — while the other reading
 costs the author the ability to say "these hazards in this order", which no
-notation gives back. Every renderer therefore asks treelib not to sort. The
-option is passed at the call, not hidden in a subclass of `Tree`: `gsn_tree`
+notation gives back.
+
+`python_value` reports the elements in document order. The renderers would
+not unless asked: `gsn_tree` builds a `treelib.Tree`, and treelib sorts
+siblings by tag unless told otherwise, which would reach `tree.show`
+(`pgsn doc`), `tree.to_json` (`pgsn doc -d json`) and the `expand_tree` walk in
+`gsn_dot` (`pgsn render`). Every renderer therefore asks treelib not to sort.
+The option is passed at the call, not hidden in a subclass of `Tree`: `gsn_tree`
 returns treelib's own tree, and a caller who renders it passes `sorting=False`
 (or `sort=False` to `to_json`) the way `pgsn doc` does. Wrapping the library to
 change its defaults would make our tree something the reader has to learn
@@ -509,21 +507,15 @@ order is the order the record was built in rather than anything sorted. The
 constructors in `gsn.py` write them in one order for that reason: what the node
 is stated in the context of, then what challenges it, then what it rests on.
 
-`ul` is gone. It compiled to the same `List` as `ol` while standing for a set,
-and `README-xml.md` told authors to use `ol` "when order matters" — so a
-document could express the distinction and the compiler would discard it. Now
-there is one list element and it is ordered. The tag is simply not in the
-language: a document that writes it is told that the expression is unknown,
-which is what the language is young enough for. `as="ul"` fails with it, since
-the shorthand expands to the element before anything reads it.
-
-Keeping `ul` as an alias would have been the cheaper change and the worse one.
-Authors would have come to depend on the order it preserved — every example
-that passes sub-goals through a list was written with it — and a set added
-later would silently reorder their documents. A set also needs more than a tag:
-an equality on its elements, which data has and functions and nodes do not
-(§1.5), and a canonical order to render it in. If one is ever wanted it gets its own element
-and its own term type, so that no existing document changes meaning under it.
+There is one list element, `<ol>`, and it is ordered. A document that writes
+`<ul>`, or `as="ul"`, is told the expression is unknown. An unordered list
+compiling to the same `List` would let a document state a distinction the
+compiler discards, and authors would come to depend on the order it kept, so a
+set added later would silently reorder their documents. A set needs more than
+a tag: an equality on its elements, which data has and functions and nodes do
+not (§1.5), and a canonical order to render it in. If one is wanted it gets its
+own element and its own term type, so that no existing document changes
+meaning under it.
 
 ## 5. GSN classes
 
@@ -535,17 +527,14 @@ makes the challenging role a class. This is a deviation, and it is marked as
 one in the code and in the READMEs.
 
 One class is enough. A defeater that argues its case fills in `support`; one
-that only raises an objection leaves it undeveloped. Separate rebuttal and
-undercutter classes were tried and removed.
+that only raises an objection leaves it undeveloped.
 
 A Context or an Assumption attaches to a Goal or a Strategy in the standard,
-and to nothing else. Only `goal_class` declared them, so the ones written on a
-strategy were read and then dropped, silently: `examples/Figure6` is the
-standard's Figure 6, where an assumption hangs off the strategy, and it was
-losing that assumption and a context besides. `strategy_class` declares them
-now. `solution_class` does not, because the standard attaches nothing to a
-Solution, and `PGSN.rng` rejects one written there — the compiler has nowhere
-to put it and would say nothing.
+and to nothing else, so `goal_class` and `strategy_class` declare `contexts`
+and `assumptions` and `solution_class` does not. `examples/Figure6` is the
+standard's Figure 6, where an assumption hangs off the strategy. `PGSN.rng`
+rejects a Context or an Assumption written inside a `<Solution>`: the compiler
+has nowhere to put it and would drop it without a word.
 
 ### 5.1 The output follows GSN v3 where the language does not
 
@@ -566,7 +555,7 @@ elements of that type, in document order: G, S, Sn, C, A, and CG for a
 defeater, after the standard's own examples of a challenging goal. These are
 labels of the drawing, not names in the document. Nothing in a document refers
 to an element: an element is a value, and the language gives values no
-identity (§1.5, §7).
+identity (§1.6, §7).
 
 **Relationships.** SupportedBy has a solid arrowhead, InContextOf a hollow one,
 and a defeater's Challenges a dashed line with an open arrowhead, pointing at
@@ -586,10 +575,10 @@ breach as a warning and go on; under `--strict` they stop and write nothing.
 
 ## 6. Measurements
 
-The twenty-two entry points under `examples/` are compiled, evaluated and
-converted with `python_value` in 0.53 s altogether. The slowest five are the
-four EU AI Act cases, which import a module that imports another, and
-SolarWinds, the largest document without imports:
+The twenty-four entry points under `examples/` are compiled, evaluated and
+converted with `python_value` in about 0.54 s altogether. The slowest five are the
+four EU AI Act cases, whose imports reach three modules deep, and SolarWinds,
+the largest document without imports:
 
 | document | time | steps |
 |---|---|---|
@@ -604,15 +593,16 @@ Sharing is what keeps a module cheap: a document that uses an imported name
 fifty times takes as many steps as one that uses it once, and a definition of
 the module that the document does not use takes none.
 
-The test suite evaluates every entry point (`tests/test_examples.py`) without
-fixing what they produce, since they are material rather than specification.
+`tests/test_examples.py` evaluates every entry point without fixing what they
+produce, since they are material rather than specification. The four EU AI Act
+cases are marked `slow` and run only under `pytest -m slow`.
 
 ## 7. Open questions
 
 - Typing is structural, so a type is satisfied by any class that carries its
   labels, and a `Goal` satisfies `Solution`. Whether a nominal check is wanted
   as well — "this node is a Goal, not merely goal-shaped" — is open. A class
-  carries the name its author gave it (§1.5), but that name is a label for
+  carries the name its author gave it (§1.6), but that name is a label for
   readback: nothing in the language compares one with another, and names given
   in documents written apart from each other are not unique. The inheritance
   chain holds the real answer, and only the readback can see it. Behind the
@@ -620,15 +610,16 @@ fixing what they produce, since they are material rather than specification.
   definitions collected from different places to be the same, and how the
   provenance of either is established.
 - A GSN element's compiler picks out the children it knows by tag, so a child
-  it does not know is neither read nor refused: a `<Goal>` whose `<Defeater>`
-  is spelled `<Rebuttal>` compiles to a goal with one defeater fewer and says
-  nothing. `PGSN.rng` rejects it (§4.4), but validating is a separate step that
-  nobody is obliged to take. Validating before compiling would close the gap
-  where it opens, and would stop the tag sets the compilers filter on from
-  being the only thing that decides what a document may contain. It is also
-  what keeps `"builtin"` in `_VALUE_TAGS`: the element was removed and the
-  entry is stale, but it is the only reason `<builtin>` inside a GSN element is
-  an error rather than nothing at all.
+  it does not know is neither read nor refused. `PGSN.rng` rejects an
+  unrecognised child (§4.4), but validating is a separate step that nobody is
+  obliged to take. Validating before compiling would close the gap where it
+  opens, and would stop the tag sets the compilers filter on from being the
+  only thing that decides what a document may contain. It is also why
+  `"builtin"` stays in `_VALUE_TAGS` although there is no `<builtin>` element:
+  a GSN element with neither leading text nor a `<description>` takes a lone
+  value child as its description, and listing the tag there makes `<builtin>`
+  in that position an unknown expression rather than nothing. In an element
+  that has a description it is dropped like any other unknown child.
 - GSN elements have no identifiers a document can use. The standard requires
   them, and the drawing supplies them (§5.1), but a drawing's labels cannot
   be referred to, and that is also what keeps a Challenges relationship from
