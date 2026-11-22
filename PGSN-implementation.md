@@ -12,8 +12,9 @@ Known issues and open problems are listed in known_issues.md.
 The code it describes is the XML front end (`src/pgsn/pgsn_xml.py`), the term
 language and its evaluator (`src/pgsn/pgsn_term.py`), the derived vocabulary
 (`src/pgsn/dsl.py`), the GSN classes and their rendering (`src/pgsn/gsn.py`),
-and the command line (`src/pgsn/cli.py`). Import confinement (jails) is
-specified in README-xml.md and is not discussed here.
+and the command line (`src/pgsn/cli.py`). Import confinement (jails,
+`src/pgsn/jail.py` and `src/pgsn/config.py`) is specified in README-xml.md and
+is not discussed here.
 
 **From document to result.** A document goes through these stages:
 
