@@ -159,8 +159,7 @@ def doc(input_file, term_name, doc_type, output, steps, strict, jail_specs):
         elif doc_type == 'json':
             document = tree.to_json(sort=False)
         else:
-            click.echo("Error: Unsupported document type. Use plain or json.", err=True)
-            return
+            raise click.UsageError("Unsupported document type. Use plain or json.")
 
         if output and output != '-':
             with open(output, 'w', encoding='utf-8') as f:
@@ -174,7 +173,9 @@ def doc(input_file, term_name, doc_type, output, steps, strict, jail_specs):
         # Malformed invocations must fail loudly, with a non-zero exit status.
         raise
     except Exception as e:
-        click.echo(f"Error: {e}", err=True)
+        # Reported as `Error: ...` on stderr, with a non-zero exit status, so
+        # that a script running the command can tell that it failed.
+        raise click.ClickException(str(e)) from e
 
 
 @cli.command()
@@ -220,7 +221,9 @@ def render(input_file, term_name, output, image_format, steps, label_width, stri
         # Malformed invocations must fail loudly, with a non-zero exit status.
         raise
     except Exception as e:
-        click.echo(f"Error: {e}", err=True)
+        # Reported as `Error: ...` on stderr, with a non-zero exit status, so
+        # that a script running the command can tell that it failed.
+        raise click.ClickException(str(e)) from e
 
 
 @cli.command()
@@ -249,7 +252,9 @@ def compile(input_file, term_name, output, jail_specs):
         # Malformed invocations must fail loudly, with a non-zero exit status.
         raise
     except Exception as e:
-        click.echo(f"Error: {e}", err=True)
+        # Reported as `Error: ...` on stderr, with a non-zero exit status, so
+        # that a script running the command can tell that it failed.
+        raise click.ClickException(str(e)) from e
 
 
 if __name__ == '__main__':
