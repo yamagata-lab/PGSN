@@ -66,7 +66,7 @@
     <dt key="quality_management_system"/><dd><Solution>ISO 9001-aligned quality management system certificate (Art. 17)</Solution></dd>
     <dt key="conformity_assessment"/><dd><Solution>Internal control conformity assessment record (Art. 43)</Solution></dd>
     <dt key="ce_marking"/><dd><Solution>CE marking affixation record (Art. 48)</Solution></dd>
-    <dt key="declaration_of_conformity"/><dd><Solution>EU declaration of conformity and EU database registration (Art. 49)</Solution></dd>
+    <dt key="declaration_of_conformity"/><dd><Solution>EU declaration of conformity (Art. 47) and EU database registration (Art. 49)</Solution></dd>
   </def>
 
   <def name="system" as="dl">
