@@ -376,6 +376,14 @@ def test_internals_are_not_exported():
         assert hidden not in pgsn.__all__
 
 
+def test_the_step_limit_is_caught_by_its_public_name():
+    x = pgsn.variable("x")
+    omega = pgsn.lambda_abs(x, x(x))
+    with pytest.raises(pgsn.LambdaInterpreterError,
+                       match="Reduction did not terminate"):
+        omega(omega).fully_eval(steps=100)
+
+
 # ------------------------------------------------------------------ #
 # CLI
 # ------------------------------------------------------------------ #

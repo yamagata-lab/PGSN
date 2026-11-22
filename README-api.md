@@ -334,7 +334,7 @@ Jailed imports (`/lib/...`) work either way.
 
 ## Errors
 
-`PGSNError` covers what the compiler rejects in a well-formed document: unknown elements, invalid names, circular imports and every rejected import path. `JailError` covers invalid jail definitions: `Jails` raises it at construction time, and it is converted to `PGSNError` when it happens during compilation. Three other failures are not `PGSNError`. A file that is not well-formed XML raises `xml.etree.ElementTree.ParseError`. Reaching the `steps` limit raises an error whose message begins `Reduction did not terminate`. A result with no value raises `ValueError` from whichever reader asks for it (`python_value`, `gsn_tree`, `gsn_dot`, `save_gsn`, `gsn_violations`), naming the path where evaluation stopped.
+`PGSNError` covers what the compiler rejects in a well-formed document: unknown elements, invalid names, circular imports and every rejected import path. `JailError` covers invalid jail definitions: `Jails` raises it at construction time, and it is converted to `PGSNError` when it happens during compilation. Three other failures are not `PGSNError`. A file that is not well-formed XML raises `xml.etree.ElementTree.ParseError`. Reaching the `steps` limit raises `LambdaInterpreterError`, whose message begins `Reduction did not terminate`. A result with no value raises `ValueError` from whichever reader asks for it (`python_value`, `gsn_tree`, `gsn_dot`, `save_gsn`, `gsn_violations`), naming the path where evaluation stopped.
 
 ```python
 try:
