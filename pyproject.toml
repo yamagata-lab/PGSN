@@ -1,27 +1,26 @@
-# ビルドシステム自体の設定
 [build-system]
-requires = ["setuptools>=61.0"]
+# 77 is the first setuptools that reads a license expression (`license = "MIT"`).
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
-# パッケージの基本的な情報（メタデータ）
 [project]
 name = "pgsn"
-version = "0.0.4"
+version = "0.1.0"
 authors = [
   { name="Yoriyuki Yamagata", email="yoriyuki@u-fukui.ac.jp" },
 ]
 description = "PGSN: a programming language for GSN generation and manipulation"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 # 3.10 is the true floor: pgsn_term.cast uses a match statement, and
 # annotations such as `str | Path` are evaluated at runtime. 3.10 reaches
 # end of life in October 2026, so 3.11 is declared instead.
 requires-python = ">=3.11"
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
-# このパッケージが依存する他のライブラリがあればここに書く
 # Ranges belong here, exact pins in requirements.txt. A pin in this table
 # constrains the user's whole environment, not just PGSN's own copy, and it
 # says nothing about transitive dependencies. See #10 for the per-release
@@ -32,7 +31,7 @@ dependencies = [
     "cattrs>=25.1",
     "treelib>=1.7",
     "graphviz>=0.21",
-    "click>=8.2"
+    "click>=8.2",
 ]
 
 # What running the tests needs. typeguard only checks the annotations
@@ -40,28 +39,23 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest",
-    "typeguard>=4.4"
+    "typeguard>=4.4",
 ]
 
 [project.urls]
-Homepage = "https://github.com/yamagata-lab/pgsn"
-Repository = "https://github.com/yamagata-lab/pgsn"
-
-## ここが、コマンドラインツールを定義する場所
-#[project.scripts]
-## "コマンド名" = "パッケージ名.モジュール名:関数名"
-#your-command = "your_package_name.main:cli"
+Homepage = "https://github.com/yamagata-lab/PGSN"
+Repository = "https://github.com/yamagata-lab/PGSN"
 
 [project.scripts]
 pgsn = "pgsn.cli:cli"
 
-# setuptoolsに、どこにパッケージのコードがあるか教える
 [tool.setuptools.packages.find]
 where = ["src"]
 
-# Tests. `slow` marks an example that takes minutes rather than seconds to
-# evaluate. A plain `pytest` leaves those out and says so ("deselected");
-# `pytest -m slow` runs only them, and `pytest -m ""` runs everything.
+# Tests. `slow` marks the examples named in the SLOW set of
+# tests/test_examples.py. A plain `pytest` leaves those out and says so
+# ("deselected"); `pytest -m slow` runs only them, and `pytest -m ""` runs
+# everything.
 [tool.pytest.ini_options]
-markers = ["slow: minutes rather than seconds to evaluate; run it with -m slow"]
+markers = ["slow: an example kept out of a plain run; run it with -m slow"]
 addopts = "-m 'not slow'"
