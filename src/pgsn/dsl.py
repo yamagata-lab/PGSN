@@ -218,10 +218,6 @@ def list_term(terms: tuple[Term,...]) -> List:
 _class = variable("_class")
 _attrs = variable("_attrs")
 
-### OO programming
-ClassTerm = PGSNClass
-ObjectTerm = PGSNObject
-
 ## Class
 
 # inheritance

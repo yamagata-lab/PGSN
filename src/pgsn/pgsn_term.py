@@ -3,25 +3,16 @@ from __future__ import annotations
 import functools
 import re
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, ClassVar
 from typing import TypeAlias
-from typing import TypeVar
 
 import cattrs.preconf.json
-from attrs import field, frozen, evolve
+from attrs import define, field, frozen, evolve
 from cattrs.strategies import include_subclasses, configure_tagged_union
 
 from pgsn import helpers
 
 Term: TypeAlias = "Term"
-
-
-def is_named(instance, attribute, value):
-    assert value.is_named
-
-
-def is_nameless(instance, attribute, value):
-    assert not value.is_named
 
 
 def naming_context(names: set[str]) -> list[str]:
@@ -247,8 +238,6 @@ class Term(ABC):
             raise AttributeError(name)
         return self(name)
 
-    def pretty(self):
-        return self.__str__()
 
 @frozen
 class Variable(Term):
@@ -262,10 +251,6 @@ class Variable(Term):
     @name.validator
     def _check_name(self, _, name):
         assert not self.is_named or name is not None
-
-    @classmethod
-    def from_name(cls, name:str):
-        return cls.named(name=name)
 
     def _evolve(self, num: int | None = None, name: str | None = None):
         if num is None and name is not None:
@@ -354,18 +339,6 @@ class App(Term):
     def _check_t2(self, _, v):
         assert v.is_named == self.is_named
 
-    @classmethod
-    def term(cls, t1: Term, t2: Term):
-        if t1.is_named and t2.is_named:
-            return cls.named(t1=t1, t2=t2)
-        elif not t1.is_named and not t2.is_named:
-            return cls.nameless(t1=t1, t2=t2)
-        else:
-            assert False
-
-    def __attrs_post_init__(self):
-        assert self.t1.is_named == self.t2.is_named
-
     def _evolve(self, t1: Term | None = None, t2: Term | None = None):
         if t1 is None:
             t1 = self.t1
@@ -404,6 +377,17 @@ class Builtin(Term, ABC):
 
     arity: int = field(validator=[helpers.not_none, helpers.non_negative])
 
+    # The arity of every builtin of the class, given to `build`. None for a
+    # builtin whose arity depends on what it was built for, which is then
+    # passed to `build` with the rest.
+    fixed_arity: ClassVar[int | None] = None
+
+    @classmethod
+    def build(cls, is_named: bool, **kwarg) -> Term:
+        if cls.fixed_arity is None:
+            return super().build(is_named=is_named, **kwarg)
+        return super().build(arity=cls.fixed_arity, is_named=is_named, **kwarg)
+
     # The result of applying the builtin to exactly `arity` arguments, a term
     # the evaluator goes on to evaluate. When the arguments do not meet its
     # preconditions it raises a PGSNRuntimeError, which leaves the application
@@ -440,6 +424,13 @@ class Builtin(Term, ABC):
                              f"got {type(_value(got)).__name__}",
                              cause=_why_stuck(got))
 
+    # `got`, when it is one of `types`. Otherwise the builtin declines it, with
+    # the message that `subject` must be `expected`.
+    def _expect(self, got: Term, types, subject: str, expected: str):
+        if not isinstance(got, types):
+            raise self._type_error(subject, expected, got)
+        return got
+
 
 # The term a thunk the evaluator handed over stands for: its value.
 def _value(t: Term) -> Term:
@@ -469,10 +460,7 @@ def _why_stuck(t: Term) -> str | None:
 
 @frozen
 class Unary(Builtin, ABC):
-
-    @classmethod
-    def build(cls, is_named: bool, **kwarg) -> Term:
-        return super().build(arity=1, is_named=is_named, **kwarg)
+    fixed_arity = 1
 
     @abstractmethod
     def _apply_arg(self, arg: Term) -> Term:
@@ -484,10 +472,7 @@ class Unary(Builtin, ABC):
 
 @frozen
 class ZeroAry(Builtin, ABC):
-
-    @classmethod
-    def build(cls, is_named: bool, **kwargs) -> Term:
-        return super().build(arity=0, is_named=is_named, **kwargs)
+    fixed_arity = 0
 
     # A constant takes no argument.
     def _apply_args(self, _) -> Term:
@@ -579,8 +564,7 @@ class List(Data):
 
     # A negative index counts from the end, as in Python and as `Index` does.
     def _apply_arg(self, term: Term) -> Term:
-        if not isinstance(term, Integer):
-            raise self._type_error("the index", "an integer", term)
+        self._expect(term, Integer, "the index", "an integer")
         if not -len(self.terms) <= term.value < len(self.terms):
             raise PGSNIndexError(f"List: index {term.value} is out of range "
                                  f"for a list of length {len(self.terms)}")
@@ -614,21 +598,14 @@ class Record(Data):
         attributes = _map_dict(self._attributes, f)
         if is_named == self.is_named and attributes is None:
             return self
-        return self.evolve(attributes=attributes, is_named=is_named)
-
-    def _evolve(self, is_named: bool | None = None, attributes: dict[str, Term] | None =None):
-        if attributes is None:
-            attributes = self._attributes
-        if is_named is None:
-            is_named = self.is_named
-        return evolve(self, is_named=is_named, attributes=attributes.copy())
+        return self.evolve(is_named=is_named,
+                           attributes=helpers.default(attributes, self._attributes))
 
     def attributes(self):
         return self._attributes.copy()
 
     def _apply_arg(self, term: Term) -> Term:
-        if not isinstance(term, String):
-            raise self._type_error("the label", "a string", term)
+        self._expect(term, String, "the label", "a string")
         if term.value not in self._attributes:
             raise PGSNKeyError(f"Record: there is no label {term.value!r}")
         return self._attributes[term.value]
@@ -675,33 +652,6 @@ class PGSNClass(Data):
     def methods(self):
         return self._methods.copy()
 
-    def _evolve(self,
-                is_named: bool | None = None,
-                name: str | None = None,
-                inherit: PGSNClass | None = None,
-                defaults: dict[str, Term] | None = None,
-                attributes: set[str,...] | None = None,
-                methods: dict[str, Term] | None = None):
-        if is_named is None:
-            is_named = self.is_named
-        if name is None:
-            name = self.name
-        if inherit is None:
-            inherit = self.inherit
-        if defaults is None:
-            defaults = self.defaults()
-        if attributes is None:
-            attributes = self.attributes()
-        if methods is None:
-            methods = self.methods()
-        return evolve(self,
-                      is_named=is_named,
-                      name=name,
-                      inherit=inherit,
-                      defaults=defaults.copy(),
-                      attributes=attributes,
-                      methods=methods.copy())
-
     def fields(self):
         inherited = self.inherit.fields() if self.inherit is not None else ()
         return [*inherited, *self._defaults.values(), *self._methods.values()]
@@ -714,19 +664,21 @@ class PGSNClass(Data):
         if (is_named == self.is_named and inherit is self.inherit
                 and defaults is None and methods is None):
             return self
-        return self.evolve(is_named=is_named, inherit=inherit, defaults=defaults, methods=methods)
+        return self.evolve(is_named=is_named, inherit=inherit,
+                           defaults=helpers.default(defaults, self._defaults),
+                           methods=helpers.default(methods, self._methods))
 
+    # The object of this class with the attributes the record gives, and the
+    # defaults for the rest.
     def _apply_arg(self, arg: Term) -> Term:
-        if not isinstance(arg, Record):
-            raise self._type_error("the argument", "a record", arg)
-        attr = arg.attributes()
-        if not set(self.defaults().keys()) | set(attr.keys()) ==  set(self.attributes()):
+        arg = self._expect(arg, Record, "the argument", "a record")
+        given = arg.attributes()
+        if not self._defaults.keys() | given.keys() == self._attributes:
             raise PGSNValueError(f"PGSNClass: the attributes given, together with the defaults, "
                                  f"must be exactly the attributes of class {self.name}")
-        for k in self._defaults:
-            if not k in attr.keys():
-                attr[k] = self.defaults()[k]
-        return PGSNObject.nameless(instance=self, attributes=attr, methods=self.methods())
+        missing = {k: d for k, d in self._defaults.items() if k not in given}
+        return PGSNObject.nameless(instance=self, attributes=given | missing,
+                                   methods=self._methods)
 
 
 _CLASS_PARAMETERS = ("inherit", "name", "defaults", "attributes", "methods")
@@ -740,8 +692,7 @@ _CLASS_PARAMETERS = ("inherit", "name", "defaults", "attributes", "methods")
 class DefineClass(ConstMixin, Unary):
 
     def _apply_arg(self, arg: Term) -> Term:
-        if not isinstance(arg, Record):
-            raise self._type_error("the argument", "a record", arg)
+        self._expect(arg, Record, "the argument", "a record")
         params = arg.attributes()
         if not "inherit" in params:
             raise PGSNKeyError("DefineClass: inherit is missing")
@@ -766,14 +717,13 @@ class _ClassDefinition(ConstMixin, Builtin):
 
     def _apply_args(self, args: tuple[Term, ...]) -> Term:
         params = dict(zip(self.labels, args))
-        if not isinstance(params["inherit"], PGSNClass):
-            raise self._type_error("inherit", "a class", params["inherit"])
-        if "name" in params and not isinstance(params["name"], String):
-            raise self._type_error("name", "a string", params["name"])
-        if "defaults" in params and not isinstance(params["defaults"], Record):
-            raise self._type_error("defaults", "a record", params["defaults"])
-        if "attributes" in params and not isinstance(params["attributes"], List):
-            raise self._type_error("attributes", "a list", params["attributes"])
+        self._expect(params["inherit"], PGSNClass, "inherit", "a class")
+        if "name" in params:
+            self._expect(params["name"], String, "name", "a string")
+        if "defaults" in params:
+            self._expect(params["defaults"], Record, "defaults", "a record")
+        if "attributes" in params:
+            self._expect(params["attributes"], List, "attributes", "a list")
         if "attributes" in params and self.attribute_count is None:
             attributes = params["attributes"].terms
             if attributes:
@@ -783,13 +733,11 @@ class _ClassDefinition(ConstMixin, Builtin):
                 return _spine(definition, [*args, *attributes])
         names = args[len(self.labels):]
         for k in names:
-            if not isinstance(k, String):
-                raise self._type_error("each attribute", "a string", k)
+            self._expect(k, String, "each attribute", "a string")
         if "name" in (t.value for t in names):
             raise PGSNValueError("DefineClass: 'name' is reserved and cannot be an attribute")
         if "methods" in params:
-            if not isinstance(params["methods"], Record):
-                raise self._type_error("methods", "a record", params["methods"])
+            self._expect(params["methods"], Record, "methods", "a record")
             if "name" in (t for t in params["methods"].attributes().keys()):
                 raise PGSNValueError("DefineClass: 'name' is reserved and cannot be a method")
         inherit: PGSNClass = params["inherit"]
@@ -835,20 +783,12 @@ class IsSubtype(ConstMixin, Builtin):
     `inherit` is not consulted either: a class is a subtype of every class
     whose labels it covers, related to it or not.
     """
-
-    @classmethod
-    def build(cls, is_named: bool, **kwarg) -> Term:
-        return super().build(arity=2, is_named=is_named, **kwarg)
+    fixed_arity = 2
 
     def _apply_args(self, args: tuple[Term, ...]) -> Term:
-        for arg in args:
-            if not isinstance(arg, PGSNClass):
-                raise self._type_error("both arguments", "classes", arg)
-        sub = args[0]
-        sup = args[1]
-        covered = (set(sup.attributes()) <= set(sub.attributes())
-                   and set(sup.methods()) <= set(sub.methods()))
-
+        sub, sup = (self._expect(arg, PGSNClass, "both arguments", "classes") for arg in args)
+        covered = (sup._attributes <= sub._attributes
+                   and sup._methods.keys() <= sub._methods.keys())
         return Boolean.nameless(value=covered)
 
 
@@ -864,25 +804,6 @@ class PGSNObject(Data):
     def methods(self):
         return self._methods.copy()
 
-    def _evolve(self,
-                is_named: bool | None = None,
-                instance: PGSNClass | None = None,
-                attributes: dict[str, ...] | None = None,
-                methods: dict[str, Term] | None = None):
-        if is_named is None:
-            is_named = self.is_named
-        if instance is None:
-            instance = self.instance
-        if attributes is None:
-            attributes = self._attributes.copy()
-        if methods is None:
-            methods = self.methods()
-        return evolve(self,
-                      is_named=is_named,
-                      instance=instance,
-                      attributes=attributes,
-                      methods=methods)
-
     def fields(self):
         return [*self.instance.fields(), *self._attributes.values(), *self._methods.values()]
 
@@ -894,27 +815,26 @@ class PGSNObject(Data):
         if (is_named == self.is_named and instance is self.instance
                 and attributes is None and methods is None):
             return self
-        return self.evolve(is_named=is_named, instance=instance, attributes=attributes, methods=methods)
+        return self.evolve(is_named=is_named, instance=instance,
+                           attributes=helpers.default(attributes, self._attributes),
+                           methods=helpers.default(methods, self._methods))
 
+    # An attribute is its value; a method is applied to the object.
     def _apply_arg(self, arg: Term) -> Term:
-        if not isinstance(arg, String):
-            raise self._type_error("the name of an attribute or a method", "a string", arg)
+        arg = self._expect(arg, String, "the name of an attribute or a method", "a string")
         k = arg.value
-        if not (k in self.attributes().keys() or k in self.methods().keys()):
-            raise PGSNKeyError(f"PGSNObject: there is no attribute or method {k!r}")
-        if k in self.attributes().keys():
-            return self.attributes()[k]
-        else:
-            return (self.methods()[k])(self)
+        if k in self._attributes:
+            return self._attributes[k]
+        if k in self._methods:
+            return App.nameless(t1=self._methods[k], t2=self)
+        raise PGSNKeyError(f"PGSNObject: there is no attribute or method {k!r}")
 
 
 @frozen
 class Instance(ConstMixin, Unary):
 
     def _apply_arg(self, arg: Term) -> Term:
-        if not isinstance(arg, PGSNObject):
-            raise self._type_error("the argument", "an object", arg)
-        return arg.instance
+        return self._expect(arg, PGSNObject, "the argument", "an object").instance
 
 
 ## Builtin Functions
@@ -923,22 +843,17 @@ class Instance(ConstMixin, Unary):
 
 @frozen
 class Cons(ConstMixin, Builtin):
-
-    @classmethod
-    def build(cls, is_named: bool, **kwarg) -> Term:
-        return super().build(arity=2, is_named=is_named, **kwarg)
+    fixed_arity = 2
 
     def _apply_args(self, args: tuple[Term, ...]) -> Term:
-        if not isinstance(args[1], List):
-            raise self._type_error("the second argument", "a list", args[1])
-        return evolve(args[1], terms=(args[0],) + args[1].terms)
+        tail = self._expect(args[1], List, "the second argument", "a list")
+        return evolve(tail, terms=(args[0],) + tail.terms)
 
 @frozen
 class Head(ConstMixin, Unary):
 
     def _apply_arg(self, arg: Term) -> Term:
-        if not isinstance(arg, List):
-            raise self._type_error("the argument", "a list", arg)
+        self._expect(arg, List, "the argument", "a list")
         if len(arg.terms) == 0:
             raise PGSNIndexError("Head: the list is empty")
         return arg.terms[0]
@@ -947,11 +862,10 @@ class Head(ConstMixin, Unary):
 class Tail(ConstMixin, Unary):
 
     def _apply_arg(self, arg: Term) -> Term:
-        if not isinstance(arg, List):
-            raise self._type_error("the argument", "a list", arg)
+        self._expect(arg, List, "the argument", "a list")
         if len(arg.terms) == 0:
             raise PGSNIndexError("Tail: the list is empty")
-        return List.build(terms=arg.terms[1:], is_named=self.is_named)
+        return List.nameless(terms=arg.terms[1:])
 
 
 # Emptiness is a question about the list itself, not about its elements, so it
@@ -961,24 +875,18 @@ class Tail(ConstMixin, Unary):
 class IsEmpty(ConstMixin, Unary):
 
     def _apply_arg(self, arg: Term) -> Term:
-        if not isinstance(arg, List):
-            raise self._type_error("the argument", "a list", arg)
-        return Boolean.build(is_named=self.is_named, value=len(arg.terms) == 0)
+        self._expect(arg, List, "the argument", "a list")
+        return Boolean.nameless(value=len(arg.terms) == 0)
 
 
 @frozen
 class Index(ConstMixin, Builtin):
-
-    @classmethod
-    def build(cls, is_named: bool, **kwarg) -> Term:
-        return super().build(arity=2, is_named=is_named, **kwarg)
+    fixed_arity = 2
 
     # A negative index counts from the end, as in Python.
     def _apply_args(self, args: tuple[Term,...]) -> Term:
-        if not isinstance(args[0], List):
-            raise self._type_error("the first argument", "a list", args[0])
-        if not isinstance(args[1], Integer):
-            raise self._type_error("the index", "an integer", args[1])
+        self._expect(args[0], List, "the first argument", "a list")
+        self._expect(args[1], Integer, "the index", "an integer")
         terms = args[0].terms
         if not -len(terms) <= args[1].value < len(terms):
             raise PGSNIndexError(f"Index: index {args[1].value} is out of range "
@@ -988,38 +896,25 @@ class Index(ConstMixin, Builtin):
 
 @frozen
 class Map(ConstMixin, Builtin):
-
-    @classmethod
-    def build(cls, is_named: bool, **kwarg) -> Term:
-        return super().build(arity=2, is_named=is_named, **kwarg)
+    fixed_arity = 2
 
     def _apply_args(self, args: tuple[Term,...]) -> Term:
-        if not isinstance(args[1], List):
-            raise self._type_error("the second argument", "a list", args[1])
         fun = args[0]
-        arg = args[1]
-        arg_list = arg.terms
-        map_list = tuple((fun(t) for t in arg_list))
-        map_result = List.build(terms=map_list, is_named=self.is_named)
-        return map_result
+        items = self._expect(args[1], List, "the second argument", "a list")
+        return List.nameless(terms=tuple(App.nameless(t1=fun, t2=t) for t in items.terms))
 
 
 # Integer functions
 
 # The values of the two arguments of `builtin`, which must be integers.
 def _two_integers(builtin: Builtin, args: tuple[Term, ...]) -> tuple[int, int]:
-    for arg in args:
-        if not isinstance(arg, Integer):
-            raise builtin._type_error("both arguments", "integers", arg)
-    return args[0].value, args[1].value
+    i1, i2 = (builtin._expect(arg, Integer, "both arguments", "integers") for arg in args)
+    return i1.value, i2.value
 
 
 @frozen
 class Plus(ConstMixin, Builtin):
-
-    @classmethod
-    def build(cls, is_named: bool, **kwarg) -> Term:
-        return super().build(arity=2, is_named=is_named, **kwarg)
+    fixed_arity = 2
 
     def _apply_args(self, args: tuple[Term, ...]) -> Term:
         i1, i2 = _two_integers(self, args)
@@ -1028,10 +923,7 @@ class Plus(ConstMixin, Builtin):
 
 @frozen
 class Minus(ConstMixin, Builtin):
-
-    @classmethod
-    def build(cls, is_named: bool, **kwarg) -> Term:
-        return super().build(arity=2, is_named=is_named, **kwarg)
+    fixed_arity = 2
 
     def _apply_args(self, args: tuple[Term, ...]) -> Term:
         i1, i2 = _two_integers(self, args)
@@ -1040,10 +932,7 @@ class Minus(ConstMixin, Builtin):
 
 @frozen
 class Times(ConstMixin, Builtin):
-
-    @classmethod
-    def build(cls, is_named: bool, **kwarg) -> Term:
-        return super().build(arity=2, is_named=is_named, **kwarg)
+    fixed_arity = 2
 
     def _apply_args(self, args: tuple[Term, ...]) -> Term:
         i1, i2 = _two_integers(self, args)
@@ -1052,10 +941,7 @@ class Times(ConstMixin, Builtin):
 
 @frozen
 class Div(ConstMixin, Builtin):
-
-    @classmethod
-    def build(cls, is_named: bool, **kwarg) -> Term:
-        return super().build(arity=2, is_named=is_named, **kwarg)
+    fixed_arity = 2
 
     # A zero divisor leaves the application stuck.
     def _apply_args(self, args: tuple[Term, ...]) -> Term:
@@ -1067,10 +953,7 @@ class Div(ConstMixin, Builtin):
 
 @frozen
 class Mod(ConstMixin, Builtin):
-
-    @classmethod
-    def build(cls, is_named: bool, **kwarg) -> Term:
-        return super().build(arity=2, is_named=is_named, **kwarg)
+    fixed_arity = 2
 
     # A zero divisor leaves the application stuck.
     def _apply_args(self, args: tuple[Term, ...]) -> Term:
@@ -1083,32 +966,23 @@ class Mod(ConstMixin, Builtin):
 # Control flow
 @frozen
 class IfThenElse(ConstMixin, Builtin):
+    fixed_arity = 3
 
-    @classmethod
-    def build(cls, is_named: bool, **kwarg) -> Term:
-        return super().build(arity=3, is_named=is_named, **kwarg)
-
+    # An integer counts as true when it is positive.
     def _apply_args(self, terms: tuple[Term,...]) -> Term:
-        if not (isinstance(terms[0], Boolean) or isinstance(terms[0], Integer)):
-            raise self._type_error("the condition", "a boolean or an integer", terms[0])
-        b = terms[0].value
-        if isinstance(b, bool):
-            return terms[1] if b else terms[2]
-        if isinstance(b, int):
-            return terms[1] if b > 0 else terms[2]
+        cond = self._expect(terms[0], (Boolean, Integer),
+                            "the condition", "a boolean or an integer")
+        holds = cond.value if isinstance(cond, Boolean) else cond.value > 0
+        return terms[1] if holds else terms[2]
 
 
 # guard b t only progresses b is true
 @frozen
 class Guard(ConstMixin, Builtin):
-
-    @classmethod
-    def build(cls, is_named: bool, **kwarg) -> Term:
-        return super().build(arity=2, is_named=is_named, **kwarg)
+    fixed_arity = 2
 
     def _apply_args(self, terms: tuple[Term,...]) -> Term:
-        if not isinstance(terms[0], Boolean):
-            raise self._type_error("the condition", "a boolean", terms[0])
+        self._expect(terms[0], Boolean, "the condition", "a boolean")
         if not terms[0].value:
             raise PGSNValueError("Guard: the condition is false")
         return terms[1]
@@ -1118,14 +992,11 @@ class Guard(ConstMixin, Builtin):
 # syntax are derived from this one and from Equal.
 @frozen
 class LessThan(ConstMixin, Builtin):
-
-    @classmethod
-    def build(cls, is_named: bool, **kwarg) -> Term:
-        return super().build(arity=2, is_named=is_named, **kwarg)
+    fixed_arity = 2
 
     def _apply_args(self, args: tuple[Term, ...]) -> Term:
         i1, i2 = _two_integers(self, args)
-        return Boolean.build(is_named=self.is_named, value=i1 < i2)
+        return Boolean.nameless(value=i1 < i2)
 
 
 # Comparison. Only data can be compared. A term is comparable when it is a base
@@ -1149,15 +1020,11 @@ _BASE_VALUES = (String, Integer, Boolean, Constant)
 
 @frozen
 class Equal(ConstMixin, Builtin):
-
-    @classmethod
-    def build(cls, is_named: bool, **kwarg) -> Term:
-        return super().build(arity=2, is_named=is_named, **kwarg)
+    fixed_arity = 2
 
     def _apply_args(self, args: tuple[Term,...]) -> Term:
         for arg in args:
-            if not isinstance(arg, (*_BASE_VALUES, List, Record)):
-                raise self._type_error("both arguments", "data", arg)
+            self._expect(arg, (*_BASE_VALUES, List, Record), "both arguments", "data")
         match args:
             case (List(terms=xs), List(terms=ys)) if len(xs) == len(ys):
                 return _components_equal(args[0], args[1])
@@ -1189,90 +1056,64 @@ def _components_equal(xs: List, ys: List, i: int = 0, so_far: bool = True) -> Te
 # those before them were, both lists of components and `i`.
 @frozen
 class _ComponentsEqual(ConstMixin, Builtin):
-
-    @classmethod
-    def build(cls, is_named: bool, **kwarg) -> Term:
-        return super().build(arity=5, is_named=is_named, **kwarg)
+    fixed_arity = 5
 
     def _reported_name(self) -> str:
         return "Equal"
 
     def _apply_args(self, args: tuple[Term, ...]) -> Term:
         equal, so_far, xs, ys, i = args
-        if not isinstance(equal, Boolean):
-            raise self._type_error("the components", "data", equal)
+        self._expect(equal, Boolean, "the components", "data")
         return _components_equal(xs, ys, i.value + 1, so_far.value and equal.value)
 
 
 # The first two arguments of `builtin` must be a record and a label.
-def _record_and_label(builtin: Builtin, args: tuple[Term, ...]) -> None:
-    if not isinstance(args[0], Record):
-        raise builtin._type_error("the first argument", "a record", args[0])
-    if not isinstance(args[1], String):
-        raise builtin._type_error("the label", "a string", args[1])
+def _record_and_label(builtin: Builtin, args: tuple[Term, ...]) -> tuple[dict, str]:
+    record = builtin._expect(args[0], Record, "the first argument", "a record")
+    label = builtin._expect(args[1], String, "the label", "a string")
+    return record.attributes(), label.value
 
 
 @frozen
 class HasLabel(ConstMixin, Builtin):
-
-    @classmethod
-    def build(cls, is_named: bool, **kwarg) -> Term:
-        return super().build(arity=2, is_named=is_named, **kwarg)
+    fixed_arity = 2
 
     def _apply_args(self, terms: tuple[Term, ...]) -> Term:
-        _record_and_label(self, terms)
-        k = terms[1].value
-        b = k in terms[0].attributes()
-        return Boolean.build(is_named=self.is_named, value=b)
+        attrs, label = _record_and_label(self, terms)
+        return Boolean.nameless(value=label in attrs)
 
 
 @frozen
 class AddAttribute(ConstMixin, Builtin):
-
-    @classmethod
-    def build(cls, is_named: bool, **kwarg) -> Term:
-        return super().build(arity=3, is_named=is_named, **kwarg)
+    fixed_arity = 3
 
     def _apply_args(self, terms: tuple[Term,...]) -> Term:
-        _record_and_label(self, terms)
-        attrs = terms[0].attributes()
-        attrs[terms[1].value] = terms[2]
-        return Record.build(is_named=self.is_named, attributes=attrs)
+        attrs, label = _record_and_label(self, terms)
+        attrs[label] = terms[2]
+        return Record.nameless(attributes=attrs)
 
 
 @frozen
 class RemoveAttribute(ConstMixin, Builtin):
-
-    @classmethod
-    def build(cls, is_named: bool, **kwarg) -> Term:
-        return super().build(arity=2, is_named=is_named, **kwarg)
+    fixed_arity = 2
 
     def _apply_args(self, terms: tuple[Term,...]) -> Term:
-        _record_and_label(self, terms)
-        attrs = terms[0].attributes()
-        if terms[1].value not in attrs:
-            raise PGSNKeyError(f"RemoveAttribute: there is no label {terms[1].value!r}")
-        del attrs[terms[1].value]
-        return Record.build(is_named=self.is_named, attributes=attrs)
+        attrs, label = _record_and_label(self, terms)
+        if label not in attrs:
+            raise PGSNKeyError(f"RemoveAttribute: there is no label {label!r}")
+        del attrs[label]
+        return Record.nameless(attributes=attrs)
 
 
+# The first record with the fields of the second added, a field of the second
+# replacing a field of the first with the same label in its place.
 @frozen
 class OverwriteRecord(ConstMixin, Builtin):
-
-    @classmethod
-    def build(cls, is_named: bool, **kwarg) -> Term:
-        return super().build(arity=2, is_named=is_named, **kwarg)
+    fixed_arity = 2
 
     def _apply_args(self, terms: tuple[Term,...]) -> Term:
-        for term in terms:
-            if not isinstance(term, Record):
-                raise self._type_error("both arguments", "records", term)
-        r1 = terms[0].attributes()
-        r2 = terms[1].attributes()
-        r = r1
-        for k, t in r2.items():
-            r[k] = t
-        return Record.build(is_named=self.is_named, attributes=r)
+        r1, r2 = (self._expect(t, Record, "both arguments", "records") for t in terms)
+        return Record.nameless(attributes=r1.attributes() | r2.attributes())
 
 
 # A format string is text with fields: `{label}` is replaced by the field of
@@ -1286,19 +1127,13 @@ _FORMAT_PIECE = re.compile(r"\{\{|\}\}|\{([^{}]*)\}|[{}]|[^{}]+")
 
 @frozen
 class Formatter(ConstMixin, Builtin):
-
-    @classmethod
-    def build(cls, is_named: bool, **kwarg) -> Term:
-        return super().build(arity=2, is_named=is_named, **kwarg)
+    fixed_arity = 2
 
     # The text between the fields is found here; the fields are then evaluated
     # as the arguments of `_Format`, as many as the format string names.
     def _apply_args(self, terms: tuple[Term,...]) -> Term:
-        if not isinstance(terms[0], String):
-            raise self._type_error("the format string", "a string", terms[0])
-        if not isinstance(terms[1], Record):
-            raise self._type_error("the fields", "a record", terms[1])
-        fields = terms[1].attributes()
+        self._expect(terms[0], String, "the format string", "a string")
+        fields = self._expect(terms[1], Record, "the fields", "a record").attributes()
         texts = [""]
         labels = []
         for m in _FORMAT_PIECE.finditer(terms[0].value):
@@ -1342,9 +1177,8 @@ class _Format(ConstMixin, Builtin):
     def _show(self, label: str, value: Term) -> str:
         if isinstance(value, Boolean):
             return "true" if value.value else "false"
-        if not isinstance(value, (String, Integer)):
-            raise self._type_error(f"the field {label!r}",
-                                   "a string, an integer or a boolean", value)
+        self._expect(value, (String, Integer), f"the field {label!r}",
+                     "a string, an integer or a boolean")
         return str(value.value)
 
 
@@ -1376,21 +1210,20 @@ class _Format(ConstMixin, Builtin):
 # was made from with its environment substituted if it was never forced.
 
 _PENDING, _RUNNING, _DONE = range(3)
-_ARG, _UPDATE, _STRICT = range(3)
 
 
+# A cell is compared and hashed by identity, as the sharing it stands for
+# requires, and has no generated repr, which would walk its environment.
+@define(eq=False, repr=False)
 class _Cell:
-    __slots__ = ("code", "env", "state", "value", "readback")
-
-    def __init__(self, code: Term, env, state: int, value):
-        self.code = code
-        self.env = env
-        self.state = state
-        # The value is a pair of a term and an environment. The environment is
-        # that of a function and None for anything else, whose free indices
-        # are those of the term evaluated at the top.
-        self.value = value
-        self.readback = None
+    code: Term
+    env: Any
+    state: int
+    # The value is a pair of a term and an environment. The environment is
+    # that of a function and None for anything else, whose free indices are
+    # those of the term evaluated at the top.
+    value: Any
+    readback: Term | None = None
 
 
 def _new_thunk(code: Term, env) -> Thunk:
@@ -1414,18 +1247,20 @@ def _lookup(env, i: int) -> Thunk | int:
 
 
 def _delay(t: Term, env) -> Thunk:
-    if isinstance(t, Thunk):
-        return t
-    if isinstance(t, Variable):
-        found = _lookup(env, t.num)
-        if isinstance(found, Thunk):
-            return found
-        return _value_thunk(t if found == t.num else t.evolve(num=found), None)
-    if isinstance(t, ConstMixin):
-        return _value_thunk(t, None)
-    if isinstance(t, Abs):
-        return _value_thunk(t, env)
-    return _new_thunk(t, env)
+    match t:
+        case Thunk():
+            return t
+        case Variable():
+            found = _lookup(env, t.num)
+            if isinstance(found, Thunk):
+                return found
+            return _value_thunk(t if found == t.num else t.evolve(num=found), None)
+        case ConstMixin():
+            return _value_thunk(t, None)
+        case Abs():
+            return _value_thunk(t, env)
+        case _:
+            return _new_thunk(t, env)
 
 
 # Data reached under an environment, with each field made a thunk.
@@ -1444,12 +1279,36 @@ def _spine(head: Term, args) -> Term:
     return t
 
 
+# The frames on the machine's stack. Like a cell, a frame is compared by
+# identity and has no generated repr.
+
+# An argument, waiting for the function it is applied to.
+@define(eq=False, repr=False)
+class _Arg:
+    thunk: Thunk
+
+
+# A thunk being evaluated, to be overwritten with its value.
+@define(eq=False, repr=False)
+class _Update:
+    thunk: Thunk
+
+
+# A builtin waiting for its arguments to be evaluated. `next` is the first of
+# them not evaluated yet.
+@define(eq=False, repr=False)
+class _Strict:
+    builtin: Builtin
+    args: tuple
+    next: int = 0
+
+
 # The arguments on top of the stack, the first one first.
 def _pending_args(stack: list) -> tuple[Thunk, ...]:
     i = len(stack)
-    while i > 0 and stack[i - 1][0] == _ARG:
+    while i > 0 and isinstance(stack[i - 1], _Arg):
         i -= 1
-    return tuple(entry[1] for entry in reversed(stack[i:]))
+    return tuple(frame.thunk for frame in reversed(stack[i:]))
 
 
 # A builtin applied to fewer arguments than it takes.
@@ -1465,17 +1324,6 @@ def _is_partial(t: Term) -> bool:
 def _handed(thunk: Thunk) -> Term:
     t, _ = thunk._cell.value
     return t if isinstance(t, (Data, ConstMixin)) else thunk
-
-
-# A builtin waiting for its arguments to be evaluated. `next` is the first of
-# them not evaluated yet.
-class _Strict:
-    __slots__ = ("builtin", "args", "next")
-
-    def __init__(self, builtin: Builtin, args: tuple[Thunk, ...]):
-        self.builtin = builtin
-        self.args = args
-        self.next = 0
 
 
 class _Machine:
@@ -1508,72 +1356,72 @@ class _Machine:
         stack = []
         while True:
             # Evaluate `term` under `env` until it is a value.
-            if isinstance(term, Thunk):
-                cell = term._cell
-                if cell.state == _DONE:
+            match term:
+                case Thunk():
+                    cell = term._cell
+                    if cell.state == _RUNNING:
+                        # Its value is needed to compute its value.
+                        raise LambdaInterpreterError('Reduction did not terminate', term)
+                    if cell.state == _PENDING:
+                        cell.state = _RUNNING
+                        stack.append(_Update(term))
+                        term, env = cell.code, cell.env
+                        continue
                     value = cell.value
-                elif cell.state == _RUNNING:
-                    # Its value is needed to compute its value.
-                    raise LambdaInterpreterError('Reduction did not terminate', term)
-                else:
-                    cell.state = _RUNNING
-                    stack.append((_UPDATE, term))
-                    term, env = cell.code, cell.env
+                case Variable():
+                    found = _lookup(env, term.num)
+                    if isinstance(found, Thunk):
+                        term, env = found, None
+                        continue
+                    free = term if found == term.num else term.evolve(num=found)
+                    value = (self._stuck(free, stack, None), None)
+                case App():
+                    stack.append(_Arg(_delay(term.t2, env)))
+                    term = term.t1
                     continue
-            elif isinstance(term, Variable):
-                found = _lookup(env, term.num)
-                if isinstance(found, Thunk):
-                    term, env = found, None
-                    continue
-                free = term if found == term.num else term.evolve(num=found)
-                value = (self._stuck(free, stack, None), None)
-            elif isinstance(term, App):
-                stack.append((_ARG, _delay(term.t2, env)))
-                term = term.t1
-                continue
-            elif isinstance(term, Abs):
-                if stack and stack[-1][0] == _ARG:
-                    self._step(term)
-                    env = (stack.pop()[1], env)
-                    term = term.t
-                    continue
-                value = (term, env)
-            elif isinstance(term, Builtin):
-                term = _close(term, env)
-                args = _pending_args(stack)
-                n = term.arity
-                if not args or len(args) < n:
-                    value = (self._stuck(term, stack, None), None)
-                else:
-                    del stack[len(stack) - n:]
-                    stack.append((_STRICT, _Strict(term, args[:n])))
-                    value = None
-            else:
-                raise TypeError(f"not a term the machine evaluates: {type(term).__name__}")
+                case Abs():
+                    if stack and isinstance(stack[-1], _Arg):
+                        self._step(term)
+                        env = (stack.pop().thunk, env)
+                        term = term.t
+                        continue
+                    value = (term, env)
+                case Builtin():
+                    term = _close(term, env)
+                    args = _pending_args(stack)
+                    n = term.arity
+                    if not args or len(args) < n:
+                        value = (self._stuck(term, stack, None), None)
+                    else:
+                        del stack[len(stack) - n:]
+                        stack.append(_Strict(term, args[:n]))
+                        value = None
+                case _:
+                    raise TypeError(f"not a term the machine evaluates: {type(term).__name__}")
 
             # Hand the value to what is on top of the stack, until something
             # is left to evaluate.
             while True:
-                while stack and stack[-1][0] == _UPDATE:
-                    cell = stack.pop()[1]._cell
+                while stack and isinstance(stack[-1], _Update):
+                    cell = stack.pop().thunk._cell
                     cell.state = _DONE
                     cell.value = value
                 if not stack:
                     return value
-                kind, entry = stack[-1]
-                if kind == _STRICT:
-                    if entry.next < len(entry.args):
-                        term, env = entry.args[entry.next], None
-                        entry.next += 1
+                frame = stack[-1]
+                if isinstance(frame, _Strict):
+                    if frame.next < len(frame.args):
+                        term, env = frame.args[frame.next], None
+                        frame.next += 1
                         break
                     stack.pop()
                     try:
-                        reduced = entry.builtin.apply_args(tuple(_handed(a) for a in entry.args))
+                        reduced = frame.builtin.apply_args(tuple(_handed(a) for a in frame.args))
                     except PGSNRuntimeError as e:
-                        stack.extend((_ARG, a) for a in reversed(entry.args))
-                        value = (self._stuck(entry.builtin, stack, e), None)
+                        stack.extend(_Arg(a) for a in reversed(frame.args))
+                        value = (self._stuck(frame.builtin, stack, e), None)
                         continue
-                    self._step(entry.builtin)
+                    self._step(frame.builtin)
                     term, env = reduced, None
                     break
                 # The value is applied to more arguments.
@@ -1583,7 +1431,7 @@ class _Machine:
                     break
                 if _is_partial(t):
                     while isinstance(t, App):
-                        stack.append((_ARG, t.t2))
+                        stack.append(_Arg(t.t2))
                         t = t.t1
                     term, env = t, None
                     break
@@ -1651,24 +1499,26 @@ class _Machine:
     # it, or one the environment holds for an index that reaches past the
     # binders -- replaced by `at_thunk(thunk, depth)`.
     def _substitute(self, t: Term, depth: int, env, at_thunk) -> Term:
-        if isinstance(t, Variable):
-            if t.num < depth:
+        match t:
+            case Variable():
+                if t.num < depth:
+                    return t
+                found = _lookup(env, t.num - depth)
+                if isinstance(found, Thunk):
+                    return at_thunk(found, depth)
+                num = found + depth
+                return t if num == t.num else t.evolve(num=num)
+            case Thunk():
+                return at_thunk(t, depth)
+            case Abs():
+                return t.evolve(t=self._substitute(t.t, depth + 1, env, at_thunk))
+            case App():
+                return t.evolve(t1=self._substitute(t.t1, depth, env, at_thunk),
+                                t2=self._substitute(t.t2, depth, env, at_thunk))
+            case Data():
+                return t.map_fields(lambda c: self._substitute(c, depth, env, at_thunk))
+            case _:
                 return t
-            found = _lookup(env, t.num - depth)
-            if isinstance(found, Thunk):
-                return at_thunk(found, depth)
-            num = found + depth
-            return t if num == t.num else t.evolve(num=num)
-        if isinstance(t, Thunk):
-            return at_thunk(t, depth)
-        if isinstance(t, Abs):
-            return t.evolve(t=self._substitute(t.t, depth + 1, env, at_thunk))
-        if isinstance(t, App):
-            return t.evolve(t1=self._substitute(t.t1, depth, env, at_thunk),
-                            t2=self._substitute(t.t2, depth, env, at_thunk))
-        if isinstance(t, Data):
-            return t.map_fields(lambda c: self._substitute(c, depth, env, at_thunk))
-        return t
 
 
 def value_of(term: Term, steps=DEFAULT_STEPS, with_inherit_chain=False) -> Any:
