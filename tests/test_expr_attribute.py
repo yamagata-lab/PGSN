@@ -77,7 +77,7 @@ def test_the_attribute_conflicts_with_content_of_its_own():
 
 def test_the_expression_is_checked_like_any_other():
     """It goes through the same expansion, so the same rules apply."""
-    with pytest.raises(PGSNError, match="Call is not allowed"):
+    with pytest.raises(PGSNError, match="a call is not allowed"):
         run('<ol><li expr="f(x)"/></ol>')
     with pytest.raises(PGSNError, match="not a valid name"):
         run('<ol><li expr="_plus"/></ol>')
