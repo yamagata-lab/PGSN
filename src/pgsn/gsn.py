@@ -484,8 +484,11 @@ def gsn_violations(gsn: pgsn.pgsn_term.Term) -> list[GSNViolation]:
     3. A strategy describes the inference between a goal and its supporting
        goals (Table 1:2-1), so it has at least one.
     4. What challenges is a goal or a solution (1:6.2.2); in PGSN, a defeater.
-    5. Every element states something (1:2.1), so its description is
-       non-empty text.
+    5. Every element states something (1:2.1), so a description given as
+       text is not blank. A description that is some other value -- a record,
+       a list -- is not a breach: a context, for one, may be a reference to
+       an artefact rather than a statement (Table 1:2-1), and the language
+       lets any value stand there.
     6. The structure is headed by a goal.
 
     Identifiers are unique and the structure is acyclic by construction, and
@@ -520,7 +523,7 @@ def gsn_violations(gsn: pgsn.pgsn_term.Term) -> list[GSNViolation]:
 
         if kind is not None and kind != "Undeveloped":
             description = value.get("description")
-            if not isinstance(description, str) or not description.strip():
+            if isinstance(description, str) and not description.strip():
                 broken(f"the {kind.lower()} must state something in its "
                        f"description, which is {description!r}")
         if kind in ("Goal", "Defeater") and "support" in value:

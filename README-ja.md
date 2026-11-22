@@ -95,7 +95,7 @@ Done.
 Warning: S1 at <root>.support: a strategy relates a goal to supporting goals, but this one has none
 ```
 
-規則は次のとおりです。Goal を支持するのは Strategy・Solution・サブゴールのどれかで、Strategy を支持するのは Goal であること。contexts と assumptions の中身がそれぞれ Context と Assumption であること。Strategy がサブゴールを1つ以上持つこと。異議を立てる要素が Defeater であること。どの要素も description が空でない文字列であること。構造の一番上が Goal であること。`--strict` を付けると違反はエラーになり、何も書き出さずに終了コード 1 で終わります。
+規則は次のとおりです。Goal を支持するのは Strategy・Solution・サブゴールのどれかで、Strategy を支持するのは Goal であること。contexts と assumptions の中身がそれぞれ Context と Assumption であること。Strategy がサブゴールを1つ以上持つこと。異議を立てる要素が Defeater であること。どの要素の description も、空や空白だけの文字列でないこと。構造の一番上が Goal であること。`--strict` を付けると違反はエラーになり、何も書き出さずに終了コード 1 で終わります。
 
 ### XML import のための jail
 

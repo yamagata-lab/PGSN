@@ -98,7 +98,7 @@ A `.py` input is a Python program that binds the term to show to `main` (another
 Warning: S1 at <root>.support: a strategy relates a goal to supporting goals, but this one has none
 ```
 
-The rules: a goal is supported by a strategy, a solution or sub-goals, and a strategy by goals; the contexts of an element are Context nodes and its assumptions Assumption nodes; a strategy has at least one sub-goal; what challenges an element is a defeater; every element's description is a non-blank string; the structure is headed by a goal. With `--strict` a breach is an error: the command writes nothing and exits with status 1.
+The rules: a goal is supported by a strategy, a solution or sub-goals, and a strategy by goals; the contexts of an element are Context nodes and its assumptions Assumption nodes; a strategy has at least one sub-goal; what challenges an element is a defeater; no element's description is blank text; the structure is headed by a goal. With `--strict` a breach is an error: the command writes nothing and exits with status 1.
 
 ### Jails for XML imports
 
