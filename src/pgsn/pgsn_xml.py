@@ -4,7 +4,9 @@ XML parsing builds a single Term; all evaluation is deferred to fully_eval().
 Semantic errors surface as non-terminating reduction.
 """
 
+import copy
 import re
+import unicodedata
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import NamedTuple
@@ -276,19 +278,28 @@ _NAME_ATTRS: dict[str, tuple[str, ...]] = {
 }
 
 
-# The words of the expression syntax. They are not names, so that every name
-# a <def> can bind can also be written in an <expr>.
-_WORDS = frozenset({"and", "or", "not"})
+# The keywords of the expression syntax: Python's, as of Python 3.12, since
+# <expr> reads expressions the way Python does. They are not names, so that
+# every name a <def> can bind can also be written in an <expr>. The list is
+# written out rather than taken from Python, so that PGSN does not change
+# when Python does.
+_KEYWORDS = frozenset({
+    "False", "None", "True", "and", "as", "assert", "async", "await",
+    "break", "class", "continue", "def", "del", "elif", "else", "except",
+    "finally", "for", "from", "global", "if", "import", "in", "is",
+    "lambda", "nonlocal", "not", "or", "pass", "raise", "return", "try",
+    "while", "with", "yield",
+})
 
 
 def _is_name(s: str) -> bool:
-    """A letter, then letters, digits and underscores; not a word of <expr>.
+    """A letter, then letters, digits and underscores; not a keyword.
 
     Letters are Unicode letters, so a Japanese name is a name.
     """
     return (bool(s) and s[0].isalpha()
             and all(c.isalnum() or c == "_" for c in s)
-            and s not in _WORDS)
+            and s not in _KEYWORDS)
 
 
 def _check_name(name: str, where: str = "") -> None:
@@ -300,9 +311,9 @@ def _name_error(name: str, where: str = "") -> PGSNError:
     if name.startswith(_RESERVED_PREFIX):
         reason = ("a name may not begin with an underscore; "
                   "those are reserved by the implementation")
-    elif name in _WORDS:
-        reason = ("'and', 'or' and 'not' are words of the expression "
-                  "syntax, not names")
+    elif name in _KEYWORDS:
+        reason = ("it is a keyword of the expression syntax, which has "
+                  "Python's keywords")
     else:
         reason = ("a name must begin with a letter and continue with letters, "
                   "digits or underscores")
@@ -333,46 +344,64 @@ def _check_names(elem: ET.Element) -> None:
 # ------------------------------------------------------------------ #
 # <expr>: infix notation for the terms that are already expressible
 #
-# The text of an <expr> is parsed by the small grammar below and *translated*
-# into the XML the document could have written by hand, at the place the
-# <expr> stands: a name in an expression is a <var>, resolved in the scope of
-# that place like any other. Nothing is evaluated, and the grammar has no form
-# that `<apply>` could not write, so the syntax cannot reach anything more.
+# The text of an <expr> is parsed by the grammar below, a subset of Python's
+# expressions read the way Python reads them, and *translated* into the XML
+# the document could have written by hand, at the place the <expr> stands: a
+# name is a <var>, resolved in the scope of that place like any other.
+# Nothing is evaluated, and the grammar has no form that `<apply>`, `<get>`
+# or a literal could not write, so the syntax cannot reach anything more.
 #
-#   expr        := or_expr
-#   or_expr     := and_expr ("or" and_expr)*
-#   and_expr    := not_expr ("and" not_expr)*
-#   not_expr    := "not" not_expr | comparison
-#   comparison  := sum (compare_op sum)?
-#   sum         := product (("+" | "-") product)*
-#   product     := unary (("*" | "//" | "%") unary)*
-#   unary       := "-" unary | atom
-#   atom        := integer | string | f-string | name | "(" expr ")"
+#   expression  := disjunction ("if" disjunction "else" expression)?
+#   disjunction := conjunction ("or" conjunction)*
+#   conjunction := inversion ("and" inversion)*
+#   inversion   := "not" inversion | comparison
+#   comparison  := sum (compare_op sum)*          (chains as in Python)
+#   sum         := term (("+" | "-") term)*
+#   term        := factor (("*" | "//" | "%") factor)*
+#   factor      := ("+" | "-") factor | primary
+#   primary     := atom ("." word | "(" arguments ")")*
+#   arguments   := (argument ("," argument)* ","?)?
+#   argument    := expression | name "=" expression
+#   atom        := name | "True" | "False" | integer | string+
+#                | "(" expression ")"
 #
-# Operators expand to the reserved alias of a builtin, so that `1 + 2` means
-# addition whatever the surrounding document happens to bind.
+# The parser is PGSN's own rather than Python's, so that the language does
+# not change when Python's grammar does.
+#
+# Operators, `True` and `False` expand to the reserved alias of a builtin, so
+# that `1 + 2` means addition whatever the surrounding document binds.
 # ------------------------------------------------------------------ #
 
 _BIN_OPS = {"+": "plus", "-": "minus", "*": "times", "//": "div", "%": "mod"}
 
 _COMPARE_OPS = {"==", "!=", "<", "<=", ">", ">="}
 
-_TOKEN = re.compile(r"""
-    (?P<space>\s+)
-  | (?P<integer>[0-9]+)
-  | f(?P<fquote>["'])(?P<fbody>(?:\\.|(?!(?P=fquote)).)*)(?P=fquote)
-  | (?P<quote>["'])(?P<body>(?:\\.|(?!(?P=quote)).)*)(?P=quote)
-  | (?P<op>//|==|!=|<=|>=|[-+*%<>()/])
-  | (?P<word>\w+)
-""", re.VERBOSE | re.DOTALL)
+_NUMBER = re.compile(r"""
+    (?P<float>[0-9][0-9_]*\.[0-9_]*([eE][-+]?[0-9_]+)?
+             |\.[0-9][0-9_]*([eE][-+]?[0-9_]+)?
+             |[0-9][0-9_]*[eE][-+]?[0-9_]+)
+  | (?P<integer>0[xX][0-9a-fA-F_]+|0[oO][0-7_]+|0[bB][01_]+|[0-9][0-9_]*)
+""", re.VERBOSE)
 
-_ESCAPES = {"\\": "\\", '"': '"', "'": "'", "n": "\n", "t": "\t"}
+_STRING_START = re.compile(r"(?P<prefix>[rRbBuUfF]{0,2})(?P<quote>'''|\"\"\"|'|\")")
+
+_OP = re.compile(r"//|\*\*|==|!=|<=|>=|[-+*%<>()/.,=]")
+
+_WORD = re.compile(r"\w+")
+
+# Python's simple escapes; octal, \x, \u, \U and \N{...} are read separately.
+_SIMPLE_ESCAPES = {"\\": "\\", "'": "'", '"': '"', "a": "\a", "b": "\b",
+                   "f": "\f", "n": "\n", "r": "\r", "t": "\t", "v": "\v",
+                   "\n": ""}
 
 
 class _Token(NamedTuple):
-    kind: str      # "integer", "string", "fstring", "op" or "word"
-    text: str      # the integer's digits, the string's value, the op or word
+    kind: str      # "integer", "string", "op" or "word"
+    text: str      # the integer's digits, the op or the word
     column: int
+    # A string's parts: literal text and the sources of an f-string's fields,
+    # as ("text", value) and ("field", source, column of the source).
+    parts: tuple = ()
 
 
 def _reserved(name: str) -> ET.Element:
@@ -399,52 +428,188 @@ def _call_builtin(name: str, *args: ET.Element) -> ET.Element:
     return apply_elem
 
 
+def _parse_error(source: str, what: str, column: int | None) -> PGSNError:
+    where = "at the end" if column is None else f"at column {column + 1}"
+    return PGSNError(f"Cannot parse <expr>: {source!r}: {what} {where}")
+
+
 def _unescape(body: str) -> str:
-    """The value of a string literal's body: backslash escapes resolved."""
+    """A string literal's body with its backslash escapes resolved, as Python
+    resolves them. An escape Python does not know keeps its backslash."""
     out, i = [], 0
     while i < len(body):
         c = body[i]
-        if c == "\\":
-            escaped = body[i + 1]   # the token pattern never ends on a lone \
-            if escaped not in _ESCAPES:
-                raise PGSNError(
-                    f"'\\{escaped}' is not an escape in <expr>; the escapes are "
-                    + ", ".join(f"'\\{e}'" for e in _ESCAPES))
-            out.append(_ESCAPES[escaped])
+        if c != "\\" or i + 1 == len(body):
+            out.append(c)
+            i += 1
+            continue
+        e = body[i + 1]
+        if e in _SIMPLE_ESCAPES:
+            out.append(_SIMPLE_ESCAPES[e])
             i += 2
+        elif e in "01234567":
+            m = re.match(r"[0-7]{1,3}", body[i + 1:])
+            out.append(chr(int(m.group(), 8)))
+            i += 1 + len(m.group())
+        elif e in "xuU":
+            width = {"x": 2, "u": 4, "U": 8}[e]
+            digits = body[i + 2:i + 2 + width]
+            if not re.fullmatch(r"[0-9a-fA-F]{%d}" % width, digits):
+                raise PGSNError(f"'\\{e}' needs {width} hexadecimal digits "
+                                f"in {body!r}")
+            out.append(chr(int(digits, 16)))
+            i += 2 + width
+        elif e == "N":
+            m = re.match(r"\{([^}]*)\}", body[i + 2:])
+            char = None
+            if m:
+                try:
+                    char = unicodedata.lookup(m.group(1))
+                except KeyError:
+                    pass
+            if char is None:
+                raise PGSNError(f"'\\N' needs the name of a character in "
+                                f"braces, in {body!r}")
+            out.append(char)
+            i += 2 + len(m.group())
         else:
             out.append(c)
             i += 1
     return "".join(out)
 
 
+def _format_parts(body: str, *, strict: bool) -> list[tuple]:
+    """Split text with `{...}` fields into ("text", t) and ("field", src, at).
+
+    `{{` and `}}` are literal braces. A field runs to the `}` that closes it,
+    skipping brackets and string literals inside it, so `{f(x)}` and
+    `{"}" + x}` are fields. With `strict`, as for an f-string in an <expr>, a
+    brace left single is an error; otherwise it is kept as text, for the
+    format string to report when the document is evaluated.
+    """
+    parts: list[tuple] = []
+    text, i = [], 0
+    while i < len(body):
+        if body.startswith(("{{", "}}"), i):
+            text.append(body[i:i + 2])
+            i += 2
+        elif body[i] == "{":
+            end = _field_end(body, i + 1)
+            if end is None:
+                if strict:
+                    raise PGSNError(f"{body!r} opens a field with '{{' and "
+                                    "does not close it; write '{{{{' for a "
+                                    "literal brace")
+                text.append(body[i:])
+                break
+            if text:
+                parts.append(("text", "".join(text)))
+                text = []
+            parts.append(("field", body[i + 1:end], i + 1))
+            i = end + 1
+        elif body[i] == "}" and strict:
+            raise PGSNError(f"{body!r} has a '}}' that closes no field; "
+                            "write '}}}}' for a literal brace")
+        else:
+            text.append(body[i])
+            i += 1
+    if text:
+        parts.append(("text", "".join(text)))
+    return parts
+
+
+def _field_end(body: str, i: int) -> int | None:
+    """Where the field starting at `i` ends: the index of its closing `}`."""
+    depth, quote = 0, None
+    while i < len(body):
+        c = body[i]
+        if quote:
+            if c == "\\":
+                i += 1
+            elif c == quote:
+                quote = None
+        elif c in "'\"":
+            quote = c
+        elif c in "([{":
+            depth += 1
+        elif c in ")]":
+            depth -= 1
+        elif c == "}":
+            if depth == 0:
+                return i
+            depth -= 1
+        i += 1
+    return None
+
+
+def _scan_string(source: str, pos: int) -> tuple[_Token, int] | None:
+    """The string literal starting at `pos`, and where it ends, if one does."""
+    m = _STRING_START.match(source, pos)
+    if m is None:
+        return None
+    prefix, quote = m.group("prefix").lower(), m.group("quote")
+    if prefix not in ("", "r", "u", "f", "rf", "fr", "b", "rb", "br"):
+        return None
+    if "b" in prefix:
+        raise _parse_error(source, "PGSN has no bytes", pos)
+    i = m.end()
+    while i < len(source):
+        if source.startswith(quote, i):
+            break
+        if source[i] == "\\":
+            i += 1
+        elif source[i] == "\n" and len(quote) == 1:
+            raise _parse_error(source, "a string ends at the end of its line",
+                               pos)
+        i += 1
+    else:
+        raise _parse_error(source, "a string is not closed", pos)
+    body, end = source[m.end():i], i + len(quote)
+    raw, formatted = "r" in prefix, "f" in prefix
+    if not formatted:
+        value = body if raw else _unescape(body)
+        return _Token("string", value, pos, (("text", value),)), end
+    parts = []
+    for part in _format_parts(body, strict=True):
+        if part[0] == "text":
+            literal = part[1].replace("{{", "{").replace("}}", "}")
+            parts.append(("text", literal if raw else _unescape(literal)))
+        else:
+            parts.append(("field", part[1], m.end() + part[2]))
+    return _Token("string", "", pos, tuple(parts)), end
+
+
 def _tokens(source: str) -> list[_Token]:
     tokens, pos = [], 0
     while pos < len(source):
-        m = _TOKEN.match(source, pos)
+        if source[pos].isspace():
+            pos += 1
+            continue
+        string = _scan_string(source, pos)
+        if string is not None:
+            token, pos = string
+            tokens.append(token)
+            continue
+        m = _NUMBER.match(source, pos)
+        if m and m.group("float"):
+            raise _parse_error(source, "PGSN has no floating point numbers",
+                               pos)
+        if m:
+            try:
+                int(m.group(), 0)
+            except ValueError:
+                raise _parse_error(source, f"{m.group()!r} is not an integer "
+                                   "as Python writes one", pos) from None
+            tokens.append(_Token("integer", m.group(), pos))
+            pos = m.end()
+            continue
+        m = _OP.match(source, pos) or _WORD.match(source, pos)
         if m is None:
             raise _parse_error(source, f"unexpected {source[pos]!r}", pos)
+        kind = "op" if _OP.match(source, pos) else "word"
+        tokens.append(_Token(kind, m.group(), pos))
         pos = m.end()
-        if m.group("space"):
-            continue
-        if m.group("integer"):
-            tokens.append(_Token("integer", m.group("integer"), m.start()))
-        elif m.group("fquote"):
-            tokens.append(_Token("fstring", _unescape(m.group("fbody")),
-                                 m.start()))
-        elif m.group("quote"):
-            tokens.append(_Token("string", _unescape(m.group("body")),
-                                 m.start()))
-        elif m.group("op"):
-            tokens.append(_Token("op", m.group("op"), m.start()))
-        else:
-            tokens.append(_Token("word", m.group("word"), m.start()))
     return tokens
-
-
-def _parse_error(source: str, what: str, column: int | None) -> PGSNError:
-    where = "at the end" if column is None else f"at column {column + 1}"
-    return PGSNError(f"Cannot parse <expr>: {source!r}: {what} {where}")
 
 
 class _ExprParser:
@@ -458,18 +623,19 @@ class _ExprParser:
     def parse(self) -> ET.Element:
         if not self.tokens:
             raise PGSNError("<expr> is empty")
-        result = self.or_expr()
+        result = self.expression()
         if self.pos < len(self.tokens):
             raise self.unexpected()
         return result
 
     # -- tokens ------------------------------------------------------- #
 
-    def peek(self) -> _Token | None:
-        return self.tokens[self.pos] if self.pos < len(self.tokens) else None
+    def peek(self, ahead: int = 0) -> _Token | None:
+        i = self.pos + ahead
+        return self.tokens[i] if i < len(self.tokens) else None
 
-    def at(self, kind: str, *texts: str) -> bool:
-        token = self.peek()
+    def at(self, kind: str, *texts: str, ahead: int = 0) -> bool:
+        token = self.peek(ahead)
         return (token is not None and token.kind == kind
                 and (not texts or token.text in texts))
 
@@ -478,56 +644,74 @@ class _ExprParser:
         self.pos += 1
         return token
 
+    def expect(self, kind: str, text: str) -> None:
+        if not self.at(kind, text):
+            raise self.unexpected()
+        self.take()
+
     def unexpected(self) -> PGSNError:
         token = self.peek()
         if token is None:
             return _parse_error(self.source, "the expression stops", None)
-        return _parse_error(self.source, f"unexpected {token.text!r}",
-                            token.column)
+        what = token.text if token.kind != "string" else "a string"
+        return _parse_error(self.source, f"unexpected {what!r}", token.column)
 
     # -- grammar ------------------------------------------------------ #
 
-    def or_expr(self) -> ET.Element:
-        result = self.and_expr()
+    def expression(self) -> ET.Element:
+        value = self.disjunction()
+        if not self.at("word", "if"):
+            return value
+        self.take()
+        condition = self.disjunction()
+        self.expect("word", "else")
+        # if_then_else takes its branches unevaluated, so only the one chosen
+        # is evaluated, as in Python.
+        return _call_builtin("if_then_else", condition, value,
+                             self.expression())
+
+    def disjunction(self) -> ET.Element:
+        result = self.conjunction()
         while self.at("word", "or"):
             self.take()
-            result = _call_builtin("boolean_or", result, self.and_expr())
+            result = _call_builtin("boolean_or", result, self.conjunction())
         return result
 
-    def and_expr(self) -> ET.Element:
-        result = self.not_expr()
+    def conjunction(self) -> ET.Element:
+        result = self.inversion()
         while self.at("word", "and"):
             self.take()
-            result = _call_builtin("boolean_and", result, self.not_expr())
+            result = _call_builtin("boolean_and", result, self.inversion())
         return result
 
-    def not_expr(self) -> ET.Element:
+    def inversion(self) -> ET.Element:
         if self.at("word", "not"):
             self.take()
-            return _call_builtin("boolean_not", self.not_expr())
+            return _call_builtin("boolean_not", self.inversion())
         return self.comparison()
 
     def comparison(self) -> ET.Element:
+        """`a < b < c` is `a < b and b < c`, as in Python."""
         left = self.sum()
-        if not self.at("op", *_COMPARE_OPS):
-            return left
-        op = self.take().text
-        right = self.sum()
-        if self.at("op", *_COMPARE_OPS):
-            raise PGSNError(
-                "chained comparison is not allowed in <expr>; "
-                "write it with 'and'")
-        return _translate_compare(op, left, right)
+        result = None
+        while self.at("op", *_COMPARE_OPS):
+            op = self.take().text
+            right = self.sum()
+            step = _translate_compare(op, left, right)
+            result = step if result is None else _call_builtin(
+                "boolean_and", result, step)
+            left = copy.deepcopy(right)
+        return left if result is None else result
 
     def sum(self) -> ET.Element:
-        result = self.product()
+        result = self.term()
         while self.at("op", "+", "-"):
             op = self.take().text
-            result = _call_builtin(_BIN_OPS[op], result, self.product())
+            result = _call_builtin(_BIN_OPS[op], result, self.term())
         return result
 
-    def product(self) -> ET.Element:
-        result = self.unary()
+    def term(self) -> ET.Element:
+        result = self.factor()
         while self.at("op", "*", "//", "%", "/"):
             op = self.take().text
             if op == "/":
@@ -535,16 +719,73 @@ class _ExprParser:
                     "'/' is not defined in <expr>. PGSN has integers only, so "
                     "write '//' for integer division; '/' is reserved for true "
                     "division should a floating point type be added.")
-            result = _call_builtin(_BIN_OPS[op], result, self.unary())
+            result = _call_builtin(_BIN_OPS[op], result, self.factor())
         return result
 
-    def unary(self) -> ET.Element:
+    def factor(self) -> ET.Element:
         if self.at("op", "-"):
             self.take()
             zero = ET.Element("num")
             zero.text = "0"
-            return _call_builtin("minus", zero, self.unary())
-        return self.atom()
+            return _call_builtin("minus", zero, self.factor())
+        if self.at("op", "+"):
+            self.take()
+            return self.factor()
+        value = self.primary()
+        if self.at("op", "**"):
+            raise PGSNError("'**' is not defined in <expr>: PGSN has no "
+                            "builtin for powers.")
+        return value
+
+    def primary(self) -> ET.Element:
+        value = self.atom()
+        while True:
+            if self.at("op", "."):
+                self.take()
+                token = self.peek()
+                if (token is None or token.kind != "word"
+                        or token.text in _KEYWORDS or token.text[0].isdigit()):
+                    raise self.unexpected()
+                self.take()
+                # A record label is not a name: it reads a field, as <get>.
+                get = ET.Element("get")
+                get.set("key", token.text)
+                get.append(value)
+                value = get
+            elif self.at("op", "("):
+                self.take()
+                value = self.call(value)
+            else:
+                return value
+
+    def call(self, function: ET.Element) -> ET.Element:
+        """`f(a, k=b)` is <apply> with the same arguments; `f()` passes the
+        empty keyword record, as in the Python API."""
+        application = ET.Element("apply")
+        application.append(function)
+        keywords: set[str] = set()
+        while not self.at("op", ")"):
+            arg = ET.SubElement(application, "arg")
+            if self.at("word") and self.at("op", "=", ahead=1):
+                name = self.take().text
+                self.take()
+                _check_name(name, " in <expr>")
+                if name in keywords:
+                    raise PGSNError(f"the keyword argument {name!r} is given "
+                                    f"twice in <expr>: {self.source!r}")
+                keywords.add(name)
+                arg.set("name", name)
+            elif keywords:
+                raise PGSNError("a positional argument follows a keyword "
+                                f"argument in <expr>: {self.source!r}")
+            arg.append(self.expression())
+            if not self.at("op", ","):
+                break
+            self.take()
+        self.expect("op", ")")
+        if len(application) == 1:
+            ET.SubElement(application, "arg")
+        return application
 
     def atom(self) -> ET.Element:
         token = self.peek()
@@ -554,32 +795,29 @@ class _ExprParser:
             case "integer":
                 self.take()
                 elem = ET.Element("num")
-                elem.text = str(int(token.text))
+                elem.text = str(int(token.text, 0))
                 return elem
             case "string":
+                parts = []
+                while self.at("string"):
+                    parts.extend(self.take().parts)
+                return _translate_string(parts, self.source)
+            case "word" if token.text in ("True", "False"):
                 self.take()
-                elem = ET.Element("str")
-                elem.text = token.text
-                return elem
-            case "fstring":
-                self.take()
-                return _translate_fstring(token.text)
-            case "word" if token.text not in _WORDS:
+                return _reserved(token.text.lower())
+            case "word" if token.text == "None":
+                raise PGSNError(
+                    f"None has no counterpart in PGSN: {self.source!r}")
+            case "word" if token.text not in _KEYWORDS:
                 self.take()
                 _check_name(token.text, " in <expr>")
-                if self.at("op", "("):
-                    raise PGSNError(
-                        f"a call is not allowed in <expr>: {self.source!r}. "
-                        "Apply a function with <apply>.")
                 elem = ET.Element("var")
                 elem.set("name", token.text)
                 return elem
             case "op" if token.text == "(":
                 self.take()
-                inner = self.or_expr()
-                if not self.at("op", ")"):
-                    raise self.unexpected()
-                self.take()
+                inner = self.expression()
+                self.expect("op", ")")
                 return inner
         raise self.unexpected()
 
@@ -607,25 +845,60 @@ def _translate_compare(op: str, left: ET.Element,
     raise AssertionError(op)  # only _COMPARE_OPS reach here
 
 
-def _translate_fstring(body: str) -> ET.Element:
-    """Expand an f-string into an application of `format_string`.
+def _field_label(source: str, i: int) -> str:
+    """The record label a field's value is passed under: the name itself when
+    the field is a name, as bare text has always done, else a reserved one."""
+    source = source.strip()
+    return source if _is_plain_name(source) else f"{_RESERVED_PREFIX}e{i}"
 
-    An f-string is text with `{name}` fields, written as in bare text and
-    read by the same scanner (`_format_fields`): a field is a name, resolved
-    where the <expr> stands, and `{{` and `}}` are literal braces.
+
+def _is_plain_name(source: str) -> bool:
+    return not source.startswith(_RESERVED_PREFIX) and _is_name(source)
+
+
+def _translate_string(parts: list[tuple], source: str) -> ET.Element:
+    """Adjacent literals joined, and an f-string's fields given to
+    `format_string`.
+
+    The template of the format string holds labels and nothing else, so a
+    field that is an expression is passed under a generated label. A field's
+    conversion (`!r`) or format specification (`:>4`) has no counterpart in a
+    format string, so it is refused.
     """
-    fields = _format_fields(body)
+    template: list[str] = []
+    fields: dict[str, ET.Element] = {}
+    for part in parts:
+        if part[0] == "text":
+            template.append(part[1].replace("{", "{{").replace("}", "}}"))
+            continue
+        field_source = part[1]
+        if not field_source.strip():
+            raise PGSNError(f"an f-string has an empty field in <expr>: "
+                            f"{source!r}")
+        try:
+            value = _ExprParser(field_source).parse()
+        except PGSNError:
+            if re.search(r"![rsa]\s*$|:[^}]*$|=\s*$", field_source):
+                raise PGSNError(
+                    "a conversion (!r), a format specification (:>4) or a "
+                    "'=' is not allowed in an f-string field in <expr>: "
+                    f"{source!r}") from None
+            raise
+        label = _field_label(field_source, len(fields))
+        fields.setdefault(label, value)
+        template.append("{" + label + "}")
     text_elem = ET.Element("str")
     if not fields:
-        text_elem.text = body.replace("{{", "{").replace("}}", "}")
+        text_elem.text = "".join(
+            part[1] for part in parts)
         return text_elem
-    text_elem.text = body
+    text_elem.text = "".join(template)
     record_elem = ET.Element("dl")
-    for name in dict.fromkeys(fields):
+    for label, value in fields.items():
         dt = ET.SubElement(record_elem, "dt")
-        dt.text = name
+        dt.text = label
         dd = ET.SubElement(record_elem, "dd")
-        ET.SubElement(dd, "var").set("name", name)
+        dd.append(value)
     return _call_builtin("format_string", text_elem, record_elem)
 
 
@@ -847,53 +1120,37 @@ _BUILTINS: dict[str, Term] = {
 _SUPPORT_TAGS = {"Strategy", "Solution", "Goal", "supportedBy", "undeveloped"}
 
 
-def _format_fields(s: str) -> list[str]:
-    """The `{name}` fields of text, in order; `{{` and `}}` are literal braces.
+def _text_to_term(s: str, unit: "_Unit | None" = None) -> Term:
+    """Turn user text into a Term.
 
-    Bare text and the f-strings of <expr> are both read with this, so the two
-    write fields the same way. A field is a name, and anything else between
-    braces is an error, as is a brace left single.
+    Text is a string. A `{...}` in it is a field: what stands between the
+    braces is an expression, read as in <expr>, and its value is put in its
+    place by `format_string`; `{{` and `}}` are the braces themselves. Text is
+    not checked at compile time: a field that cannot be read as an expression,
+    and a brace left single, stay in the format string as written, and
+    `format_string` reports them when the document is evaluated.
     """
-    fields, i = [], 0
-    while i < len(s):
-        if s.startswith(("{{", "}}"), i):
-            i += 2
-        elif s[i] == "{":
-            end = s.find("}", i)
-            if end < 0:
-                raise PGSNError(
-                    f"{s!r} opens a field with '{{' and does not close it; "
-                    "write '{{{{' for a literal brace")
-            name = s[i + 1:end]
-            _check_name(name, f" in the field {{{name}}} of {s!r}")
-            fields.append(name)
-            i = end + 1
-        elif s[i] == "}":
-            raise PGSNError(
-                f"{s!r} has a '}}' that closes no field; "
-                "write '}}}}' for a literal brace")
-        else:
-            i += 1
-    return fields
-
-
-def _text_to_term(s: str) -> Term:
-    """
-    Turn user text into a Term. If it contains {name} fields, build a
-    format_string application binding each field to the variable of that name.
-    If it contains {{ }} escapes but no fields, still run format_string so
-    the escapes are resolved ({{ -> {, }} -> }).
-    Plain text with no braces at all becomes a String directly.
-    """
-    fields = _format_fields(s)
-    if fields:
-        args = record({name: variable(name) for name in fields})
-        return format_string(string(s))(args)
-    if "{{" in s or "}}" in s:
-        # No variable fields but escape sequences present — run format_string
-        # with an empty record so {{ }} are resolved to literal braces.
-        return format_string(string(s))(empty_record)
-    return string(s)
+    if "{" not in s and "}" not in s:
+        return string(s)
+    template: list[str] = []
+    fields: dict[str, Term] = {}
+    for part in _format_parts(s, strict=False):
+        if part[0] == "text":
+            template.append(part[1])
+            continue
+        source = part[1]
+        try:
+            value = _ExprParser(source.strip()).parse()
+        except PGSNError:
+            template.append("{" + source + "}")
+            continue
+        label = _field_label(source, len(fields))
+        if label not in fields:
+            fields[label] = (variable(label) if label == source.strip()
+                             else _expr(value, unit))
+        template.append("{" + label + "}")
+    return format_string(string("".join(template)))(
+        record(fields) if fields else empty_record)
 
 
 def _resolve(name: str, type_name: str | None = None) -> Term:
@@ -1239,7 +1496,7 @@ def _items(parent: ET.Element) -> list[ET.Element | str]:
 def _item(item: ET.Element | str, unit: _Unit) -> Term:
     """The term an item stands for."""
     if isinstance(item, str):
-        return _text_to_term(item)
+        return _text_to_term(item, unit)
     return _expr(item, unit)
 
 
@@ -1561,7 +1818,7 @@ def _header_description(elem: ET.Element, unit: _Unit) -> Term:
         return _content(desc_elem, unit)
     text = (elem.text or "").strip()
     if text:
-        return _text_to_term(text)
+        return _text_to_term(text, unit)
     values = [c for c in elem if c.tag in _VALUE_TAGS]
     if len(values) == 1:
         return _expr(values[0], unit)
@@ -1651,7 +1908,7 @@ def _e_annotation(elem: ET.Element, unit: _Unit, ctor: Term) -> Term:
                 f"{len(other)} children")
         desc = _expr(other[0], unit)
     else:
-        desc = _text_to_term((elem.text or "").strip())
+        desc = _text_to_term((elem.text or "").strip(), unit)
     return ctor(description=desc)
 
 

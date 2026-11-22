@@ -288,20 +288,31 @@ deliberately absent from the documentation, this file included. What the
 language guarantees is only that a name beginning with an underscore is
 reserved.
 
-### 2.3 One rule for names
+### 2.3 Expressions are read as Python reads them
 
-A name is a letter followed by letters, digits and underscores, letters being
-Unicode letters, so a Japanese name is a name. `<expr>` has a grammar of its
-own, parsed by a small recursive-descent parser in `pgsn_xml.py`, and the
-parser checks a name with the same function the attributes are checked with.
-So every name a `<def>` can bind can be written in an expression. That is why
-the three words the grammar uses, `and`, `or` and `not`, are not names at all,
-and why nothing else is: a word another language reserves is an ordinary name
-here. `true` and `false` are names of builtins rather than literals, so an
-expression reaches them the way `<var>` does at the same place.
+`<expr>` takes a part of Python's expressions with Python's meaning:
+precedence, chained comparisons, the conditional expression, calls, attribute
+access, Python's integer and string literals and f-strings. The parser is a
+small recursive-descent one in `pgsn_xml.py` rather than Python's own, and the
+keywords are written out as those of Python 3.12, so the language does not
+change when Python's grammar does.
 
-The `{name}` fields of bare text and of an f-string are read by one scanner,
-and a field is a name under the same rule, so the two cannot drift apart.
+An expression is expanded into the XML it abbreviates, where it stands, so a
+name in it resolves as a `<var>` would at that place. A name is a letter
+followed by letters, digits and underscores, letters being Unicode letters, so
+a Japanese name is a name; Python's keywords are not names. The parser checks a
+name with the same function the attributes are checked with, so every name a
+`<def>` can bind can be written in an expression. Operators, `True` and
+`False` go through the reserved aliases (§2.2) and always mean the builtins.
+
+A field of bare text is an expression too, read by the same parser, and the
+fields of text and of an f-string are found by one scanner. The two differ in
+when a mistake is reported. An f-string is part of an `<expr>`, whose syntax is
+checked at compile time. Text is not: a field that does not parse, and a brace
+left single, stay in the format string as written, and `format_string` reports
+them when the document is evaluated. A field that is a name is passed under
+that name, as text always did, so a document whose fields are names compiles
+to the same term as before.
 
 ### 2.4 Rebinding is shadowing
 
