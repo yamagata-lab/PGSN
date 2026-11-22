@@ -1131,12 +1131,32 @@ def test_empty_arg_calls_a_method_with_its_defaults(tmp_path):
     assert result == "world"
 
 
-def test_an_empty_named_arg_passes_the_empty_string(tmp_path):
-    """Only an unnamed <arg/> passes the keyword record; a named one has
-    empty content, which is the empty string as everywhere else."""
+@pytest.mark.parametrize("arg", ['<arg name="x"/>', '<arg name="x"></arg>'])
+def test_an_empty_named_arg_leaves_its_parameter_at_the_default(arg, tmp_path):
+    """An <arg> with nothing in it passes nothing, so the parameter takes its
+    default, written either way."""
     result = run(DEFAULTED.format(
-        call='<apply template="f"><arg name="x"/></apply>'), tmp_path)
-    assert result == {"x": "", "y": "default y"}
+        call=f'<apply template="f">{arg}<arg name="y">given</arg></apply>'),
+        tmp_path)
+    assert result == {"x": "default x", "y": "given"}
+
+
+def test_an_empty_arg_written_open_and_closed_is_the_same(tmp_path):
+    assert (run(DEFAULTED.format(call='<apply template="f"><arg></arg></apply>'),
+                tmp_path)
+            == run(DEFAULTED.format(call='<apply template="f"><arg/></apply>'),
+                   tmp_path))
+
+
+def test_an_empty_sub_goals_is_the_empty_list(tmp_path):
+    """<subGoals> requires a list, so its empty content is the empty list,
+    which the GSN check reports."""
+    term = pgsn.load_xml_string(
+        "<PGSN><Goal>g<Strategy>s<subGoals/></Strategy></Goal></PGSN>")
+    value = python_value(term.fully_eval())
+    assert value["support"]["sub_goals"] == []
+    assert [v.message for v in pgsn.gsn_violations(term.fully_eval())] == [
+        "a strategy relates a goal to supporting goals, but this one has none"]
 
 
 # ------------------------------------------------------------------ #
