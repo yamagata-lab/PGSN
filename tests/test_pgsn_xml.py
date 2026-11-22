@@ -576,11 +576,18 @@ def test_unsafe_path(tmp_path):
         compile_pgsn(p)
 
 
-def test_missing_value(tmp_path):
-    p = tmp_path / "test.pgsn"
-    p.write_text("<PGSN></PGSN>")
-    with pytest.raises(PGSNError):
-        compile_pgsn(p)
+@pytest.mark.parametrize("source, expected", [
+    ("<PGSN></PGSN>", ""),
+    ("<PGSN><div/></PGSN>", ""),
+    ("<PGSN><ol><li/><li>  </li></ol></PGSN>", ["", ""]),
+    ("<PGSN><dl><dt>k</dt><dd/></dl></PGSN>", {"k": ""}),
+    ('<PGSN><def name="x"/><var name="x"/></PGSN>', ""),
+], ids=["document", "div", "li", "dd", "def"])
+def test_empty_content_is_the_empty_string(source, expected, tmp_path):
+    """In XML an element with nothing in it holds the empty text, and bare
+    text is a string; what the empty string fails to be is for the output to
+    report, not the compiler."""
+    assert run(source, tmp_path) == expected
 
 
 @pytest.mark.parametrize("source", [
@@ -1124,10 +1131,12 @@ def test_empty_arg_calls_a_method_with_its_defaults(tmp_path):
     assert result == "world"
 
 
-def test_empty_named_arg_is_still_an_error(tmp_path):
-    with pytest.raises(PGSNError, match="No value in <arg>"):
-        run(DEFAULTED.format(
-            call='<apply template="f"><arg name="x"/></apply>'), tmp_path)
+def test_an_empty_named_arg_passes_the_empty_string(tmp_path):
+    """Only an unnamed <arg/> passes the keyword record; a named one has
+    empty content, which is the empty string as everywhere else."""
+    result = run(DEFAULTED.format(
+        call='<apply template="f"><arg name="x"/></apply>'), tmp_path)
+    assert result == {"x": "", "y": "default y"}
 
 
 # ------------------------------------------------------------------ #
