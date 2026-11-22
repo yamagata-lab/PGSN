@@ -505,6 +505,13 @@ When the function is a named variable, the `template` attribute provides a short
 </apply>
 ```
 
+A keyword parameter left out of a call that passes keyword arguments takes its default. An empty `<arg/>` passes no keyword argument at all, so that every keyword parameter takes its default; it counts as a keyword argument, so it comes after the positional ones:
+
+```xml
+<apply template="f"><arg/></apply>                    <!-- every keyword parameter at its default -->
+<apply template="f"><arg>expr1</arg><arg/></apply>    <!-- a positional argument, then the defaults -->
+```
+
 Application is binary, so an `<apply>` with no `<arg>` applies nothing and is the function itself: `<apply template="f"/>` and `<var name="f"/>` are the same expression.
 
 ---

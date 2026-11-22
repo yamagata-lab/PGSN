@@ -827,18 +827,24 @@ def _keyword_abs(params: list[ET.Element], body: Term, unit: _Unit) -> Term:
 
 
 def _split_args(items: list[ET.Element | str], unit: _Unit,
-                owner: str) -> tuple[list, dict]:
+                owner: str) -> tuple[list, dict, bool]:
     """
-    Collect <arg> children into positional and keyword groups.
+    Collect <arg> children into positional and keyword groups, and say whether
+    the keyword record is passed.
     Positional args (no name) must precede keyword args, as in Python.
-    Application itself is delegated to Term.__call__.
+
+    The keyword record is passed when there is a keyword argument, or an empty
+    `<arg/>`. The empty one passes the record with nothing in it, so that the
+    keyword parameters all take their defaults: `<apply template="f"><arg/>
+    </apply>` is `f()` in Python. It counts as a keyword argument, so it comes
+    after the positional ones.
 
     Anything that is not an <arg> is an error rather than something to skip.
     Desugaring expands `var` and `expr` into a child of their own, so skipping
     would turn `<apply template="f" var="x"/>` into an application of `f` to
     nothing at all.
     """
-    positional, keyword = [], {}
+    positional, keyword, record_passed = [], {}, False
     for a in items:
         if isinstance(a, str):
             raise PGSNError(
@@ -849,13 +855,16 @@ def _split_args(items: list[ET.Element | str], unit: _Unit,
                 f"<{owner}> takes its arguments as <arg> children, "
                 f"found <{a.tag}>")
         name = a.get("name")
-        if name is None:
-            if keyword:
+        if name is None and _items(a):
+            if record_passed:
                 raise PGSNError("positional arg after keyword arg")
             positional.append(_content(a, unit))
+        elif name is None:
+            record_passed = True
         else:
             keyword[name] = _content(a, unit)
-    return positional, keyword
+            record_passed = True
+    return positional, keyword, record_passed
 
 
 # ------------------------------------------------------------------ #
@@ -1235,11 +1244,9 @@ def _applied(func: Term, items: list[ET.Element | str], unit: _Unit,
     An empty argument list is not an error. Application is binary, so applying
     a function to nothing is the function: `<apply template="f"/>` is `f`.
     """
-    positional, keyword = _split_args(items, unit, owner)
-    if not positional and not keyword:
-        return func
-    # Delegate to Term.__call__: it casts args and builds the keyword Record
-    return func(*positional, **keyword)
+    positional, keyword, record_passed = _split_args(items, unit, owner)
+    applied = func(*positional) if positional else func
+    return applied(record(keyword)) if record_passed else applied
 
 
 def _e_apply(elem: ET.Element, unit: _Unit) -> Term:

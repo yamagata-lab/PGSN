@@ -1036,6 +1036,83 @@ def test_apply_template_builtin(tmp_path):
 
 
 # ------------------------------------------------------------------ #
+# An empty <arg/> passes the keyword record with nothing in it
+# ------------------------------------------------------------------ #
+
+DEFAULTED = """
+<PGSN>
+    <def name="f" as="template">
+        <param name="x">default x</param>
+        <param name="y">default y</param>
+        <dl><dt>x</dt><dd var="x"/><dt>y</dt><dd var="y"/></dl>
+    </def>
+    {call}
+</PGSN>"""
+
+
+def test_empty_arg_takes_every_default(tmp_path):
+    result = run(DEFAULTED.format(
+        call='<apply template="f"><arg/></apply>'), tmp_path)
+    assert result == {"x": "default x", "y": "default y"}
+
+
+def test_empty_arg_is_the_empty_record(tmp_path):
+    with_empty_arg = run(DEFAULTED.format(
+        call='<apply template="f"><arg/></apply>'), tmp_path)
+    with_empty_record = run(DEFAULTED.format(
+        call='<apply template="f"><arg><dl/></arg></apply>'), tmp_path)
+    assert with_empty_arg == with_empty_record
+
+
+def test_empty_arg_beside_a_keyword_arg(tmp_path):
+    result = run(DEFAULTED.format(
+        call='<apply template="f"><arg/><arg name="y">given</arg></apply>'),
+        tmp_path)
+    assert result == {"x": "default x", "y": "given"}
+
+
+def test_empty_arg_after_a_positional_arg(tmp_path):
+    result = run("""
+    <PGSN>
+        <def name="f" as="template">
+            <param name="p" positional="true"/>
+            <param name="k">default k</param>
+            <dl><dt>p</dt><dd var="p"/><dt>k</dt><dd var="k"/></dl>
+        </def>
+        <apply template="f"><arg>given p</arg><arg/></apply>
+    </PGSN>""", tmp_path)
+    assert result == {"p": "given p", "k": "default k"}
+
+
+def test_positional_arg_after_an_empty_arg_is_an_error(tmp_path):
+    with pytest.raises(PGSNError, match="positional arg after keyword arg"):
+        run(DEFAULTED.format(
+            call='<apply template="f"><arg/><arg>late</arg></apply>'),
+            tmp_path)
+
+
+def test_empty_arg_calls_a_method_with_its_defaults(tmp_path):
+    result = run("""
+    <PGSN>
+        <def name="Greeter" as="class">
+            <method name="greet">
+                <param name="whom">world</param>
+                <var name="whom"/>
+            </method>
+        </def>
+        <def name="g" as="object"><instanceOf var="Greeter"/></def>
+        <send method="greet" to="g"><arg/></send>
+    </PGSN>""", tmp_path)
+    assert result == "world"
+
+
+def test_empty_named_arg_is_still_an_error(tmp_path):
+    with pytest.raises(PGSNError, match="No value in <arg>"):
+        run(DEFAULTED.format(
+            call='<apply template="f"><arg name="x"/></apply>'), tmp_path)
+
+
+# ------------------------------------------------------------------ #
 # send method= / to= shorthand
 # ------------------------------------------------------------------ #
 
