@@ -1,6 +1,6 @@
 # PGSN — Programmable Goal Structuring Notation
 
-PGSN は XML ベースの言語で、GSN（Goal Structuring Notation）をプログラマブルに拡張したものです。
+この文書は PGSN の XML 構文を定めます。PGSN は GSN（Goal Structuring Notation）をプログラミングの構造で拡張したものです。
 GSN ノード（Goal・Strategy・Solution）を値として扱い、変数・テンプレート・クラスといったプログラミング構造と組み合わせることができます。
 
 ---
@@ -23,7 +23,7 @@ GSN ノード（Goal・Strategy・Solution）を値として扱い、変数・�
 
 ## ドキュメントの種類
 
-PGSN には2種類のルート要素があります。
+PGSN には2種類のルート要素があります。ドキュメントは拡張子 `.xml` のファイルで、`pgsn` が入力として受け付けるのもこれです。
 
 ### `<PGSN>` — 値を生成するドキュメント
 
@@ -230,13 +230,13 @@ XML では `<` をエスケープする必要があります。`i &lt; n` と書
 ### 単一 import
 
 ```xml
-<from file="security.pgsn" import="secureGoal" as="G1"/>
+<from file="security.xml" import="secureGoal" as="G1"/>
 ```
 
 ### 複数 import
 
 ```xml
-<from file="evidence.pgsn">
+<from file="evidence.xml">
     <import name="auditEvidence"/>
     <import name="testReport" as="TR"/>
 </from>
@@ -245,7 +245,7 @@ XML では `<` をエスケープする必要があります。`i &lt; n` と書
 ### パラメーターを渡しながら import
 
 ```xml
-<from file="other.pgsn">
+<from file="other.xml">
     <import name="someGoal" as="G2"/>
     <arg name="A1" var="A1"/>
     <arg name="threshold" var="threshold"/>
@@ -257,7 +257,7 @@ XML では `<` をエスケープする必要があります。`i &lt; n` と書
 値が期待される位置に書いた `<from>` は、何も取り出していないモジュールのレコードを表します。こう書くとモジュールは普通の値になります。`<def>` で束縛したり、リストに入れたり、テンプレートに渡したりできます。
 
 ```xml
-<def name="lib"><from file="security.pgsn"/></def>
+<def name="lib"><from file="security.xml"/></def>
 <get key="secureGoal" of="lib"/>
 ```
 
@@ -270,16 +270,16 @@ import の時点で名前を選び出すのは上の形式の役目なので、2
 **相対パス**は、import する側のドキュメントがあるディレクトリを基準に解決されます。
 
 ```xml
-<from file="modules/security.pgsn" import="secureGoal"/>
-<from file="../shared/evidence.pgsn" import="auditEvidence"/>
+<from file="modules/security.xml" import="secureGoal"/>
+<from file="../shared/evidence.xml" import="auditEvidence"/>
 ```
 
-`..` は使えますが、結果が封じ込めルートの内側に留まる場合に限ります。パスを指定して直接開いたドキュメントのルートは、そのドキュメント自身が置かれているディレクトリです。つまり既定では、隣接するファイルとその配下には届き、それより上には届きません。
+`..` は使えますが、結果が封じ込めルートの内側に留まる場合に限ります。パスを指定して直接開いたドキュメントのルートは、それを含む登録済みの jail があればその jail、なければそのドキュメント自身が置かれているディレクトリです。つまり既定では、隣接するファイルとその配下には届き、それより上には届きません。
 
 **jail パス**は `/` で始まり、先頭の要素が *jail* の名前になります。jail は PGSN を実行する側が登録するディレクトリルートです。
 
 ```xml
-<from file="/lib/security.pgsn" import="secureGoal"/>
+<from file="/lib/security.xml" import="secureGoal"/>
 ```
 
 ここで `lib` はディスク上のディレクトリ名ではなく jail 名です。コマンドラインまたは API で与えた jail テーブルを使って解決されます。
@@ -295,7 +295,7 @@ cfg = pgsn.Config(jails={"lib": "/opt/pgsn-lib"})
 term = pgsn.load_xml("main.xml", config=cfg)
 ```
 
-ドキュメント側から未登録の jail を指定する手段はなく、jail の背後にある実際のディレクトリ構成を知る手段もありません。jail 名に使えるのは英数字と `_`、`-` のみです。
+ドキュメント側から未登録の jail を指定する手段はなく、jail の背後にある実際のディレクトリ構成を知る手段もありません。jail 名に使えるのは ASCII の英数字と `_`、`-` のみです。
 
 import が jail に入ると、その jail が import 先モジュールの封じ込めルートになります。jail 内のモジュールは相対パスで近傍を import できますが、`..` で外に出ることはできません。import 元のドキュメントがあるツリーに戻ることもできません。ある jail から別の jail へ移るには、必ず対象の jail 名を明示する必要があります。
 
@@ -305,9 +305,9 @@ import が jail に入ると、その jail が import 先モジュールの封�
 |------|------|
 | `../../etc/passwd` | 封じ込めルートの外に出る |
 | `/etc/passwd` | `etc` は登録された jail ではない |
-| `/lib/../secret.pgsn` | jail パスに `..` は使えない |
-| `/lib/link.pgsn`（`link.pgsn` が jail 外へのシンボリックリンク） | 解決結果が jail の外になる |
-| `C:\lib\mod.pgsn` | 絶対パスは jail 名で始まらなければならない |
+| `/lib/../secret.xml` | jail パスに `..` は使えない |
+| `/lib/link.xml`（`link.xml` が jail 外へのシンボリックリンク） | 解決結果が jail の外になる |
+| `C:\lib\mod.xml` | バックスラッシュは使えない |
 
 シンボリックリンクは封じ込め検証の前に展開されるため、jail 内に仕込まれたリンクで脱獄することはできません。
 
@@ -362,7 +362,8 @@ import が jail に入ると、その jail が import 先モジュールの封�
 どこで止まったかがパスつきで報告されます。
 
 `<param>` は `typeOf` を取りません。パラメーターは呼ばれたときに決まるので、検査を本体の中に
-仕込むことになるからです。使う場所で検査してください。
+仕込むことになるからです。使う場所で検査してください。`<param>` に書いた `typeOf` は
+コンパイラが何も言わずに無視し、弾くのは `PGSN.rng` だけです。
 
 ### 局所定義
 
@@ -401,15 +402,15 @@ import が jail に入ると、その jail が import 先モジュールの封�
 
 ### 組み込み
 
-以下の名前はあらかじめ定義されています。`<var name="..."/>` で参照し、`<apply>` で適用します。これは `pgsn` パッケージが公開する値とちょうど同じ名前なので、Python から使えるものは XML からも同じ名前で使えます。
+以下の名前はあらかじめ定義されています。`<var name="..."/>` で参照し、`<apply>` で適用します。どれも `pgsn` パッケージが同じ名前で公開している組み込みの項です（[README-ja-api.md](README-ja-api.md#組み込みの項)）。ただしクラスの短い別名は XML にしかありません。項を組み立てる Python の関数（`string`・`lambda_abs`・`let` など）と読み込みの関数は、XML の要素がその役をするので、XML には対応するものがありません。
 
 - リスト操作: `cons`・`head`・`tail`・`index`・`is_empty`・`concat`・`map_term`・`fold`・`foldr`・`list_all`・`empty`
 - 真偽値: `true`・`false`・`if_then_else`・`boolean_and`・`boolean_or`・`boolean_not`・`equal`・`less_than`・`guard`
-- 整数: `plus`・`minus`・`times`・`div`・`mod`・`integer_sum`
+- 整数: `plus`・`minus`・`times`・`div`・`mod`・`integer_sum`・`repeat`
 - レコード: `has_label`・`add_attribute`・`remove_attribute`・`overwrite_record`・`empty_record`
 - 文字列: `format_string`
 - クラス／オブジェクト: `define_class`・`instantiate`・`type_of`・`is_subtype`・`base_class`
-- その他: `fix`・`repeat`・`undefined`
+- その他: `fix`・`undefined`
 - GSN コンストラクタ: `goal`・`strategy`・`solution`・`context`・`assumption`・`defeater`・`undeveloped`・`immediate`・`solution_as_goal`
 - GSN クラス（長い名前）: `goal_class`・`strategy_class`・`solution_class`・`context_class`・`assumption_class`・`defeater_class`・`gsn_class`・`support_class`・`undeveloped_class`
 - GSN クラス（短いエイリアス）: `Goal`・`Strategy`・`Solution`・`Context`・`Assumption`・`Defeater`・`GSN`・`Support`
@@ -622,7 +623,7 @@ import が jail に入ると、その jail が import 先モジュールの封�
 
 ### テキスト中の書式文字列
 
-テキストを置ける場所では、`{name}` という記法でスコープ内の変数を埋め込めます。
+テキストが値を表す場所では、`{name}` という記法でスコープ内の変数を埋め込めます。
 `format_string` の適用になります。波括弧自体を書きたい場合は `{{` `}}` でエスケープします。
 
 ```xml
@@ -684,7 +685,7 @@ GSN ノードはどれも説明（description）から始まり、どれも `Def
 
 **Context と Assumption の使い分け**
 
-`Context` と `Assumption` はどちらもヘッダーに付随するドキュメンテーション要素で、値として任意の式（テキスト・変数参照・オブジェクト・リスト等）を1つ置けます。
+`Context` と `Assumption` はどちらもヘッダーに付随するドキュメンテーション要素で、値として任意の式（テキスト・変数参照・オブジェクト・リスト等）を1つ置けます。ただし `pgsn doc` と `pgsn render` の GSN の検査は、空でない文字列以外の値を違反として報告します（`--strict` ではエラー）。GSN ではどの要素も何かを述べるものだからです。
 
 - `Context` は議論が置かれる状況や、議論の対象を表します。
 - `Assumption` は議論が置く仮定を表します。
@@ -711,9 +712,11 @@ GSN ノードはどれも説明（description）から始まり、どれも `Def
 </Goal>
 ```
 
+Goal の支持はちょうど1つです。コンパイラは最初に書かれたものを使い、2つ目以降の支持は何も言わずに捨てます。そのような文書を弾くのは `PGSN.rng` だけです。
+
 > **補足: サブゴールの並記は糖衣構文です**
 > Goal の直下に `<Goal>` を複数並べる書き方は、`immediate`（サブゴールを束ねる特殊な Strategy）でラップされます。
-> PGSN のコアでは Goal の支持（support）は Strategy か Solution のいずれかでなければなりません。
+> PGSN のコアでは Goal の支持（support）は Strategy・Solution・undeveloped のどれかです。
 > 実行時に計算したゴールのリストを支持にしたい場合は、`immediate` を明示的に適用して Strategy 化します。
 >
 > ```xml
@@ -838,7 +841,7 @@ GSN ノードはクラスとして継承・拡張できます。
     <param name="threshold">100</param>
 
     <!-- 別ファイルからゴールを持ち込む -->
-    <from file="security.pgsn" import="secureGoal" as="G1"/>
+    <from file="security.xml" import="secureGoal" as="G1"/>
 
     <def name="mainStrategy" as="Strategy">
         テストとレビューによる検証
@@ -852,10 +855,12 @@ GSN ノードはクラスとして継承・拡張できます。
     <def name="main" as="Goal">
         <description>システムはセキュアである</description>
         <Assumption>ゼロデイ攻撃はない</Assumption>
+        <Assumption>毎秒 {threshold} リクエストを超えない</Assumption>
         <supportedBy var="mainStrategy"/>
     </def>
 </PGSNModule>
 ```
 
 `param` を受け取るモジュールは、末尾に単一の値を置く `<PGSN>` ではなく `<PGSNModule>` を使います
-（`param` は `<PGSNModule>` の先頭にだけ書けます）。
+（`param` は `<PGSNModule>` の先頭にだけ書けます）。モジュールは `pgsn doc` に直接渡せません。
+`<PGSN>` のドキュメントから、たとえば `<from file="module.xml" import="main"/>` のように import して使います。

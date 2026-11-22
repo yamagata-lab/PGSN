@@ -22,7 +22,7 @@
 - **関数型プログラミングによるGSN記述**：アシュアランスケースを関数として記述
 - **構成的・再利用可能**：GSN構造を柔軟に組み立て可能
 - **オブジェクト指向サポート**：クラス／継承によるノード定義の拡張
-- **閉じた評価**：文書が外に手を伸ばす方法がありません（言語にファイル・ネットワーク・システムへのアクセスがない）。名前を書けるファイルも、与えられたディレクトリの下だけです。評価はステップ数で上限が決まります
+- **閉じた評価**：XML ドキュメントが外に手を伸ばす方法はありません（言語にファイル・ネットワーク・システムへのアクセスがない）。import できるファイルも、自身のディレクトリか、与えられたディレクトリルートの下だけです。評価はステップ数で上限が決まります。`.py` の入力は別で、これは Python のプログラムなので、`pgsn` はあなたの権限でそのまま実行します。信頼できる `.py` ファイルだけを渡してください
 
 ---
 
@@ -40,6 +40,8 @@ cd PGSN
 pip install -e '.[dev]'
 ```
 
+`pgsn render` と `gsn_dot` には Graphviz のプログラム（`dot`）が要りますが、pip では入りません。システムのパッケージマネージャーで入れるか、それを含む下の conda 環境を使ってください。
+
 condaを使ってライブラリの開発を行う場合
 ```bash
 git clone https://github.com/yamagata-lab/PGSN.git
@@ -53,9 +55,26 @@ pip install -e '.[dev]'
 ---
 ## コマンドライン
 
+XML ドキュメントの例 `examples/gsn.xml`：
+
+```xml
+<PGSN>
+    <Goal>
+        System is secure
+        <Strategy>
+            Break into sub-goals
+            <Goal>Input validated<Solution>Static analysis passed</Solution></Goal>
+            <Goal>Output sanitized<Solution>Fuzzing test succeeded</Solution></Goal>
+        </Strategy>
+    </Goal>
+</PGSN>
+```
+
+`pgsn doc` はこれを評価し、構造を木として表示します。
+
 ```shell
-PGSN % pgsn doc examples/cli.py
-Generating 'None' from 'examples/cli.py'
+% pgsn doc examples/gsn.xml
+Generating 'None' from 'examples/gsn.xml'
 Evaluating term 'main'...
 Goal: System is secure
 └── Strategy: Break into sub-goals
@@ -67,7 +86,7 @@ Goal: System is secure
 Done.
 ```
 
-他のコマンドとオプションは `pgsn --help` を参照してください。
+`.py` の入力は、表示する項を `main`（`--term-name` で別の名前にできます）に束縛する Python のプログラムです。[基本例](#基本例)を参照してください。`pgsn render` は同じ構造を SVG・PNG・PDF の図に描き、他のコマンドとオプションは `pgsn --help` で一覧できます。コマンドが失敗すると `Error:` を表示して終了コード 1 で終わります。入力ファイルが無い、`--jail` の書き方が誤っている、といった使い方の誤りは終了コード 2 で終わります。
 
 ### GSN の規則の検査
 
@@ -77,7 +96,7 @@ Done.
 Warning: S1 at <root>.support: a strategy relates a goal to supporting goals, but this one has none
 ```
 
-規則は次のとおりです。Goal を支持するのは Strategy・Solution・サブゴールのどれかで、Strategy を支持するのは Goal であること。contexts と assumptions の中身がそれぞれ Context と Assumption であること。Strategy がサブゴールを1つ以上持つこと。異議を立てる要素が Defeater であること。どの要素も何かを述べていること。構造の一番上が Goal であること。`--strict` を付けると違反はエラーになり、何も書き出さずに 0 以外の終了コードで終わります。
+規則は次のとおりです。Goal を支持するのは Strategy・Solution・サブゴールのどれかで、Strategy を支持するのは Goal であること。contexts と assumptions の中身がそれぞれ Context と Assumption であること。Strategy がサブゴールを1つ以上持つこと。異議を立てる要素が Defeater であること。どの要素も description が空でない文字列であること。構造の一番上が Goal であること。`--strict` を付けると違反はエラーになり、何も書き出さずに終了コード 1 で終わります。
 
 ### XML import のための jail
 
@@ -88,10 +107,10 @@ PGSN % pgsn doc main.xml --jail lib=/opt/pgsn-lib
 ```
 
 ```xml
-<from file="/lib/security.pgsn" import="secureGoal"/>
+<from file="/lib/security.xml" import="secureGoal"/>
 ```
 
-`--jail` は複数回指定でき、`.xml` 入力にのみ適用されます。登録された jail の外にあるものは import できません。`..` で封じ込めルートの外に出ることはできず、シンボリックリンクは検証前に展開されます。詳細は [README-ja-xml.md](README-ja-xml.md) を参照してください。
+`--jail` は複数回指定でき、`.xml` 入力にのみ適用されます。ドキュメント自身のディレクトリと登録された jail の外にあるものは import できません。`..` で封じ込めルートの外に出ることはできず、シンボリックリンクは検証前に展開されます。詳細は [README-ja-xml.md](README-ja-xml.md) を参照してください。
 
 ---
 
@@ -109,7 +128,7 @@ print(pgsn.gsn_tree(term).show(stdout=False, sorting=False))
 
 公開しているのは、PGSN 定数および項を構築する関数（`string`、`record`、`lambda_abs`、`map_term` など）、GSN ノードとクラスを構築する関数（`goal`、`strategy`、`solution`、`goal_class` など）、変換・描画の関数（`python_value`、`gsn_tree`、`gsn_dot`、`save_gsn`）、そして XML フロントエンドとその設定（`load_xml`、`load_xml_string`、`Config`、`Jails`、`configure`）です。
 
-これら以外 — `pgsn.dsl`、`pgsn.gsn`、`pgsn.pgsn_term`、`pgsn.pgsn_xml`、`pgsn.helpers`、`pgsn.cli` — は内部実装であり、予告なく変更されることがあります。以下の例はこれらのサブモジュールを直接 import しています。新しいコードでは `import pgsn` を使ってください。
+これら以外 — `pgsn.dsl`、`pgsn.gsn`、`pgsn.pgsn_term`、`pgsn.pgsn_xml`、`pgsn.helpers`、`pgsn.cli` — は内部実装であり、予告なく変更されることがあります。
 
 詳細なリファレンスは [README-ja-api.md](README-ja-api.md) にあります。
 
@@ -118,8 +137,7 @@ print(pgsn.gsn_tree(term).show(stdout=False, sorting=False))
 ## 基本例
 
 ```python
-from pgsn.gsn import *
-from pgsn.dsl import *
+from pgsn import *
 
 g = goal(
     description="System is secure",
@@ -137,20 +155,7 @@ g = goal(
 gsn_tree(g.fully_eval()).show(sorting=False)
 ```
 
-同じケースが `examples/gsn.py` にあり、コマンドラインから描画できるよう `main` に束縛してあります。
-```shell
-% pgsn doc examples/gsn.py
-Generating 'None' from 'examples/gsn.py'
-Evaluating term 'main'...
-Goal: System is secure
-└── Strategy: Break into sub-goals
-    ├── Goal: Input validated
-    │   └── Solution: Static analysis passed
-    └── Goal: Output sanitized
-        └── Solution: Fuzzing test succeeded
-
-Done.
-```
+これは[コマンドライン](#コマンドライン)の例を Python で書いたものです。`examples/gsn.py` はこれを `main` に束縛しているので、`pgsn doc examples/gsn.py` も同じ木を表示します。
 
 ---
 
@@ -161,8 +166,7 @@ Done.
 同じ説明文を持つ goal + solution の構造を生成する再利用可能な関数を定義します。
 
 ```python
-from pgsn.dsl import *
-from pgsn.gsn import *
+from pgsn import *
 
 # 再利用できる goal + solution のテンプレートを定義
 mk_goal_with_evidence = lambda_abs_keywords(
@@ -197,8 +201,7 @@ gsn_tree(top.fully_eval()).show(sorting=False)
 複数の要件から自動的に goal + solution の構造を生成します。
 
 ```python
-from pgsn.dsl import *
-from pgsn.gsn import *
+from pgsn import *
 
 requirements = ["Firewall enabled", "Encrypted communication", "Access control active"]
 
@@ -225,8 +228,7 @@ gsn_tree(secure_goal.fully_eval()).show(sorting=False)
 Goal を継承した独自のクラスを定義し、メタデータを加えてインスタンス化します。
 
 ```python
-from pgsn.dsl import *
-from pgsn.gsn import *
+from pgsn import *
 
 # Goal の派生クラスを定義
 CustomGoal = define_class(inherit=goal_class, name="GoalWithProject", attributes=["project"])
@@ -260,12 +262,14 @@ gsn_tree(g.fully_eval()).show(sorting=False)
 | `solution(...)`            | ゴールを支える証拠への参照を記述              |
 | `context(...)`             | ゴールや戦略に対する文脈情報を追加            |
 | `assumption(...)`          | 仮定を明示                                    |
+| `defeater(...)`            | それを持つノードに異議を立てる                |
+| `undeveloped`              | ゴールがまだ支持されていないことを示す        |
 | `immediate(...)`           | サブゴールを直接接続                          |
 | `map_term(...)`            | リストに対して関数適用を行い複数ノード生成    |
 | `lambda_abs(...)`          | 引数付きのラムダ抽象（位置引数）              |
 | `lambda_abs_keywords(...)` | 引数付きのラムダ抽象（キーワード引数）        |
-| `define_class(...)`        | GSNノードの再利用可能なクラスを定義           |
-| `instantiate(...)`         | クラスからオブジェクト（GSNノード）を生成     |
+| `define_class(...)`        | クラスを定義（`inherit=` で親を指定）         |
+| `instantiate(...)`         | クラスをインスタンス化                        |
 
 ---
 
