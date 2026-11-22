@@ -422,6 +422,9 @@ stuck, and the stuck term is reported where it came to rest.
 
 ### 4.4 The schema describes the surface syntax
 
+The schema is experimental. It does not yet describe the language exactly, and
+`pgsn` does not validate against it; `README-xml.md` is what defines the syntax.
+
 `PGSN.rng` is asked about the document an author wrote, shorthands and all, so
 it has to describe the surface form rather than what desugaring leaves behind.
 Two decisions follow.
@@ -532,9 +535,9 @@ that only raises an objection leaves it undeveloped.
 A Context or an Assumption attaches to a Goal or a Strategy in the standard,
 and to nothing else, so `goal_class` and `strategy_class` declare `contexts`
 and `assumptions` and `solution_class` does not. `examples/Figure6` is the
-standard's Figure 6, where an assumption hangs off the strategy. `PGSN.rng`
-rejects a Context or an Assumption written inside a `<Solution>`: the compiler
-has nowhere to put it and would drop it without a word.
+standard's Figure 6, where an assumption hangs off the strategy. A Context or
+an Assumption written inside a `<Solution>` has nowhere to go, and the compiler
+drops it without a word.
 
 ### 5.1 The output follows GSN v3 where the language does not
 
