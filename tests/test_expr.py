@@ -140,14 +140,23 @@ def test_ordering_is_limited_to_integers():
 
 
 @pytest.mark.parametrize("source,expected", [
-    ("True and False", False),
-    ("True or False", True),
-    ("not True", False),
-    ("True and True and False", False),
+    ("true and false", False),
+    ("true or false", True),
+    ("not true", False),
+    ("true and true and false", False),
     ("1 &lt; 2 and 3 > 2", True),
+    ("not 1 == 2", True),
+    ("false or true and false", False),
 ])
 def test_boolean_operators(source, expected):
     assert expr(source) is expected
+
+
+def test_true_and_false_are_names():
+    """They are the builtins `true` and `false`, reached by name where the
+    <expr> stands, like any other name in an expression."""
+    assert expanded("true") == '<var name="true" />'
+    assert expr("flag and true", '<def name="flag"><expr>1 == 1</expr></def>') is True
 
 
 # ------------------------------------------------------------------ #
@@ -162,20 +171,27 @@ def test_fstring_interpolates_variables():
     assert expr('f"hello {who}"', DEFS) == "hello world"
 
 
-def test_fstring_interpolates_expressions():
-    assert expr('f"{n} + 1 = {n + 1}"', DEFS) == "3 + 1 = 4"
+def test_fstring_fields_are_names_as_in_text():
+    """An f-string writes its fields as bare text does: a field is a name."""
+    assert expr('f"{who}"', DEFS) == run("{who}", DEFS)
+    for field in ("n + 1", "n:>4", "who!r", "who=", ""):
+        with pytest.raises(PGSNError, match="not a valid name"):
+            expr(f'f"[{{{field}}}]"', DEFS)
 
 
-def test_fstring_refuses_format_specs():
-    with pytest.raises(PGSNError, match="format specification"):
-        expr('f"[{n:>4}]"', DEFS)
+def test_a_single_brace_is_an_error():
+    with pytest.raises(PGSNError, match="does not close it"):
+        expr('f"{who"', DEFS)
+    with pytest.raises(PGSNError, match="closes no field"):
+        expr('f"who}"', DEFS)
 
 
-def test_fstring_refuses_conversions():
-    with pytest.raises(PGSNError, match="conversion"):
-        expr('f"{who!r}"', DEFS)
-    with pytest.raises(PGSNError, match="conversion"):
-        expr('f"{who=}"', DEFS)
+def test_string_literals_take_either_quote_and_escapes():
+    assert expr("'single'") == "single"
+    assert expr(r'"say \"hi\" \\ done"') == 'say "hi" \\ done'
+    assert expr(r'"a\tb"') == "a\tb"
+    with pytest.raises(PGSNError, match="is not an escape"):
+        expr(r'"\q"')
 
 
 def test_fstring_without_fields_is_a_plain_string():
@@ -191,21 +207,32 @@ def test_fstring_escapes_literal_braces():
 # What the syntax deliberately excludes
 # ------------------------------------------------------------------ #
 
-@pytest.mark.parametrize("source,node", [
-    ("f(x)", "Call"),
-    ("obj.field", "Attribute"),
-    ("xs[0]", "Subscript"),
-    ("lambda x: x", "Lambda"),
-    ("[i for i in xs]", "ListComp"),
-    ("x if y else z", "IfExp"),
-    ("2 ** 3", "BinOp"),
-    ("None", "Constant"),
-    ("{1: 2}", "Dict"),
-    ("(1, 2)", "Tuple"),
+@pytest.mark.parametrize("source", [
+    "obj.field", "xs[0]", "lambda x: x", "[i for i in xs]", "x if y else z",
+    "2 ** 3", "{1: 2}", "(1, 2)", "1 +", "(1", "3abc", "x = 1",
 ])
-def test_disallowed_syntax(source, node):
-    with pytest.raises(PGSNError, match=f"{node} is not allowed"):
+def test_what_the_grammar_does_not_have(source):
+    with pytest.raises(PGSNError, match="Cannot parse <expr>"):
         expr(source)
+
+
+def test_a_call_is_not_allowed():
+    with pytest.raises(PGSNError, match="a call is not allowed"):
+        expr("f(x)")
+
+
+@pytest.mark.parametrize("word", ["and", "or", "not"])
+def test_the_words_of_the_syntax_are_not_names(word):
+    """Every name a <def> can bind can be written in an <expr>, so the words
+    the expression syntax uses are kept out of names altogether."""
+    with pytest.raises(PGSNError, match="words of the expression syntax"):
+        run(f'<def name="{word}">x</def>x')
+
+
+@pytest.mark.parametrize("name", ["lambda", "if", "class", "None", "True"])
+def test_a_python_keyword_is_an_ordinary_name(name):
+    """The grammar is PGSN's own, so Python's keywords mean nothing to it."""
+    assert expr(f"{name} + 1", f'<def name="{name}"><num>1</num></def>') == 2
 
 
 def test_true_division_is_reserved():
@@ -222,7 +249,7 @@ def test_chained_comparison_is_rejected():
 def test_empty_and_malformed_expressions():
     with pytest.raises(PGSNError, match="is empty"):
         expr("")
-    with pytest.raises(PGSNError, match="Cannot parse"):
+    with pytest.raises(PGSNError, match="Cannot parse.*at the end"):
         expr("1 +")
 
 
@@ -260,7 +287,7 @@ def test_expansion_is_ordinary_xml_apart_from_the_reserved_names():
     document, and that document means the same thing — as long as nothing has
     rebound the names, which is the whole point of the prefix.
     """
-    source = 'f"{n} items and {n + 1} boxes"'
+    source = 'f"{n} items" == "3 items" and n + 1 > 2'
     hand_written = expanded(source).replace('name="_', 'name="')
     assert run(hand_written, DEFS) == expr(source, DEFS)
 

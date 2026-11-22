@@ -108,20 +108,25 @@ Writing arithmetic with `<apply>` is heavy, so `<expr>` accepts the usual infix 
 <def name="label"><expr>f"component {i} of {total}"</expr></def>
 ```
 
-`<expr>` is a shorthand and nothing more: every expression stands for an application of the corresponding builtin, so nothing is reachable through an expression that is not reachable without one.
+`<expr>` is a shorthand and nothing more. Before compilation it is expanded, where it stands, into the elements it abbreviates: every operator into an application of the corresponding builtin, every name into a `<var>`. So a name in an expression means what `<var>` would mean at that place, and nothing is reachable through an expression that is not reachable without one. The grammar is PGSN's own; it is not borrowed from any other language.
 
 **What may appear in an expression**
 
 | | |
 |---|---|
-| literals | `3`, `"text"`, `True`, `False` |
-| variables | `i` — becomes `<var name="i"/>` |
+| literals | `3`, `"text"`, `'text'` |
+| names | `i` — becomes `<var name="i"/>`; `true` and `false` are the builtins of those names |
 | arithmetic | `+`, `-`, `*`, `//`, `%`, and unary `-` |
 | comparison | `==`, `!=`, `<`, `<=`, `>`, `>=` |
 | boolean | `and`, `or`, `not` |
+| parentheses | `(i + 1) * 2` |
 | f-strings | `f"component {i} of {total}"` |
 
 Everything else is rejected with an error naming what was found. There are no function calls, no attribute access and no subscripting: use `<apply>`, `<get>` and the list elements, which state plainly what they do.
+
+The operators bind as usual: `or` loosest, then `and`, `not`, the comparisons, `+` and `-`, `*`, `//` and `%`, and unary `-` tightest. A comparison is not chained: `a < b < c` is an error, written `a < b and b < c`.
+
+A string literal takes either quote, and a backslash escapes `\\`, `\"`, `\'`, `\n` and `\t`. An f-string writes its fields as bare text does — see [Format Strings in Text](#format-strings-in-text): each field is a name, so a value computed for a field is bound with `<def>` first.
 
 **Three things to know**
 
@@ -136,7 +141,7 @@ Everything else is rejected with an error naming what was found. There are no fu
 
 `//` is integer division: `7 // 2` is `3`. `/` is rejected rather than treated as a synonym, so that it stays available for true division if PGSN ever gains a floating point type.
 
-Ordering compares integers only, so `"a" < "b"` has no value. Equality compares data only: base values — a string, an integer, a boolean, `undefined` — and lists and records built out of them. So `"a" == "a"` is `True`, while two functions, two classes or two GSN nodes have no value when compared, just as `"a" < "b"` has none. To ask whether a list is empty, apply `is_empty`; comparing the list with `empty` answers only for a list whose elements are base values, or lists and records built out of them.
+Ordering compares integers only, so `"a" < "b"` has no value. Equality compares data only: base values — a string, an integer, a boolean, `undefined` — and lists and records built out of them. So `"a" == "a"` is `true`, while two functions, two classes or two GSN nodes have no value when compared, just as `"a" < "b"` has none. To ask whether a list is empty, apply `is_empty`; comparing the list with `empty` answers only for a list whose elements are base values, or lists and records built out of them.
 
 **Operators cannot be redefined.** `1 + 2` is addition even inside a scope that binds the name `plus`.
 
@@ -144,9 +149,7 @@ Ordering compares integers only, so `"a" < "b"` has no value. Equality compares 
 
 A *name* is what `<def>` and `<param>` introduce and what `<var>` refers to. The same rule applies to every attribute that holds one: `name` on `<def>`, `<param>` and `<var>`, `typeOf` on `<def>` and `<var>`, `as` on `<from>` and `<import>`, `template` on `<apply>`, `of` on `<get>`, `to` on `<send>`, `name` on `<arg>`, and the `var` shorthand attribute.
 
-A name must begin with a letter and may continue with letters, digits and underscores. Letters are not restricted to ASCII, so `ゴール` is a name. A name may **not** begin with an underscore; those are reserved by the implementation.
-
-The rule is the same one Python uses for identifiers, and deliberately so: an [expression](#expressions-expr) is parsed by Python's parser, so a name that could not appear in an expression would be unreachable from one.
+A name must begin with a letter and may continue with letters, digits and underscores. Letters are not restricted to ASCII, so `ゴール` is a name. A name may **not** begin with an underscore; those are reserved by the implementation. The words `and`, `or` and `not` are not names, because an [expression](#expressions-expr) uses them as operators: every name a `<def>` can bind can then be written in an expression.
 
 Record labels are a different namespace and are unrestricted: `key` on `<get>` and `<dt>`, `method` on `<send>` and `name` on `<attribute>` are arbitrary strings. So is `name` on `<class>`, which is what the class is called rather than a name anything refers to.
 
@@ -645,7 +648,7 @@ record whose labels are computed is built with `add_attribute` instead.
 ### Format Strings in Text
 
 Wherever text stands for a value, you can embed in-scope variables with the `{name}` notation.
-This becomes a `format_string` application. To write a literal brace, escape it as `{{` or `}}`.
+This becomes a `format_string` application. What stands between the braces is a name, and anything else there is an error, as is a brace left single. To write a literal brace, escape it as `{{` or `}}`.
 
 ```xml
 <template>

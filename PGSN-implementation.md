@@ -288,14 +288,20 @@ deliberately absent from the documentation, this file included. What the
 language guarantees is only that a name beginning with an underscore is
 reserved.
 
-### 2.3 Names are identifiers
+### 2.3 One rule for names
 
-`<expr>` is parsed by Python's parser, so a name that Python cannot parse as
-an identifier could be introduced by a `<def>` and then never referred to from
-an expression. The check is `str.isidentifier()` plus the underscore rule, so
-it is not restricted to ASCII: a Japanese name is a name. Python's keywords
-pass that check and still cannot be written in an expression, so a binding
-named `lambda` or `if` can be referred to with `<var>` only.
+A name is a letter followed by letters, digits and underscores, letters being
+Unicode letters, so a Japanese name is a name. `<expr>` has a grammar of its
+own, parsed by a small recursive-descent parser in `pgsn_xml.py`, and the
+parser checks a name with the same function the attributes are checked with.
+So every name a `<def>` can bind can be written in an expression. That is why
+the three words the grammar uses, `and`, `or` and `not`, are not names at all,
+and why nothing else is: a word another language reserves is an ordinary name
+here. `true` and `false` are names of builtins rather than literals, so an
+expression reaches them the way `<var>` does at the same place.
+
+The `{name}` fields of bare text and of an f-string are read by one scanner,
+and a field is a name under the same rule, so the two cannot drift apart.
 
 ### 2.4 Rebinding is shadowing
 
