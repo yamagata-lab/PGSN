@@ -93,6 +93,8 @@ Bare text is a string, so the other literal forms are written out.
 | `<num>3</num>` | an `Integer`. PGSN has no floating point numbers |
 | `<str> a {b} </str>` | a `String`, taken exactly as written: whitespace is kept and `{...}` is not interpolated |
 
+Empty content is the empty string as well: `<li/>`, `<dd/>`, `<arg name="x"/>` and `<description/>` each stand for `""`, since an element with nothing in it holds the empty text. The one exception is an unnamed `<arg/>`, which passes the keyword record — see [Template Application](#template-application-apply).
+
 `<num>` matters because bare text stays a string even when it looks like a number, which is what lets a goal say `2024 audit passed` without the year turning into an integer. The arithmetic builtins only accept integers, so `<arg>3</arg>` hands them a string and the sum is never computed; write `<arg><num>3</num></arg>`.
 
 The builtins are ordinary bindings in the outermost scope, so `<var name="plus"/>` reaches the builtin unless something nearer binds that name.
@@ -690,7 +692,7 @@ Every GSN node opens with a description, and any node may be challenged by a
 `Assumption` elements.
 
 A description that is empty or blank, `<description/>` included, is not a
-compile error. It is the empty string, and the GSN check of `pgsn doc` and
+compile error. It is the empty string ([Literals](#literals)), and the GSN check of `pgsn doc` and
 `pgsn render` reports it, as it does a blank description computed at run time.
 
 ```xml

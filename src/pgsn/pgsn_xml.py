@@ -1099,13 +1099,18 @@ def _item(item: ET.Element | str, unit: _Unit) -> Term:
 
 
 def _content(parent: ET.Element, unit: _Unit) -> Term:
-    """The single value an element's content stands for."""
+    """The single value an element's content stands for.
+
+    Empty content is the empty string, as bare text is a string: in XML an
+    element with nothing in it holds the empty text. What the empty string
+    then fails to be is reported with the output, not here.
+    """
     items = _items(parent)
     if len(items) == 1:
         return _item(items[0], unit)
     if items:
         raise PGSNError(f"Multiple values in <{parent.tag}>")
-    raise PGSNError(f"No value in <{parent.tag}>")
+    return _text_to_term("")
 
 
 def _split_params(parent: ET.Element) -> tuple[list[ET.Element],
@@ -1122,10 +1127,11 @@ def _block(items: list[ET.Element | str], unit: _Unit, owner: str) -> Term:
     """Any number of bindings, then the value they are in scope for.
 
     `<PGSN>`, `<div>` and a template body are all this shape, and the value
-    is simply the last item -- a child element or a run of text.
+    is simply the last item -- a child element or a run of text. An empty
+    one is the empty string, as empty content is everywhere.
     """
     if not items:
-        raise PGSNError(f"<{owner}> has no value")
+        return _text_to_term("")
     return _thread_lets(_bindings(items[:-1], unit, owner),
                         _item(items[-1], unit))
 
@@ -1396,18 +1402,6 @@ class _Header(NamedTuple):
     defeaters: Term
 
 
-def _description_element(desc_elem: ET.Element, unit: _Unit) -> Term:
-    """What a <description> says. An empty one says the empty string.
-
-    A blank description is not a compile error: the compiler checks the
-    document as XML, and the GSN check reports the blank with the output, as
-    it does for a description computed at run time.
-    """
-    if not _items(desc_elem):
-        return _text_to_term("")
-    return _content(desc_elem, unit)
-
-
 def _header_description(elem: ET.Element, unit: _Unit) -> Term:
     """The description of a GSN header element.
 
@@ -1419,7 +1413,7 @@ def _header_description(elem: ET.Element, unit: _Unit) -> Term:
     """
     desc_elem = elem.find("description")
     if desc_elem is not None:
-        return _description_element(desc_elem, unit)
+        return _content(desc_elem, unit)
     text = (elem.text or "").strip()
     if text:
         return _text_to_term(text)
@@ -1500,7 +1494,7 @@ def _e_annotation(elem: ET.Element, unit: _Unit, ctor: Term) -> Term:
             raise PGSNError(
                 f"<{elem.tag}> carries both a <description> and <{other[0].tag}>; "
                 f"it holds a single statement, so give it only one")
-        desc = _description_element(desc_elem, unit)
+        desc = _content(desc_elem, unit)
     elif other:
         if elem.text and elem.text.strip():
             raise PGSNError(
