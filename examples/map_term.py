@@ -1,7 +1,4 @@
-from pprint import pprint
-
-from pgsn.dsl import *
-from pgsn.gsn import *
+from pgsn import *
 
 requirements = ["Firewall enabled", "Encrypted communication", "Access control active"]
 

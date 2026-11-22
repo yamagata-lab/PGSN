@@ -1,7 +1,4 @@
-from pprint import pprint
-
-from pgsn.gsn import *
-from pgsn.dsl import python_value
+from pgsn import *
 
 main = goal(
     description="System is secure",
