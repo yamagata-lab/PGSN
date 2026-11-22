@@ -1,10 +1,10 @@
 # PGSN implementation notes
 
-This file records how the implementation works and why it was built that way.
-It is for people working on the front end (`src/pgsn/pgsn_xml.py`), the term
-language and evaluator (`src/pgsn/pgsn_term.py`), the derived vocabulary
-(`src/pgsn/dsl.py`) and the GSN classes (`src/pgsn/gsn.py`), and for anyone
-replacing the evaluator with a virtual machine.
+This file explains how the implementation works and why it was built that way:
+the XML front end (`src/pgsn/pgsn_xml.py`), the term language and its
+evaluator (`src/pgsn/pgsn_term.py`), the derived vocabulary
+(`src/pgsn/dsl.py`), and the GSN classes and their rendering
+(`src/pgsn/gsn.py`).
 
 The language itself is documented elsewhere: README-xml.md / README-ja-xml.md
 for the surface syntax, README-api.md / README-ja-api.md for the Python API.
@@ -41,13 +41,13 @@ leftmost redex reduces the function body first, with the parameter unknown,
 and a recursion over that parameter never ends — even though the whole term
 has a normal form, reached by firing `Map` first.
 
-**A rule that inspects an open term breaks confluence.** `Equal` used to fire
-on any argument that was not an application or an abstraction, a bound
-variable included, so `equal x "a"` reduced to `false` under a binder. That is
-not a rewrite rule: it does not survive the substitution of `"a"` for `x`.
-Evaluating `map_term (λx. if (equal x "a") "yes" "no")` over `["a"]` could
-therefore reach `["yes"]` or `["no"]` depending on the order of reduction.
-Equality has since been narrowed to data (§1.5), which refuses a variable.
+**A rule that inspects an open term breaks confluence.** Under a binder the
+arguments of a builtin may be variables. If `equal` answered `equal x "a"` with
+`false` there, the answer would not survive putting `"a"` for `x`, and
+`map_term (λx. if (equal x "a") "yes" "no")` over `["a"]` could reach `["yes"]`
+or `["no"]` depending on the order of evaluation. Evaluation that stays outside
+abstractions never asks the question, and `equal` refuses a variable in any
+case, since it compares data only (§1.5).
 
 **A function held in data has no normal form.** Lists and records may hold
 functions — a module is a record of templates, a class is a record of methods —
@@ -60,22 +60,65 @@ under substitution**, which is to say it must not inspect a part of a term
 that substitution could change. The shape of a list literal and the keys of a
 record literal are such parts; a variable is not.
 
-### 1.2 Substitution carries a free-variable bound
+### 1.2 The machine
 
-Beta reduction substitutes an argument without evaluating it (call by name),
-and de Bruijn indices mean each substitution that crosses an abstraction
-shifts the argument. Every term therefore caches `free_bound()`: one more than
-the largest de Bruijn index free in it, `0` if the term is closed. `shift` and
-`subst` return "unchanged" as soon as the bound shows that nothing inside can
-move.
+`fully_eval` runs a lazy Krivine machine: call by need, with environments
+indexed by de Bruijn indices, a heap of cells and update markers on the stack.
+A term is evaluated under an environment. An application pushes its argument
+on the stack, unevaluated, as a thunk that closes over the current
+environment; an abstraction takes the argument off the stack into its own
+environment; a variable is looked up there. A thunk is a cell that is
+evaluated the first time its value is needed and is then overwritten with that
+value, so a name used in many places is evaluated once. A thunk whose value is
+needed while it is being evaluated depends on itself, and the machine stops
+with the same error as an exhausted step budget.
 
-Before this, a substitution that crossed N abstractions shifted the whole
-argument N times, whether or not the variable occurred below, and the walk
-followed the expanded tree rather than the shared graph. On
-`examples/SolarWinds.xml` over 99% of the evaluation time was spent shifting.
-The arguments substituted at the root are mostly closed, so both costs now
-stop at the first node: that example went from 396 s to 0.9 s, with
-byte-identical output.
+Call by need rather than call by value, because it keeps the meaning of call
+by name. An argument that is never used is never evaluated, so an unused
+argument that diverges or cannot proceed does no harm, and recursion is
+written with the plain fixed-point combinator (`fix` in `dsl.py`). A
+call-by-value machine would need another fixed-point combinator or a
+recursive binding form, and would change which documents terminate.
+
+**Where evaluation stops.** The machine itself stops at a weak head normal
+form. `normalize` then takes the value to the weak normal form of §1.1: it
+forces, in turn, every thunk the value holds outside an abstraction — the
+fields of data, and the arguments of an application that cannot proceed. The
+fields of data are therefore evaluated only when the data is part of the
+result: at the top, inside other data of the result, or at the head of an
+application that cannot proceed, which is part of the result too. Data that
+is projected is not entered, so taking one definition out of a module
+evaluates that definition and none of the others (§3).
+
+**Builtins.** A builtin applied to as many arguments as its arity is strict in
+all of them. A frame on the stack holds it while the arguments are evaluated
+to weak head normal forms, one after the other, and the builtin is then
+applied once. Applied to fewer arguments, it is a value. Data is a builtin
+too, applied to a label to project a field, but the data is not one of its
+arguments, which is why projection leaves the other fields alone. A builtin
+whose answer depends on values inside data — equality of lists and records, a
+format string's fields, the members of a class definition — does not call the
+machine again to get them. It returns a term that applies an internal builtin
+to those fields, and the machine carries on with that term, so those values
+are evaluated by the same rules as everything else.
+
+Nothing calls the machine from inside itself, and the machine, `normalize`
+and the way back to a term described next are loops, so the depth of the
+Python stack does not grow with what the machine evaluates. The passes before and after
+evaluation still recurse — the removal of names, `python_value`, `gsn_tree` —
+and a structure deep enough for them stops with Python's `RecursionError`.
+
+**Back to a term.** What `fully_eval` returns is a term again. A thunk
+that was forced is replaced by its value, and one that was never forced by
+the term it was made from, with its environment put in place of its free
+indices. The result is the weak normal form, which `python_value` and the GSN
+conversions read.
+
+**Steps.** The budget counts two transitions of the machine: an abstraction
+taking an argument off the stack, and a builtin being applied. Pushing an
+argument, looking up a variable and updating a cell are not counted. A step
+is not a unit of time, since applying a builtin costs whatever the builtin
+does.
 
 ### 1.3 The conditional is lazy in its branches
 
@@ -84,57 +127,46 @@ wraps each branch before the builtin sees it:
 
     λc. λt. λe. IfThenElse c (λ_. t) (λ_. e) undefined
 
-Beta reduction substitutes an argument without evaluating it, so the branches
-reach the builtin as they were written. The builtin selects one of the two
-abstractions, and the application to a dummy argument forces the one that won.
+A builtin is strict in its arguments (§1.2), so `IfThenElse` handed the
+branches as they were written would evaluate both before choosing, and the
+base case of every recursion would be lost. Wrapped, each branch is an
+abstraction, which is already a value, so evaluating it does nothing. The
+builtin selects one of the two abstractions, and the application to a dummy
+argument evaluates the one that won.
 
-The wrapping changes nothing when the condition is well behaved. A builtin is
-tried before any argument is reduced, so a condition that eventually becomes a
-boolean already short-circuits, and always did. What changes is the case where
-the condition can never become a boolean. The builtin then never fires, the
-evaluator falls through to reducing the arguments of a head it cannot apply,
-and both branches are reduced — a branch holding a recursive call unfolds until
-the step budget runs out. Under an abstraction there is nothing to reduce
-(§1.1), so instead the application stays as it stands and is reported stuck.
+When the condition never becomes a boolean, the builtin refuses it and the
+application cannot proceed. Its arguments are then part of the result (§1.2),
+but they are abstractions, so nothing under them is evaluated (§1.1), and the
+application is reported stuck where it stands.
 
 This is what makes a missing record key visible where it occurs. A lookup that
 cannot proceed reaches a fold as the list being folded; the guard `is_empty
-list` cannot proceed either; and the fold now stops. The same holds for a
-recursion the author writes themselves, through `<if>` and a recursive binding,
-because `<if>` expands to an application of this same term (§4.1). Measured on
-such a recursion, guarded by a comparison against a stuck term: 86 s to exhaust
-the Python stack, reporting only that the stack was exhausted, against 0.2 s to
-a stuck term reported at `<root>.description`.
+list` cannot proceed either; and the fold stops instead of unfolding its
+recursive branch until the step budget runs out. The same holds for a
+recursion the author writes themselves, through `<if>` and a recursive
+binding, because `<if>` expands to an application of this same term (§4.1).
 
-`Guard` is left as it is. It takes the body it guards as an ordinary argument
-and is meant not to fire while its condition is false, so the body is reduced
-in exactly the cases the builtin is there to hold back; nothing in the standard
-library recurses through it.
+`Guard` is not wrapped. It takes the body it guards as an ordinary argument,
+so the body is evaluated to a weak head normal form even while the condition
+is false; nothing in the standard library recurses through it.
 
-A call-by-value machine needs this same wrapping in order not to evaluate both
-branches (§1.5), which is why it is worth having before such a machine exists.
+### 1.4 A term that cannot proceed is returned
 
-### 1.4 What is still slow, and what still diverges
-
-Call by name does not share: a name referred to from N places has its value
-reduced N times. Factoring a repeated sub-term out into a `<def>` can
-therefore cost more than it saves. This is a property of the evaluator, not of
-the translation, and a machine with environments and closures removes it.
-
-A recursion that genuinely does not terminate still does not terminate, and the
-step budget is what bounds it. What no longer happens is a recursion running
-away over data that is merely stuck. The remaining cost of a stuck term is that
-it is found during readback rather than where it arose: `python_value` reports
-the path at which it met something that is not a value, which is where the term
-came to rest, not where the key was missing.
+PGSN returns a term that cannot proceed rather than failing on it. Raising an
+error where a builtin cannot proceed would change the language, not only the
+implementation: an argument that is never used may be stuck without harm, and
+so may a field nobody reads. The error belongs to readback. `python_value`,
+and the conversion to GSN built on it, are where a value is required, and they
+report the path at which they met something that is not one.
+`tests/test_stuck.py` states the rule.
 
 What the builtin had to say is kept. A builtin that cannot proceed raises a
-`PGSNRuntimeError`; the evaluator catches it where it applies the builtin and,
-if nothing else in the application can be reduced either, records the message
-under `error` in the `meta_info` of the application it leaves behind. Only
-these are caught. Any other exception is a fault of the interpreter and
-escapes, and so do the step budget and Python's recursion limit, which would
-stop bounding anything if they turned into stuck terms.
+`PGSNRuntimeError`; the machine catches it where it applies the builtin, leaves
+the application with its arguments, and records the message under `error` in
+the application's `meta_info`. Only these are caught. Any other exception is a
+fault of the interpreter and escapes, and so do the step budget and Python's
+recursion limit, which would stop bounding anything if they turned into stuck
+terms.
 
 A builtin that refuses an argument because the argument is itself stuck says
 why it is stuck as well. The refusal carries the argument's own reason -- the
@@ -147,90 +179,51 @@ error: a record that never answered a question reaches a list of defeaters as
 PGSNKeyError: Record: there is no label '...'`, rather than as the first half
 alone. The path is still where the term came to rest.
 
-### 1.5 Notes for a virtual machine
+### 1.5 Two rules that compare terms
 
-A machine with environments and closures removes substitution, and with it the
-shifting. Krivine with updatable thunks (call by need) keeps the present
-meaning exactly; CEK (call by value) is simpler but changes it, and needs three
-things:
-
-- **Recursion.** The fixed-point combinator in `dsl.py` diverges under call by
-  value. Either use the call-by-value fixed-point combinator, or compile a
-  recursive binding to a closure whose environment refers to itself, as
-  `let rec` does.
-- **Conditionals.** Under call by value, a conditional must not evaluate both
-  branches, or the base case of every recursion is lost. This one is already
-  settled: `if_then_else` wraps its branches and applies the one that wins
-  (§1.3), so a machine that evaluates every argument evaluates neither branch,
-  and needs no special form for `if`. The price is a closure and an application
-  per conditional.
-- **Terms that cannot proceed.** PGSN returns them rather than failing, and a
-  machine does the same. Reporting an error where a builtin cannot proceed
-  would be a change of language, not of implementation. The error belongs to
-  readback: `python_value`, and the conversion to GSN built on it, are where a
-  value is required, and they report the path at which they met something that
-  is not one. `tests/test_stuck.py` states the rule.
-
-Either machine needs a readback layer: what a machine returns is a weak head
-normal form, while `python_value` requires the inside of lists, records and
-objects to be values as well.
-
-Builtins are best given their arguments unevaluated and left to force what
-they inspect — that is where the knowledge of which argument is needed already
-lives, in the preconditions each `_apply_args` checks before it computes
-anything, and raises a `PGSNRuntimeError` when they fail. The arity is checked once,
-before any builtin is called. Builtins that build a term containing
-applications (`Map`, a method call on an object) can return that term for the
-machine to continue with, which is what `_apply_args` already does.
-
-Two rules were answered by comparing terms. Both have since been settled, so
-neither leaves a machine to decide what it is for two terms to be the same:
+Two rules of the language ask whether terms are the same. Both are answered
+without the evaluator having to decide what it is for two terms to be the
+same:
 
 - **Equality.** `equal` compares data and declines everything else. A term is
   comparable when it is a base value — a string, an integer, a boolean, a
   named constant — or a list or a record whose components are comparable in
   turn; the leaves of a comparable term are therefore always base values.
   Anything else leaves the application stuck, so the question is refused
-  rather than answered wrongly.
+  rather than answered wrongly. Both sides are evaluated in full and checked
+  to be data before anything is answered, so the answer does not depend on
+  the order of the components: `equal [goal] empty` is refused, not `false`.
 
   Structural equality of data is well defined. Equality of functions is not
   definable, and comparing closures structurally is meaningless. Comparing
   them by identity is not referentially transparent: `let f = λx.x in equal f
   f` and `equal (λx.x) (λx.x)` would differ. Identity is the worse answer here
-  for a second reason: the evaluator does not share, so a binding read twice
-  is reduced twice and would carry two identities, where a machine with
-  environments and closures would carry one — the sharing a machine adds for
-  speed would change what programs mean. And a notation whose premise is that
-  code is collected from several places needs the same definition, written in
-  two of them, to be the same value. Structure gives that; identity cannot.
+  for a second reason: the machine holds a binding read twice in one cell, so
+  identity would make sharing, which is there for speed, change what a
+  document means. And a notation whose premise is that code is collected from
+  several places needs the same definition, written in two of them, to be the
+  same value. Structure gives that; identity cannot.
 
-  Two consequences were visible in the code. `equal [plus 1 1] [2]` answered
-  `false`, because the elements were compared as terms before they had values;
-  it waits now, and answers `true`. And `foldr` asked for its base case by
-  comparing the list with `empty`, which a list of GSN nodes cannot answer, so
-  emptiness is asked directly with `is_empty` — a question about the list and
-  not about its elements.
-- **Class identity.** A machine does not need one. `is_subclass` walked the
-  inheritance chain comparing classes with structural equality, so the same
-  class reached along two paths compared unequal once its defaults had been
-  reduced to different degrees. `is_instance`, defined in terms of it,
-  therefore answered `false` for every class whose defaults hold an
-  unevaluated term — `goal_class` among them, through its `undeveloped`
-  default. From XML the check was reached through the `instanceOf` attribute,
-  which compiled to `guard(is_instance(…))`, so a document that used it on a
-  `<Goal>` did not reduce and said nothing about why.
+  The components are compared once they have values, so `equal [plus 1 1]
+  [2]` is `true`. And `foldr` asks for its base case with `is_empty`, a
+  question about the list and not about its elements, since a list of GSN
+  nodes cannot be compared with `empty`.
+- **Class identity.** There is none to decide. Comparing classes
+  structurally would answer differently for the same class reached along two
+  paths once its defaults had been evaluated to different degrees — every
+  class whose defaults hold a term that is not a value, `goal_class` among
+  them through its `undeveloped` default. So a type is checked with
+  `is_subtype`, which compares the attribute and method *names* the two
+  classes declare and looks at nothing else. Names belong to a class's shape
+  rather than its contents, so the answer is the same however far either side
+  has been evaluated, and the evaluator is free to represent a class however
+  it likes as long as it can report those names. From XML the check is
+  reached through `typeOf`, which compiles to `guard(is_subtype(…))`.
 
-  Both were replaced by `is_subtype`, which compares the attribute and method
-  *names* the two classes declare and looks at nothing else. Names belong to
-  a class's shape rather than its contents, so the answer is the same however
-  far either side has been reduced, and a machine is free to represent a
-  class however it likes as long as it can report those names.
-
-  This made typing structural, which is a change of language and not only of
-  implementation. `inherit` is not consulted: a class satisfies every type
-  whose labels it covers, related to it or not, so a `Goal` satisfies
-  `Solution` by declaring `description` and `defeaters` and more besides.
-  What can no longer be asked is which class a value belongs to. The
+  Typing is therefore structural. `inherit` is not consulted: a class
+  satisfies every type whose labels it covers, related to it or not, so a
+  `Goal` satisfies `Solution` by declaring `description` and `defeaters` and
+  more besides. What cannot be asked is which class a value belongs to. The
   inheritance chain is still readable through `python_value`, and `gsn_tree`
   classifies nodes by the names it finds there, but that is a readback
   facility rather than a rule of the language.
@@ -243,11 +236,10 @@ neither leaves a machine to decide what it is for two terms to be the same:
   no name cannot be converted at all, since there is nothing to report it as:
   a limit of the readback rather than a claim about the value.
 
-  The caveat this left is closed. `equal` accepted classes, since it declined
-  only applications and abstractions, so the comparison that was removed was
-  one builtin away from returning. A class is not data and neither is an
-  object, and `equal` declines both: what makes two classes the same is left
-  open (§7) rather than decided here by accident.
+  A class is not data and neither is an object, and `equal` declines both, so
+  the structural comparison of classes cannot come back through equality:
+  what makes two classes the same is left open (§7) rather than decided by
+  accident.
 
 ## 2. Names and scope
 
@@ -261,10 +253,9 @@ produced a binding nobody could refer to, silently.
 
 Only the names a unit actually leaves free are bound. Binding the whole table
 instead would mean the same thing — a name never mentioned cannot be observed —
-but the builtin terms are large, every binding substitutes its value through
-the body, and a chain deep enough to hold all of them exhausts the
-interpreter's stack. A document that mentions dozens of builtins can still
-reach that limit; real documents bind a handful.
+but every compiled document, and every module in it, would then carry every
+builtin, in its term and in the JSON that `pgsn compile` writes. Real documents
+bind a handful.
 
 The free names are found with `Term.free_variables()`, the same traversal that
 name removal depends on, so nothing new has to be trusted.
@@ -316,6 +307,11 @@ binding to the arguments given. Embedding the module at every import instead
 makes the compiled term grow with the number of import paths, which a chain of
 files each importing the next twice makes exponential in its depth, and the
 step budget does not bound it, since it applies only to evaluation.
+
+At evaluation an import is a thunk like any other binding, so it is evaluated
+once however many times the imported name is used. The module evaluates to a
+record, and projecting a name from it evaluates that name's definition and
+none of the others (§1.2), so a module costs what the document uses of it.
 
 Each module carries a builtin scope of its own, and a module that still has a
 free name once its builtins are bound is rejected. Moving the module to the
@@ -551,37 +547,65 @@ now. `solution_class` does not, because the standard attaches nothing to a
 Solution, and `PGSN.rng` rejects one written there — the compiler has nowhere
 to put it and would say nothing.
 
+### 5.1 The output follows GSN v3 where the language does not
+
+The language is not yet shaped after the GSN metamodel, and changing it is
+left to a later version. What the evaluated structure is drawn and checked as
+follows the standard already, so that a reader of the output meets GSN v3 and
+not PGSN's encoding of it.
+
+**Undeveloped.** `undeveloped` is a value, written where a goal's support or a
+strategy's sub-goal would go. The drawing does not show it as an element of its
+own: it is absorbed into the element that holds it, which gets the standard's
+◇ under its box. A defeater left without support gets no ◇, since the standard
+gives the decorator to goals and strategies only.
+
+**Identifiers.** The standard requires every element to have one. The drawing
+heads each box with an identifier made from its type and its position among the
+elements of that type, in document order: G, S, Sn, C, A, and CG for a
+defeater, after the standard's own examples of a challenging goal. These are
+labels of the drawing, not names in the document. Nothing in a document refers
+to an element: an element is a value, and the language gives values no
+identity (§1.5, §7).
+
+**Relationships.** SupportedBy has a solid arrowhead, InContextOf a hollow one,
+and a defeater's Challenges a dashed line with an open arrowhead, pointing at
+what it challenges. An Assumption is marked with an A. A defeater is drawn as a
+dashed hexagon, which is PGSN's own shape: the standard draws a challenging
+element as an ordinary goal or solution.
+
+**Validity.** A document can put any value in any position, so a structure can
+evaluate and still not be one the standard allows: text where a goal's support
+belongs, a strategy with no sub-goal, a goal where a defeater belongs.
+`gsn_violations` checks the evaluated structure against the rules of the
+standard that a document can break, walking it in the order `gsn_tree` does, so
+that the identifiers it reports are the ones the drawing shows. The check runs
+on the result, not on the document, because which value lands in which
+position is known only after evaluation. `pgsn doc` and `pgsn render` print a
+breach as a warning and go on; under `--strict` they stop and write nothing.
+
 ## 6. Measurements
 
-`examples/SolarWinds.xml`, 3,289 nodes after compilation, no imports, many
-repeated references to the same `<def>`:
+The twenty-two entry points under `examples/` are compiled, evaluated and
+converted with `python_value` in 0.53 s altogether. The slowest five are the
+four EU AI Act cases, which import a module that imports another, and
+SolarWinds, the largest document without imports:
 
-| | time |
-|---|---|
-| before the free-variable bound | 396 s |
-| after | 0.9 s |
+| document | time | steps |
+|---|---|---|
+| `EU_AI_ACT/case_proctoring.xml` | 0.11 s | 8,459 |
+| `EU_AI_ACT/case_recruitment_ai.xml` | 0.07 s | 4,521 |
+| `EU_AI_ACT/case_medical_ai.xml` | 0.07 s | 4,429 |
+| `EU_AI_ACT/case_gpai_system.xml` | 0.06 s | 4,388 |
+| `SolarWinds.xml` | 0.05 s | 1,933 |
 
-The profile behind the first figure: `shift_or_none` accounted for 99.7% of the
-time, called about 159 million times, along a path from the reduction of an
-application through substitution into an abstraction. The term itself stayed
-around 2,000–3,000 nodes as a graph, while the tree it would expand to peaked
-at 97,000 — the shift and substitution walked the expanded tree, and repeated
-it at every abstraction.
+The steps are those of §1.2, well inside the default budget of a million.
+Sharing is what keeps a module cheap: a document that uses an imported name
+fifty times takes as many steps as one that uses it once, and a definition of
+the module that the document does not use takes none.
 
-The count of reduction steps is not a measure of work: a step reduces one redex
-in an application, but advances every element of a list and every field of a
-record. SolarWinds completes in 487 steps at the root.
-
-Thunked branches (§1.3) change no output and cost no measurable time: every
-entry point under `examples/` produced a byte-identical document before and
-after, and the slowest of them, SolarWinds, took 0.84 s against 0.85 s. What
-they change is the stuck case. A fold over a term that cannot proceed ran for
-81 s before exhausting the Python stack; it now stops at once.
-
-Where the examples stand now: the nineteen entry points under `examples/`
-evaluate in 0.96 s altogether, 0.70 s of which is SolarWinds. The test suite
-evaluates every one of them (`tests/test_examples.py`) without fixing what
-they produce, since they are material rather than specification.
+The test suite evaluates every entry point (`tests/test_examples.py`) without
+fixing what they produce, since they are material rather than specification.
 
 ## 7. Open questions
 
@@ -605,8 +629,14 @@ they produce, since they are material rather than specification.
   what keeps `"builtin"` in `_VALUE_TAGS`: the element was removed and the
   entry is stale, but it is the only reason `<builtin>` inside a GSN element is
   an error rather than nothing at all.
-- GSN elements have no identifiers, which the standard requires, and which is
-  also what keeps a Challenges relationship from being addressable.
+- GSN elements have no identifiers a document can use. The standard requires
+  them, and the drawing supplies them (§5.1), but a drawing's labels cannot
+  be referred to, and that is also what keeps a Challenges relationship from
+  being addressable.
+- A step of the budget has no bound on its cost (§1.2). An integer squared
+  over and over, or a format string that doubles its input, reaches gigabytes
+  within a few hundred steps, so the budget bounds how long a document runs
+  only for documents that do not grow their values that way.
 - A defeater's `support` says why the defeater holds, not why it defeats its
   target. GSN makes the supporting side state its reasoning in a Strategy, and
   has no counterpart on the attacking side.
