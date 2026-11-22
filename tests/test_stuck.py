@@ -161,7 +161,7 @@ SHAPES = {
     "arguments are reduced before the builtin declines them":
         (div(plus(1)(2))(minus(1)(1)),
          div(3)(0)),
-    "an argument is substituted, then reduced":
+    "an argument is bound, then reduced":
         (lambda_abs(_x, div(_x)(0))(plus(1)(2)),
          div(3)(0)),
     "arguments beyond the arity are reduced too":

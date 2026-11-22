@@ -684,7 +684,7 @@ def _expand_as_attribute(elem: ET.Element) -> None:
     elem.append(wrapper)
 
 
-# Builtins substituted inline during compilation (not at evaluation time).
+# The builtins, bound around each compilation unit by `_builtin_scope`.
 #
 # Every term-valued name the `pgsn` package exports is bound here under the
 # same name, so that the two front ends offer the same standard library; see
@@ -788,10 +788,9 @@ def _builtin_scope(body: Term) -> Term:
 
     Only the names the unit actually leaves free are bound. Binding the whole
     table instead would be equivalent — a name the document never mentions
-    cannot be observed — but ruinous: the builtin terms are large, every
-    binding substitutes its value through the body, and a chain deep enough to
-    hold them all exhausts the interpreter's stack, since every traversal of a
-    term recurses. A document mentions a handful.
+    cannot be observed — but every compiled document, and every module in it,
+    would then carry every builtin, in its term and in the JSON that
+    `pgsn compile` writes. A document mentions a handful.
 
     Which names are free is not decided here. `Term.free_variables` already
     answers it, and has to be right anyway: removing names before evaluation
