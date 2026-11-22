@@ -101,10 +101,13 @@ does not validate a document against it.
 
 ## Evaluation
 
-18. **The step budget does not bound the cost of a step.** An integer squared
-    over and over, or a format string that doubles its input, reaches
-    gigabytes within a few hundred steps. The budget bounds how long a
-    document runs only for documents that do not grow their values that way.
+18. **Memory and time are not limited.** The step budget counts steps, and a
+    step has no bound on its cost: an integer squared over and over, or a
+    format string that doubles its input, reaches gigabytes within a few
+    hundred steps. The budget stops a document that does not terminate; it
+    bounds memory and time only for documents that do not grow their values
+    that way. Run a document you did not write in a virtual machine or a
+    container that limits memory and time.
 19. **A value that depends on itself is reported as an exhausted budget.** A
     definition whose value is needed while it is being computed stops with
     the same error as running out of steps.

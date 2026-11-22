@@ -95,7 +95,7 @@ term.fully_eval(steps=5000)  # with a limit of your own
 
 Build the whole term first, then evaluate it once. What evaluation returns is a result to read: pass it to `python_value`, `gsn_tree` or a renderer. Applying it to something, or passing it as an argument to build another term, is not supported.
 
-`steps` is a safety limit. One step is one application, by the evaluator, of a function or a builtin to its arguments, and evaluation stops with the error described under [Errors](#errors) when the limit is reached. The default is enough for ordinary documents; raise it only when a large one reaches it. How steps are counted may change in a future version.
+`steps` stops a term that does not terminate. One step is one application, by the evaluator, of a function or a builtin to its arguments, and evaluation stops with the error described under [Errors](#errors) when the limit is reached. It does not limit memory or time, since a single step can cost any amount. The default is enough for ordinary documents; raise it only when a large one reaches it. How steps are counted may change in a future version.
 
 ### When evaluation cannot go on
 
@@ -428,7 +428,7 @@ pgsn.load_xml("main.xml")                      # uses the default
 pgsn.load_xml("other.xml", config=other_cfg)   # overrides it for this call
 ```
 
-The default is a convenience, not a security boundary. What confines a document is the `Jails` table in the configuration actually used for that call. Untrusted input to PGSN is XML, and XML cannot reach these functions.
+The default is a convenience, not a security boundary. What confines a document is the `Jails` table in the configuration actually used for that call. Untrusted input to PGSN is XML, and XML cannot reach these functions. PGSN does not limit the memory or the time an evaluation uses, so evaluate XML you did not write in a virtual machine or a container that limits them.
 
 ---
 

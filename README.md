@@ -11,7 +11,7 @@ PGSN lets you write a GSN (Goal Structuring Notation) assurance case as a progra
 
 PGSN comes in two forms, and either one can express a whole assurance case on its own:
 
-- **XML**, evaluated by the `pgsn` command. An XML document is confined: it cannot read files, use the network or call the system, so it is safe to run documents you did not write. [README-xml.md](README-xml.md) is the reference.
+- **XML**, evaluated by the `pgsn` command. An XML document is confined: it cannot read files, use the network or call the system. PGSN does not limit the memory or the time a document uses, however, so run a document you did not write in a virtual machine or a container that limits them. [README-xml.md](README-xml.md) is the reference.
 - **Python**, as a library embedded in Python. It has the full power of Python, so use it for code you trust. [README-api.md](README-api.md) is the reference.
 
 [README-ja.md](README-ja.md) is the Japanese version of this document.
@@ -22,7 +22,7 @@ PGSN comes in two forms, and either one can express a whole assurance case on it
 - **Reusable**: build assurance structures from parts, and import parts from other files.
 - **Object-oriented**: define new node types by inheriting from the GSN classes.
 - **GSN v3 output**: `pgsn render` draws the result after the GSN Community Standard, Version 3, including the dialectic extension (defeaters), and `pgsn doc` and `pgsn render` check the result against the standard's structural rules.
-- **Confined XML**: an XML document cannot read files, use the network or call the system. It can import only from its own directory or from directories you grant (jails), and evaluation has a step limit.
+- **Confined XML**: an XML document cannot read files, use the network or call the system. It can import only from its own directory or from directories you grant (jails). Evaluation has a step limit, which stops a document that does not terminate; it does not limit memory or time, since a single step can cost any amount.
 - **Python when you trust the code**: a `.py` input is an ordinary Python program, run with your privileges. Run only `.py` files you trust.
 
 ## Installation

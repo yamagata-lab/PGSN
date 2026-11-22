@@ -1074,7 +1074,7 @@ Five properties hold everywhere in the language; the sections above describe the
 
 A template that has not been given all its arguments is not a value either, and is reported the same way. A part that nothing needs is never evaluated, so a mistake in it goes unreported. Malformed XML and refused imports are different: they are reported as soon as the document is read.
 
-**The only way out is `import`, and it is confined.** A document reads no file, reaches no network and consults no clock. Its one connection to anything outside itself is `<from>`, which may name only a file inside the directory tree the document is confined to, or inside a jail registered by whoever ran PGSN. See [Import paths and jails](#import-paths-and-jails).
+**The only way out is `import`, and it is confined.** A document reads no file, reaches no network and consults no clock. Its one connection to anything outside itself is `<from>`, which may name only a file inside the directory tree the document is confined to, or inside a jail registered by whoever ran PGSN. See [Import paths and jails](#import-paths-and-jails). Confinement concerns what a document can reach, not what it consumes: PGSN does not limit the memory or the time a document uses, so run a document you did not write in a virtual machine or a container that limits them.
 
 **Only data can be compared.** Equality compares base values — strings, integers, booleans, `undefined` — and the lists and records built out of them. Two functions, two classes or two GSN nodes have no value when compared. A value carries no address and no timestamp, so a copy cannot be told apart from the original, and neither can two nodes written with the same description. See [Comparing values](#comparing-values).
 
