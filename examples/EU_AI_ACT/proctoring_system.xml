@@ -54,7 +54,7 @@
     <dt key="isGPAI"/><dd var="false"/>
     <dt key="notGpaiAssessment"/><dd var="notGpaiReport"/>
 
-    <!-- Art. 9-15, 17, 43, 48, 49 -->
+    <!-- Art. 9-15, 17, 43, 47-49 -->
     <dt key="risk_management"/><dd><Solution>Risk management file: false accept and false reject analysis for identity verification (Art. 9)</Solution></dd>
     <dt key="data_governance"/><dd><Solution>Enrolment data governance and demographic bias audit of the matcher (Art. 10)</Solution></dd>
     <dt key="technical_documentation"/><dd><Solution>Annex IV technical documentation, Identity Verification (Art. 11)</Solution></dd>
@@ -65,7 +65,7 @@
     <dt key="quality_management_system"/><dd><Solution>ISO 9001-aligned quality management system certificate (Art. 17)</Solution></dd>
     <dt key="conformity_assessment"/><dd><Solution>Notified body conformity assessment certificate, Annex III point 1 (Art. 43)</Solution></dd>
     <dt key="ce_marking"/><dd><Solution>CE marking affixation record (Art. 48)</Solution></dd>
-    <dt key="declaration_of_conformity"/><dd><Solution>EU declaration of conformity and EU database registration (Art. 49)</Solution></dd>
+    <dt key="declaration_of_conformity"/><dd><Solution>EU declaration of conformity (Art. 47) and EU database registration (Art. 49)</Solution></dd>
   </def>
 
   <!-- ================================================================
@@ -115,7 +115,7 @@
     <dt key="quality_management_system"/><dd><Solution>ISO 9001-aligned quality management system certificate (Art. 17)</Solution></dd>
     <dt key="conformity_assessment"/><dd><Solution>Notified body conformity assessment certificate, Annex III points 1 and 3 (Art. 43)</Solution></dd>
     <dt key="ce_marking"/><dd><Solution>CE marking affixation record (Art. 48)</Solution></dd>
-    <dt key="declaration_of_conformity"/><dd><Solution>EU declaration of conformity and EU database registration (Art. 49)</Solution></dd>
+    <dt key="declaration_of_conformity"/><dd><Solution>EU declaration of conformity (Art. 47) and EU database registration (Art. 49)</Solution></dd>
   </def>
 
   <!-- ================================================================
