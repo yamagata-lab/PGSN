@@ -75,14 +75,13 @@ def lambda_abs_vars(vs: tuple[Variable,...], t) -> Term:
 
 
 # The conditional is lazy in its branches.  The builtin only selects one of its
-# arguments, but the evaluator reduces the arguments of a head it cannot apply
-# yet, so a condition that never becomes a boolean would drag both branches into
-# reduction -- and a recursive branch would then unfold until the step limit.
-# Wrapping each branch in an abstraction before the builtin sees it prevents
-# that: beta reduction substitutes an argument without evaluating it, and
-# evaluation stops at a lambda.  The branch that wins is forced by applying it to
-# a dummy argument.  Names starting with an underscore are reserved, so the
-# thunk parameter cannot capture a variable written by a user.
+# arguments, but a builtin is strict in all of them, so given the branches as
+# they are it would evaluate both before choosing -- and a recursive branch
+# would then unfold until the step limit.  Wrapping each branch in an
+# abstraction before the builtin sees it prevents that: an abstraction is
+# already a value, and evaluation stops at it.  The branch that wins is forced
+# by applying it to a dummy argument.  Names starting with an underscore are
+# reserved, so the thunk parameter cannot capture a variable written by a user.
 _thunk = variable('_thunk')
 _cond = variable('_cond')
 _then = variable('_then')

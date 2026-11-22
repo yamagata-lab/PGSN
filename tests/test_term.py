@@ -105,12 +105,10 @@ def test_self_reference():
 
 
 def test_record_shift_under_unused_lambda():
-    """Regression: Record fields must be shifted during beta-reduction.
+    """A record built under a binder reads its fields from the environment.
 
-    Applying a lambda whose body returns a record left a free variable
-    pointing at the wrong binder (a self-referential Abs) instead of the
-    value, because Record shifting discarded its results. Here the bound
-    variable is unused, which is the minimal trigger.
+    The function's body returns a record whose field refers to a `let`
+    binding inside it, and the function's own parameter is unused.
     """
     from pgsn.dsl import lambda_abs, let, record, string, variable, python_value
 

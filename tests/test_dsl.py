@@ -291,8 +291,9 @@ def test_conditional_still_selects_a_branch():
 
 
 def test_stuck_condition_leaves_both_branches_alone():
-    # The evaluator reduces the arguments of a head it cannot apply.  Unless the
-    # branches sit under a lambda, this reduces them both and never terminates.
+    # A builtin is strict in its arguments, and the arguments of an application
+    # that cannot proceed are evaluated as part of the result.  Unless the
+    # branches sit under a lambda, both are evaluated and neither terminates.
     t = if_then_else(_stuck)(_diverging)(_diverging)
     t.fully_eval(steps=1000)
 

@@ -159,7 +159,8 @@ class Term(ABC):
         return evolve(self, **kwarg)
 
     # The weak normal form, computed by the call-by-need machine below.
-    # `steps` bounds the beta reductions and the builtin applications together.
+    # `steps` bounds two transitions of the machine together: an abstraction
+    # taking an argument, and a builtin being applied.
     def fully_eval(self, steps=DEFAULT_STEPS) -> Term:
         t = self if not self.is_named else self.remove_name()
         machine = _Machine(steps)
