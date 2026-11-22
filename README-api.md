@@ -6,7 +6,7 @@ Everything supported is reachable from the top-level package:
 import pgsn
 ```
 
-`pgsn.__all__` is the complete public surface. Anything not listed there — including the submodules `pgsn.dsl`, `pgsn.gsn`, `pgsn.pgsn_term`, `pgsn.pgsn_xml`, `pgsn.dcom`, `pgsn.helpers` and `pgsn.cli` — is implementation detail and may change without notice.
+`pgsn.__all__` is the complete public surface. Anything not listed there — including the submodules `pgsn.dsl`, `pgsn.gsn`, `pgsn.pgsn_term`, `pgsn.pgsn_xml`, `pgsn.helpers` and `pgsn.cli` — is implementation detail and may change without notice.
 
 There are two ways in: build a term in Python, or load one from an XML document. Both produce a `Term`, and everything downstream is the same.
 

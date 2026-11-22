@@ -12,8 +12,8 @@ This module is the public API.  It exposes three groups of names:
   (`Config`, `Jails`, `configure`).
 
 Everything else in the `pgsn` package is implementation detail.  The submodules
-`pgsn.dsl`, `pgsn.gsn`, `pgsn.pgsn_term`, `pgsn.pgsn_xml`, `pgsn.dcom`,
-`pgsn.helpers` and `pgsn.cli` are internal: their contents may change without
+`pgsn.dsl`, `pgsn.gsn`, `pgsn.pgsn_term`, `pgsn.pgsn_xml`, `pgsn.helpers`
+and `pgsn.cli` are internal: their contents may change without
 notice, and importing from them directly is unsupported.
 
 Loading XML is confined by a jail table.  A jail is a named directory root, and

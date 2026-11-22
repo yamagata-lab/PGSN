@@ -112,7 +112,7 @@ print(pgsn.gsn_tree(term).show(stdout=False, sorting=False))
 
 It exposes constructors for PGSN constants and terms (`string`, `record`, `lambda_abs`, `map_term`, ...), constructors for GSN nodes and classes (`goal`, `strategy`, `solution`, `goal_class`, ...), the conversion and rendering functions (`python_value`, `gsn_tree`, `gsn_dot`, `save_gsn`), and the XML front end with its configuration (`load_xml`, `load_xml_string`, `Config`, `Jails`, `configure`).
 
-Everything else in the package — `pgsn.dsl`, `pgsn.gsn`, `pgsn.pgsn_term`, `pgsn.pgsn_xml`, `pgsn.dcom`, `pgsn.helpers`, `pgsn.cli` — is internal and may change without notice. The examples below import from those submodules directly and predate the public API; prefer `import pgsn` in new code.
+Everything else in the package — `pgsn.dsl`, `pgsn.gsn`, `pgsn.pgsn_term`, `pgsn.pgsn_xml`, `pgsn.helpers`, `pgsn.cli` — is internal and may change without notice. The examples below import from those submodules directly and predate the public API; prefer `import pgsn` in new code.
 
 [README-api.md](README-api.md) is the full reference.
 

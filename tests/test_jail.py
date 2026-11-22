@@ -372,7 +372,7 @@ def test_public_names_are_importable():
 def test_internals_are_not_exported():
     for hidden in ("json_dumps", "json_loads", "compile_pgsn",
                    "compile_pgsn_string", "dsl", "gsn", "pgsn_term",
-                   "pgsn_xml", "cli", "helpers", "dcom"):
+                   "pgsn_xml", "cli", "helpers"):
         assert hidden not in pgsn.__all__
 
 

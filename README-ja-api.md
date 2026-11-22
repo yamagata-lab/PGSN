@@ -6,7 +6,7 @@
 import pgsn
 ```
 
-`pgsn.__all__` が公開 API のすべてです。そこに載っていないもの — サブモジュール `pgsn.dsl`、`pgsn.gsn`、`pgsn.pgsn_term`、`pgsn.pgsn_xml`、`pgsn.dcom`、`pgsn.helpers`、`pgsn.cli` を含む — は内部実装であり、予告なく変更されることがあります。
+`pgsn.__all__` が公開 API のすべてです。そこに載っていないもの — サブモジュール `pgsn.dsl`、`pgsn.gsn`、`pgsn.pgsn_term`、`pgsn.pgsn_xml`、`pgsn.helpers`、`pgsn.cli` を含む — は内部実装であり、予告なく変更されることがあります。
 
 入り口は 2 つあります。Python で項を組み立てるか、XML ドキュメントから読み込むか。どちらも `Term` を返し、そこから先は共通です。
 
