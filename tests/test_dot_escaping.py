@@ -54,5 +54,5 @@ def _drawn_text(description: str) -> list[str]:
     'a\\\\" image="/etc/hosts" k="',
 ])
 def test_backslashes_and_quotes_are_drawn_as_written(description):
-    assert _drawn_text(description) == ["Goal", description,
+    assert _drawn_text(description) == ["G1", description,
                                         pgsn.gsn.UNDEVELOPED_DECORATOR]

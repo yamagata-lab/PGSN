@@ -24,7 +24,7 @@ def _xml(body: str):
 
 def test_an_undeveloped_goal_carries_the_decorator():
     labels = _labels(_xml("<Goal>safe<undeveloped/></Goal>"))
-    assert labels == [f"Goal\nsafe\n{UNDEVELOPED_DECORATOR}"]
+    assert labels == [f"G1\nsafe\n{UNDEVELOPED_DECORATOR}"]
 
 
 def test_no_element_of_its_own_is_drawn():
@@ -41,7 +41,7 @@ def test_a_developed_goal_has_no_decorator():
 def test_an_undeveloped_strategy_carries_the_decorator():
     term = pgsn.goal(description="g", support=pgsn.strategy(
         description="s", sub_goals=pgsn.list_term((pgsn.undeveloped,))))
-    assert f"Strategy\ns\n{UNDEVELOPED_DECORATOR}" in _labels(term.fully_eval())
+    assert f"S1\ns\n{UNDEVELOPED_DECORATOR}" in _labels(term.fully_eval())
 
 
 def test_an_unsupported_defeater_has_neither():
@@ -49,19 +49,19 @@ def test_an_unsupported_defeater_has_neither():
     objection put without grounds says so by having nothing beneath it."""
     labels = _labels(_xml(
         "<Goal>safe<Defeater>H4</Defeater><Solution>report</Solution></Goal>"))
-    assert "Defeater\nH4" in labels
+    assert "CG1\nH4" in labels
     assert not any(UNDEVELOPED_DECORATOR in label for label in labels)
 
 
 def test_a_strategy_is_left_undeveloped_in_xml():
     """An <undeveloped/> among the sub-goals is how a document says it."""
     labels = _labels(_xml("<Goal>g<Strategy>s<undeveloped/></Strategy></Goal>"))
-    assert labels == ["Goal\ng", f"Strategy\ns\n{UNDEVELOPED_DECORATOR}"]
+    assert labels == ["G1\ng", f"S1\ns\n{UNDEVELOPED_DECORATOR}"]
 
 
 def test_an_undeveloped_strategy_keeps_the_sub_goals_it_has():
     labels = _labels(_xml(
         "<Goal>g<Strategy>s<Goal>a<Solution>r</Solution></Goal>"
         "<undeveloped/></Strategy></Goal>"))
-    assert f"Strategy\ns\n{UNDEVELOPED_DECORATOR}" in labels
-    assert "Goal\na" in labels
+    assert f"S1\ns\n{UNDEVELOPED_DECORATOR}" in labels
+    assert "G2\na" in labels
