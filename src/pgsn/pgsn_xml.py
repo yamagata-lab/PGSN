@@ -1396,6 +1396,18 @@ class _Header(NamedTuple):
     defeaters: Term
 
 
+def _description_element(desc_elem: ET.Element, unit: _Unit) -> Term:
+    """What a <description> says. An empty one says the empty string.
+
+    A blank description is not a compile error: the compiler checks the
+    document as XML, and the GSN check reports the blank with the output, as
+    it does for a description computed at run time.
+    """
+    if not _items(desc_elem):
+        return _text_to_term("")
+    return _content(desc_elem, unit)
+
+
 def _header_description(elem: ET.Element, unit: _Unit) -> Term:
     """The description of a GSN header element.
 
@@ -1407,7 +1419,7 @@ def _header_description(elem: ET.Element, unit: _Unit) -> Term:
     """
     desc_elem = elem.find("description")
     if desc_elem is not None:
-        return _content(desc_elem, unit)
+        return _description_element(desc_elem, unit)
     text = (elem.text or "").strip()
     if text:
         return _text_to_term(text)
@@ -1488,7 +1500,7 @@ def _e_annotation(elem: ET.Element, unit: _Unit, ctor: Term) -> Term:
             raise PGSNError(
                 f"<{elem.tag}> carries both a <description> and <{other[0].tag}>; "
                 f"it holds a single statement, so give it only one")
-        desc = _content(desc_elem, unit)
+        desc = _description_element(desc_elem, unit)
     elif other:
         if elem.text and elem.text.strip():
             raise PGSNError(
