@@ -11,7 +11,7 @@
 
 **PGSN** は、**Goal Structuring Notation (GSN)** に基づいて構造化されたアシュアランスケースを構築・変換するための、関数型プログラミング言語および実行環境です。従来のGSNが静的な図表を中心とするのに対し、PGSNは関数型およびオブジェクト指向の構文を用いて、GSN要素を動的かつ構造的に生成できます。
 
-**PGSN** には2つの実装があります。Python に埋め込まれた DSL と、`pgsn` コマンドで評価する XML 構文です。
+**PGSN** は2つの形で書けます。Python に埋め込まれた DSL と、`pgsn` コマンドで評価する XML 構文です。
 どちらか一方だけでアシュアランスケースを書き切れます。Python API の仕様は
 [README-ja-api.md](README-ja-api.md)、XML 構文の仕様は [README-ja-xml.md](README-ja-xml.md) にあります。
 
@@ -28,7 +28,7 @@
 
 ## インストール
 
-インストール方法
+利用者向け
 ```shell
 pip install git+https://github.com/yamagata-lab/pgsn.git
 ```
@@ -51,7 +51,7 @@ pip install -e '.[dev]'
 
 
 ---
-## コマンドラインインタープリター
+## コマンドライン
 
 ```shell
 PGSN % pgsn doc examples/cli.py
@@ -77,7 +77,7 @@ Done.
 Warning: S1 at <root>.support: a strategy relates a goal to supporting goals, but this one has none
 ```
 
-規則は次のとおりです。Goal の支えは Strategy・Solution・サブゴールのどれかで、Strategy の支えは Goal であること。contexts と assumptions の中身がそれぞれ Context と Assumption であること。Strategy がサブゴールを1つ以上持つこと。反論する要素が Defeater であること。どの要素も何かを述べていること。構造の一番上が Goal であること。`--strict` を付けると違反はエラーになり、何も書き出さずに 0 以外の終了コードで終わります。
+規則は次のとおりです。Goal を支持するのは Strategy・Solution・サブゴールのどれかで、Strategy を支持するのは Goal であること。contexts と assumptions の中身がそれぞれ Context と Assumption であること。Strategy がサブゴールを1つ以上持つこと。異議を立てる要素が Defeater であること。どの要素も何かを述べていること。構造の一番上が Goal であること。`--strict` を付けると違反はエラーになり、何も書き出さずに 0 以外の終了コードで終わります。
 
 ### XML import のための jail
 
@@ -109,7 +109,7 @@ print(pgsn.gsn_tree(term).show(stdout=False, sorting=False))
 
 公開しているのは、PGSN 定数および項を構築する関数（`string`、`record`、`lambda_abs`、`map_term` など）、GSN ノードとクラスを構築する関数（`goal`、`strategy`、`solution`、`goal_class` など）、変換・描画の関数（`python_value`、`gsn_tree`、`gsn_dot`、`save_gsn`）、そして XML フロントエンドとその設定（`load_xml`、`load_xml_string`、`Config`、`Jails`、`configure`）です。
 
-これら以外 — `pgsn.dsl`、`pgsn.gsn`、`pgsn.pgsn_term`、`pgsn.pgsn_xml`、`pgsn.helpers`、`pgsn.cli` — は内部実装であり、予告なく変更されることがあります。以下の例は公開 API の導入前に書かれたもので、これらのサブモジュールを直接 import しています。新しいコードでは `import pgsn` を使ってください。
+これら以外 — `pgsn.dsl`、`pgsn.gsn`、`pgsn.pgsn_term`、`pgsn.pgsn_xml`、`pgsn.helpers`、`pgsn.cli` — は内部実装であり、予告なく変更されることがあります。以下の例はこれらのサブモジュールを直接 import しています。新しいコードでは `import pgsn` を使ってください。
 
 詳細なリファレンスは [README-ja-api.md](README-ja-api.md) にあります。
 
@@ -222,7 +222,7 @@ gsn_tree(secure_goal.fully_eval()).show(sorting=False)
 
 ### 例3：オブジェクト指向によるノード拡張
 
-GSNの各要素はクラスです。継承により拡張が可能です。
+Goal を継承した独自のクラスを定義し、メタデータを加えてインスタンス化します。
 
 ```python
 from pgsn.dsl import *
@@ -247,6 +247,8 @@ gsn_tree(g.fully_eval()).show(sorting=False)
 | 構造の一括生成       | `map_term` を用いたリスト展開                  |
 | メタデータの付加     | クラス定義と `instantiate` による構成           |
 
+これらの技法を組み合わせれば、分野ごとの GSN テンプレートを作ったり、アシュアランスケースの生成を自動化したり、構造上の制約をプログラムで検査したりできます。
+
 ---
 
 ## よく使う関数一覧
@@ -257,7 +259,7 @@ gsn_tree(g.fully_eval()).show(sorting=False)
 | `strategy(...)`            | ゴールを裏付ける推論戦略を記述                |
 | `solution(...)`            | ゴールを支える証拠への参照を記述              |
 | `context(...)`             | ゴールや戦略に対する文脈情報を追加            |
-| `assumption(...)`          | 前提条件を明示                                |
+| `assumption(...)`          | 仮定を明示                                    |
 | `immediate(...)`           | サブゴールを直接接続                          |
 | `map_term(...)`            | リストに対して関数適用を行い複数ノード生成    |
 | `lambda_abs(...)`          | 引数付きのラムダ抽象（位置引数）              |
@@ -271,7 +273,7 @@ gsn_tree(g.fully_eval()).show(sorting=False)
 
 | レイヤー           | コンポーネント          | 概要                                       |
 |--------------------|------------------------|--------------------------------------------|
-| コア               | `pgsn_term.py`         | ラムダ計算に基づくインタプリタ             |
+| コア               | `pgsn_term.py`         | ラムダ計算に基づくインタープリター             |
 | Python DSL         | `dsl.py`・`gsn.py`     | プログラムから GSN ノードを組み立てる      |
 | XML フロントエンド | `pgsn_xml.py`          | XML 構文をコアへコンパイル                 |
 | サンドボックス     | `jail.py`・`config.py` | import が届く範囲を封じ込める              |

@@ -116,18 +116,18 @@ pgsn.python_value(double(pgsn.integer(21)).fully_eval())   # 42
 
 | コンストラクタ | 引数 |
 |--------------|------|
-| `goal` | `description`・`support`・`contexts`（既定は空）・`assumptions`（既定は空）・`defeaters`（既定は空） |
-| `strategy` | `description`・`sub_goals`・`contexts`（既定は空）・`assumptions`（既定は空）・`defeaters`（既定は空） |
-| `solution` | `description`・`defeaters`（既定は空） |
+| `goal` | `description`・`support`・`contexts`（デフォルトは空）・`assumptions`（デフォルトは空）・`defeaters`（デフォルトは空） |
+| `strategy` | `description`・`sub_goals`・`contexts`（デフォルトは空）・`assumptions`（デフォルトは空）・`defeaters`（デフォルトは空） |
+| `solution` | `description`・`defeaters`（デフォルトは空） |
 | `context` | `description` |
 | `assumption` | `description` |
-| `defeater` | `description`・`support`（既定は undeveloped）・`defeaters`（既定は空） |
+| `defeater` | `description`・`support`（デフォルトは undeveloped）・`defeaters`（デフォルトは空） |
 
 `support` に既定値はありません。支持のないゴールは `support=pgsn.undeveloped` と明示的に書きます。
 
-`contexts` と `assumptions` はゴールと戦略が持ちます。規格がこの2つに付けるからです。Solution はどちらも取りません。
+`contexts` と `assumptions` は Goal と Strategy が持ちます。規格がこの2つに付けるからです。Solution はどちらも取りません。
 
-`defeaters` は GSN v3 の dialectic extension です。defeater は、それを保持するノードへの支持ではなく疑いを記録します。どのノード型も defeater を持てますし、defeater 自身もノードなので反証は入れ子になります。規格そのものには Defeater 要素はなく、defeater は Challenges 関係で対象に繋がった Goal または Solution ですが、値の言語には関係を担う辺がないため、PGSN では攻撃するという役割をクラスとして表現しています。rebutting と undercutting は 1 クラスで足ります。対抗論拠を伴うなら `support` を埋め、異議を述べるだけなら省略します。
+`defeaters` は GSN v3 の dialectic extension です。defeater は、それを保持するノードへの支持ではなく疑いを記録します。どのノード型も defeater を持てますし、defeater 自身もノードなので、それにも異議を立てられます。規格そのものには Defeater 要素はなく、defeater は Challenges 関係で対象に繋がった Goal または Solution ですが、値の言語には関係を担う辺がないため、PGSN では攻撃するという役割をクラスとして表現しています。rebutting と undercutting のどちらも 1 つのクラスで表します。根拠を示して異議を立てるなら `support` を埋め、異議を述べるだけなら省略します。
 
 よく使う形のための補助が 2 つあります。
 
@@ -177,7 +177,7 @@ my_goal_class = pgsn.define_class(
 
 `name` はそのクラスが何と呼ばれるかで、オブジェクトはその名前で報告されます（下の
 `__ClassName__` キー）。ラベルであって何かと比較されることはありませんが、インスタンスを
-読み出すつもりのクラスには必要です。無いと何として報告すればよいかが無くなります。継承もされません。
+読み出すつもりのクラスには必要です。無いと何として報告すればよいかが決まらないからです。名前は継承されません。
 
 `type_of` はオブジェクトのクラスを返し、`is_subtype` は2つのクラスを比べます。
 値を型と照合するときはこう書きます（`node` は自分で組んだ項です）。
@@ -233,7 +233,7 @@ print(tree.show(stdout=False, sorting=False))   # テキスト表示
 tree.to_json(sort=False)                        # JSON
 ```
 
-treelib は指定しないと兄弟をタグ順に並べ替えるので、並べ替えないよう渡してください。リストの順序は文書が述べていることの一部で、`python_value` はその順序で報告します。`pgsn doc` も同じオプションを渡しています。
+treelib は指定しないと兄弟をタグ順に並べ替えるので、`sorting=False`・`sort=False` で並べ替えないよう指定してください。リストの順序は文書が述べていることの一部で、`python_value` はその順序で報告します。`pgsn doc` も同じオプションを渡しています。
 
 ### `gsn_dot(term, layout_attrs=None)`
 
@@ -250,7 +250,7 @@ dot.render("out", format="svg", cleanup=True)
 
 ### `gsn_violations(term)`
 
-評価した構造が GSN v3 の規則を破っている箇所を、`GSNViolation`（`path`・`identifier`・`message`）のリストで返します。空のリストなら違反はありません。`path` は読み戻しが詰まった項を報告するときと同じ書き方で、`identifier` は図がその要素に付ける識別子です。規則は `pgsn doc` が検査するものと同じです（[README-ja.md](README-ja.md) のコマンドラインインタープリターの節）。
+評価した構造が GSN v3 の規則を破っている箇所を、`GSNViolation`（`path`・`identifier`・`message`）のリストで返します。空のリストなら違反はありません。`path` は読み出しが詰まった項を報告するときと同じ書き方で、`identifier` は図がその要素に付ける識別子です。規則は `pgsn doc` が検査するものと同じです（[README-ja.md](README-ja.md) の「GSN の規則の検査」）。
 
 ```python
 for v in pgsn.gsn_violations(evaluated):
@@ -287,7 +287,7 @@ cfg = pgsn.Config(jails={"lib": "/opt/pgsn-lib"})
 term = pgsn.load_xml("main.xml", config=cfg)
 ```
 
-パス指定で開いたドキュメントが登録済みの jail のどれにも属さない場合、そのドキュメント自身のディレクトリが封じ込め範囲になります。相対 import は封じ込めルートの内側に留まる限り `..` を使えます。シンボリックリンクは検証前に展開され、jail 経由で辿ったモジュールはその jail の外に出られません。
+パス指定で開いたドキュメントが登録済みの jail のどれにも属さない場合、そのドキュメント自身のディレクトリが封じ込めルートになります。相対 import は封じ込めルートの内側に留まる限り `..` を使えます。シンボリックリンクは検証前に展開され、jail 経由で辿ったモジュールはその jail の外に出られません。
 
 #### `Jails(roots)`
 

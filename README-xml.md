@@ -412,7 +412,7 @@ References a previously defined name.
 
 ### Built-ins
 
-The following names are predefined; reference them with `<var name="..."/>` and apply them via `apply`. They are exactly the values the `pgsn` Python package exports, so anything usable from Python is usable here under the same name.
+The following names are predefined; reference them with `<var name="..."/>` and apply them with `<apply>`. They are exactly the values the `pgsn` Python package exports, so anything usable from Python is usable here under the same name.
 
 - List operations: `cons`, `head`, `tail`, `index`, `is_empty`, `concat`, `map_term`, `fold`, `foldr`, `list_all`, `empty`
 - Booleans: `true`, `false`, `if_then_else`, `boolean_and`, `boolean_or`, `boolean_not`, `equal`, `less_than`, `guard`
@@ -704,8 +704,8 @@ Every GSN node opens with a description, and any node may be challenged by a
 **Where they may appear.** A `Context` or an `Assumption` attaches to a `Goal`
 or to a `Strategy`, which are the two the standard allows — a strategy carries
 the assumption its reasoning depends on. `Solution` takes neither, and neither
-does a `Defeater`. Writing one there is rejected by `PGSN.rng`; nothing in the
-document itself will say so.
+does a `Defeater`. Writing one there is rejected by `PGSN.rng`; `pgsn` itself
+drops it without a word.
 
 ### Goal
 
