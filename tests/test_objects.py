@@ -66,10 +66,9 @@ def test_subtype_ignores_inheritance():
 
 
 def test_subtype_sees_past_unevaluated_defaults():
-    """A class's defaults may hold an application still to be reduced, as
-    `defeater_class` defaults `support` to one, and a structural comparison of
-    classes cannot compare those. Labels are readable without reducing
-    anything.
+    """`goal_class` defaults `support` to an application, which the previous
+    predicate could not compare, so it answered False for every goal. Labels
+    are readable without reducing anything.
     """
     g = pgsn.goal(description="g", support=pgsn.undeveloped)
     assert is_subtype(type_of(g))(pgsn.goal_class).fully_eval().value

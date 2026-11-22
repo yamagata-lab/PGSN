@@ -735,7 +735,7 @@ a word.
 </Goal>
 ```
 
-A goal has exactly one support. A `<Goal>` with none is an error: a goal not developed yet says so with `<undeveloped/>`. The compiler keeps the first one written and drops any further support without a word.
+A goal has exactly one support. A `<Goal>` with none is undeveloped, as if `<undeveloped/>` were written. The compiler keeps the first one written and drops any further support without a word.
 
 > **Note: writing sub-goals directly is sugar**
 > Listing several `<Goal>` elements directly under a Goal is a wrap by `immediate` (a special Strategy that bundles sub-goals).

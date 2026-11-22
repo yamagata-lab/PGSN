@@ -222,7 +222,7 @@ compared with `empty`.
 
 There is none to decide. A structural comparison of classes would have to
 compare their defaults and methods. Methods are functions, which have no
-equality, and defaults hold objects (`defeater_class`'s `undeveloped`), which are
+equality, and defaults hold objects (`goal_class`'s `undeveloped`), which are
 not data. Comparing the terms as they stand instead would make the answer
 depend on how far evaluation had got. So a type is checked with `is_subtype`,
 which compares the attribute and method *names* the two classes declare and

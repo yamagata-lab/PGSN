@@ -37,7 +37,7 @@ strategy_class = pgsn.dsl.define_class(inherit=support_class, name='Strategy',
 goal_class = pgsn.dsl.define_class(inherit=gsn_class,
                                       name='Goal',
                                       attributes=["assumptions", "contexts", "support"],
-                                      defaults={"assumptions": [], "contexts": []}
+                                      defaults={"assumptions":[], "contexts": [], "support": undeveloped}
                                       )
 # Context and Assumption are documentation nodes. In GSN each carries a
 # statement and nothing else, so `description` is the only field they need.
