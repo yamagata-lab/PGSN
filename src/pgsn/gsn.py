@@ -131,6 +131,16 @@ GSN_DEFEATER_TYPES = {"Defeater"}
 UNDEVELOPED_DECORATED_TYPES = {"Goal", "Strategy"}
 UNDEVELOPED_DECORATOR = "◇"  # WHITE DIAMOND
 
+# GSN v3 gives every element an identifier (1:2.1.2), and a drawing heads each
+# element with one, numbered per kind in document order. The prefixes are the
+# ones the standard's own figures use; a defeater is a goal that challenges,
+# which the dialectic figures (1:6-1, 1:6-2) number CG.
+GSN_IDENTIFIER_PREFIXES = {"Goal": "G", "Strategy": "S", "Solution": "Sn",
+                           "Context": "C", "Assumption": "A", "Defeater": "CG"}
+
+# The letter GSN v3 sets at the right of an assumption (Table 1:2-1).
+ASSUMPTION_MARK = "A"
+
 
 # Term and to_python are assumed to be in your module
 # from your_module import Term, to_python
@@ -268,6 +278,7 @@ def gsn_dot(gsn: pgsn.pgsn_term.Term,
 
     horizontal_pairs = []
     skipped_nodes = set()  # 親の箱に吸収された属性ノードのIDを記録
+    numbered = {kind: 0 for kind in GSN_IDENTIFIER_PREFIXES}
 
     # treelib sorts siblings by tag unless told otherwise, which would draw the
     # children of a node in alphabetical rather than document order. The order
@@ -343,8 +354,14 @@ def gsn_dot(gsn: pgsn.pgsn_term.Term,
             node_attrs['skew'] = '0.3'
             node_attrs['margin'] = '0'
 
-        # ラベルの最終決定（GSNならタイプ名を見出しにし、それ以外はタグをそのまま使う）
-        final_label = f"{node_type}\n{node_label}" if node_type else node_label
+        # The heading is the element's identifier, the shape telling its kind;
+        # a node that is not a GSN element keeps its tag as it is.
+        if node_type in GSN_IDENTIFIER_PREFIXES:
+            numbered[node_type] += 1
+            heading = f"{GSN_IDENTIFIER_PREFIXES[node_type]}{numbered[node_type]}"
+        else:
+            heading = node_type
+        final_label = f"{heading}\n{node_label}" if node_type else node_label
 
         # The label is the document's text, so nothing in it may mean anything
         # to graphviz. Unescaped, a label of the form <...> is taken as HTML
@@ -360,9 +377,14 @@ def gsn_dot(gsn: pgsn.pgsn_term.Term,
         if undeveloped_here:
             # The last line of a label is centred at the bottom of the box.
             label += "\n" + UNDEVELOPED_DECORATOR
+        label = graphviz.escape(label)
+        if node_type == 'Assumption':
+            # Added after escaping, since \r -- which sets the line before it
+            # flush right -- is graphviz's own and must reach it as written.
+            label = graphviz.nohtml(f"{label}\n{ASSUMPTION_MARK}\\r")
         dot.node(
             name=node_obj.identifier,
-            label=graphviz.escape(label),
+            label=label,
             shape=shape,
             style=style,
             **node_attrs
@@ -394,6 +416,9 @@ def gsn_dot(gsn: pgsn.pgsn_term.Term,
                 # rank across the whole drawing.
                 edge_attrs['dir'] = 'back'
                 edge_attrs['style'] = 'dashed'
+                # GSN v3 (Table 1:6-2) gives Challenges an open arrowhead; the
+                # edge is reversed, so the head it points with is its tail.
+                edge_attrs['arrowtail'] = 'vee'
 
             if parent_node_type == 'Goal' and node_type == 'Solution':
                 edge_attrs['tailport'] = 's'
