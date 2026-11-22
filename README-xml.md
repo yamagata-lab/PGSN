@@ -713,7 +713,7 @@ compile error. It is the empty string ([Literals](#literals)), and the GSN check
 
 **Context vs Assumption**
 
-`Context` and `Assumption` are both documentation elements attached to the header; each holds a single value (text, a variable reference, an object, a list, and so on). The GSN check of `pgsn doc` and `pgsn render`, however, reports any value that is not a non-blank string as a breach (an error under `--strict`), since GSN gives every element a statement.
+`Context` and `Assumption` are both documentation elements attached to the header; each holds a single value (text, a variable reference, an object, a list, and so on). The GSN check of `pgsn doc` and `pgsn render` reports only a description that is blank text, and is content with any other value.
 
 - `Context` describes the setting or subject matter in which the argument is made.
 - `Assumption` states an assumption the argument relies on.

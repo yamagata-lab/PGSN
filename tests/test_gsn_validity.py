@@ -78,8 +78,6 @@ def test_a_goal_where_a_defeater_belongs():
     ("<Goal><description/><undeveloped/></Goal>", "''"),
     ("<Goal><description>  </description><undeveloped/></Goal>", "''"),
     ("<Goal>g<Context><description/></Context><undeveloped/></Goal>", "''"),
-    ("<Goal>g<Context><ol><li>a</li></ol></Context><undeveloped/></Goal>",
-     "['a']"),
 ])
 def test_an_element_that_states_nothing(body, description):
     # An empty description compiles; the check is what reports it.
@@ -87,6 +85,18 @@ def test_an_element_that_states_nothing(body, description):
     assert len(violations) == 1
     assert violations[0].endswith(
         f"must state something in its description, which is {description}")
+
+
+@pytest.mark.parametrize("body", [
+    "<Goal>g<Context><ol><li>a</li></ol></Context><undeveloped/></Goal>",
+    '<Goal>g<Context><dl><dt>url</dt><dd>https://example.com</dd></dl></Context>'
+    "<undeveloped/></Goal>",
+    "<Goal><num>3</num><undeveloped/></Goal>",
+], ids=["a list", "a record", "a number"])
+def test_a_description_that_is_not_text_is_no_breach(body):
+    """A context may be a reference to an artefact rather than a statement,
+    and the language lets any value stand for a description."""
+    assert _violations(body) == []
 
 
 def test_a_structure_not_headed_by_a_goal():
