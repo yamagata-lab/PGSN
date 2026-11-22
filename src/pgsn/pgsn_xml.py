@@ -977,11 +977,13 @@ def _split_args(items: list[ET.Element | str], unit: _Unit,
     the keyword record is passed.
     Positional args (no name) must precede keyword args, as in Python.
 
-    The keyword record is passed when there is a keyword argument, or an empty
-    `<arg/>`. The empty one passes the record with nothing in it, so that the
-    keyword parameters all take their defaults: `<apply template="f"><arg/>
-    </apply>` is `f()` in Python. It counts as a keyword argument, so it comes
-    after the positional ones.
+    The `<arg>` elements are the parameters passed, and one with nothing in it
+    passes nothing: a parameter left without a value takes its default. So an
+    empty `<arg name="x"/>` leaves `x` at its default, and an empty unnamed
+    `<arg/>` passes the keyword record with nothing in it, so that the keyword
+    parameters all take their defaults -- `<apply template="f"><arg/></apply>`
+    is `f()` in Python. Either counts as a keyword argument, so it comes after
+    the positional ones.
 
     Anything that is not an <arg> is an error rather than something to skip.
     Desugaring expands `var` and `expr` into a child of their own, so skipping
@@ -1003,10 +1005,9 @@ def _split_args(items: list[ET.Element | str], unit: _Unit,
             if record_passed:
                 raise PGSNError("positional arg after keyword arg")
             positional.append(_content(a, unit))
-        elif name is None:
-            record_passed = True
         else:
-            keyword[name] = _content(a, unit)
+            if _items(a):
+                keyword[name] = _content(a, unit)
             record_passed = True
     return positional, keyword, record_passed
 
@@ -1689,7 +1690,9 @@ def _sub_goals(elem: ET.Element, unit: _Unit) -> Term:
                                else undeveloped for c in written))
     computed = elem.find("subGoals")
     if computed is not None:
-        return _content(computed, unit)
+        # <subGoals> requires a list, so its empty content is the empty
+        # list rather than the empty string.
+        return _content(computed, unit) if _items(computed) else empty
     raise PGSNError("<Strategy> requires sub-goals or <subGoals>")
 
 

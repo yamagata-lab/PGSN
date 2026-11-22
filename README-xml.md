@@ -93,7 +93,7 @@ Bare text is a string, so the other literal forms are written out.
 | `<num>3</num>` | an `Integer`. PGSN has no floating point numbers |
 | `<str> a {b} </str>` | a `String`, taken exactly as written: whitespace is kept and `{...}` is not interpolated |
 
-Empty content is the empty string as well: `<li/>`, `<dd/>`, `<arg name="x"/>` and `<description/>` each stand for `""`, since an element with nothing in it holds the empty text. The one exception is an unnamed `<arg/>`, which passes the keyword record — see [Template Application](#template-application-apply).
+Empty content is the empty string as well: `<li/>`, `<dd/>`, `<def name="x"/>` and `<description/>` each stand for `""`, since an element with nothing in it holds the empty text. `<x/>` and `<x></x>` are the same. Two elements are different. One that requires a list, `<ol/>` and `<subGoals/>`, stands for the empty list. An empty `<arg>` passes nothing, so the parameter takes its default — see [Template Application](#template-application-apply).
 
 `<num>` matters because bare text stays a string even when it looks like a number, which is what lets a goal say `2024 audit passed` without the year turning into an integer. The arithmetic builtins only accept integers, so `<arg>3</arg>` hands them a string and the sum is never computed; write `<arg><num>3</num></arg>`.
 
@@ -513,7 +513,7 @@ When the function is a named variable, the `template` attribute provides a short
 </apply>
 ```
 
-A keyword parameter left out of a call that passes keyword arguments takes its default. An empty `<arg/>` passes no keyword argument at all, so that every keyword parameter takes its default; it counts as a keyword argument, so it comes after the positional ones:
+A keyword parameter left out of a call that passes keyword arguments takes its default. An `<arg>` with nothing in it passes nothing: an empty `<arg name="x"/>` leaves `x` at its default, and an empty unnamed `<arg/>` passes no keyword argument at all, so that every keyword parameter takes its default. Either counts as a keyword argument, so it comes after the positional ones:
 
 ```xml
 <apply template="f"><arg/></apply>                    <!-- every keyword parameter at its default -->
