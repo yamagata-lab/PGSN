@@ -20,7 +20,7 @@ def naming_context(names: set[str]) -> list[str]:
 
 
 class LambdaInterpreterError(Exception):
-    pass
+    """Evaluation reached its step limit before the term was evaluated."""
 
 
 # Raised by a builtin that declines its arguments. The evaluator catches these

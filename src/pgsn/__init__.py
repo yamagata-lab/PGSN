@@ -141,6 +141,7 @@ from pgsn.gsn import (
     GSNViolation,
 )
 
+from pgsn.pgsn_term import LambdaInterpreterError
 from pgsn.pgsn_xml import PGSNError, load_xml, load_xml_string
 
 __all__ = [
@@ -156,6 +157,8 @@ __all__ = [
     "load_xml",
     "load_xml_string",
     "PGSNError",
+    # Evaluation
+    "LambdaInterpreterError",
     # Terms and variables
     "Term",
     "variable",

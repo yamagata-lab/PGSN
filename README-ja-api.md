@@ -330,7 +330,7 @@ jail パス（`/lib/...`）はどちらの場合も使えます。
 
 ## 例外
 
-`PGSNError` は、整形式のドキュメントをコンパイラが拒むときのエラーです。未知の要素、不正な名前、循環 import、そして拒否されたすべての import パスです。`JailError` は jail 定義そのものの不正を表し、`Jails` の構築時に送出されます。コンパイル中に起きた場合は `PGSNError` に変換されます。次の3つは `PGSNError` ではありません。整形式でない XML は `xml.etree.ElementTree.ParseError` を送出します。`steps` の上限に達すると、メッセージが `Reduction did not terminate` で始まるエラーが送出されます。値を持たない結果は、それを読み出すもの（`python_value`・`gsn_tree`・`gsn_dot`・`save_gsn`・`gsn_violations`）が `ValueError` を送出し、評価が止まった位置をパスで示します。
+`PGSNError` は、整形式のドキュメントをコンパイラが拒むときのエラーです。未知の要素、不正な名前、循環 import、そして拒否されたすべての import パスです。`JailError` は jail 定義そのものの不正を表し、`Jails` の構築時に送出されます。コンパイル中に起きた場合は `PGSNError` に変換されます。次の3つは `PGSNError` ではありません。整形式でない XML は `xml.etree.ElementTree.ParseError` を送出します。`steps` の上限に達すると、メッセージが `Reduction did not terminate` で始まる `LambdaInterpreterError` が送出されます。値を持たない結果は、それを読み出すもの（`python_value`・`gsn_tree`・`gsn_dot`・`save_gsn`・`gsn_violations`）が `ValueError` を送出し、評価が止まった位置をパスで示します。
 
 ```python
 try:
