@@ -89,7 +89,7 @@ Bare text is a string, so the other literal forms are written out.
 
 | Element | Value |
 |---------|-------|
-| bare text | a `String`. Leading and trailing whitespace is removed, and `{name}` fields are interpolated — see [Format Strings in Text](#format-strings-in-text) |
+| bare text | a `String`. Leading and trailing whitespace is removed, and `{...}` fields are interpolated — see [Format Strings in Text](#format-strings-in-text) |
 | `<num>3</num>` | an `Integer`. PGSN has no floating point numbers |
 | `<str> a {b} </str>` | a `String`, taken exactly as written: whitespace is kept and `{...}` is not interpolated |
 
@@ -101,32 +101,42 @@ The builtins are ordinary bindings in the outermost scope, so `<var name="plus"/
 
 ### Expressions (expr)
 
-Writing arithmetic with `<apply>` is heavy, so `<expr>` accepts the usual infix notation:
+Writing arithmetic with `<apply>` is heavy, so `<expr>` accepts expressions written as in Python:
 
 ```xml
 <def name="next"><expr>i + 1</expr></def>
 <def name="label"><expr>f"component {i} of {total}"</expr></def>
+<def name="size"><expr>"large" if count > 10 else "small"</expr></def>
 ```
 
-`<expr>` is a shorthand and nothing more. Before compilation it is expanded, where it stands, into the elements it abbreviates: every operator into an application of the corresponding builtin, every name into a `<var>`. So a name in an expression means what `<var>` would mean at that place, and nothing is reachable through an expression that is not reachable without one. The grammar is PGSN's own; it is not borrowed from any other language.
+`<expr>` is a shorthand and nothing more. Before compilation it is expanded, where it stands, into the elements it abbreviates: an operator into an application of the corresponding builtin, a name into a `<var>`, a call into an `<apply>`, an attribute into a `<get>`. So a name in an expression means what `<var>` would mean at that place, and nothing is reachable through an expression that is not reachable without one.
 
 **What may appear in an expression**
 
+The grammar is a part of Python's expressions, read the way Python reads them.
+
 | | |
 |---|---|
-| literals | `3`, `"text"`, `'text'` |
-| names | `i` — becomes `<var name="i"/>`; `true` and `false` are the builtins of those names |
-| arithmetic | `+`, `-`, `*`, `//`, `%`, and unary `-` |
-| comparison | `==`, `!=`, `<`, `<=`, `>`, `>=` |
+| integers | `3`, `1_000`, `0x1F`, `0o17`, `0b101` |
+| strings | `"text"`, `'text'`, `"""text"""`, `r"\d"`, with Python's escapes; adjacent strings are joined |
+| f-strings | `f"component {i} of {total}"`, `f"{i + 1} left"` |
+| booleans | `True`, `False` |
+| names | `i` — becomes `<var name="i"/>` |
+| arithmetic | `+`, `-`, `*`, `//`, `%`, and unary `-` and `+` |
+| comparison | `==`, `!=`, `<`, `<=`, `>`, `>=`, chained as in Python: `a < b < c` is `a < b and b < c` |
 | boolean | `and`, `or`, `not` |
+| conditional | `x if c else y` — only the branch chosen is evaluated |
+| calls | `f(x, k=1)` — becomes `<apply>`; `f()` takes every keyword parameter at its default |
+| attributes | `r.key` — becomes `<get key="key">`; `obj.m(x)` calls a method |
 | parentheses | `(i + 1) * 2` |
-| f-strings | `f"component {i} of {total}"` |
 
-Everything else is rejected with an error naming what was found. There are no function calls, no attribute access and no subscripting: use `<apply>`, `<get>` and the list elements, which state plainly what they do.
+The operators bind as in Python: the conditional loosest, then `or`, `and`, `not`, the comparisons, `+` and `-`, `*`, `//` and `%`, the unary operators, and calls and attributes tightest.
 
-The operators bind as usual: `or` loosest, then `and`, `not`, the comparisons, `+` and `-`, `*`, `//` and `%`, and unary `-` tightest. A comparison is not chained: `a < b < c` is an error, written `a < b and b < c`.
+Everything else is rejected with an error naming what was found: there is no subscripting (`xs[0]`), no `lambda`, no comprehension, no `in` or `is`, and no `None`, which has no counterpart in PGSN. A floating point number is an error, since PGSN has none, and so is `**`, for which there is no builtin.
 
-A string literal takes either quote, and a backslash escapes `\\`, `\"`, `\'`, `\n` and `\t`. An f-string writes its fields as bare text does — see [Format Strings in Text](#format-strings-in-text): each field is a name, so a value computed for a field is bound with `<def>` first.
+An f-string field is an expression. A conversion (`!r`), a format specification (`:>4`) and a `=` have no counterpart in a format string, so they are errors, as is a brace left single; `{{` and `}}` are the braces themselves. A field may hold a string literal in the other quote.
+
+`True` and `False` always mean the booleans, as the operators always mean the builtins. `true` and `false` are the names those builtins are bound to, like any other name.
 
 **Three things to know**
 
@@ -141,7 +151,7 @@ A string literal takes either quote, and a backslash escapes `\\`, `\"`, `\'`, `
 
 `//` is integer division: `7 // 2` is `3`. `/` is rejected rather than treated as a synonym, so that it stays available for true division if PGSN ever gains a floating point type.
 
-Ordering compares integers only, so `"a" < "b"` has no value. Equality compares data only: base values — a string, an integer, a boolean, `undefined` — and lists and records built out of them. So `"a" == "a"` is `true`, while two functions, two classes or two GSN nodes have no value when compared, just as `"a" < "b"` has none. To ask whether a list is empty, apply `is_empty`; comparing the list with `empty` answers only for a list whose elements are base values, or lists and records built out of them.
+Ordering compares integers only, so `"a" < "b"` has no value. Equality compares data only: base values — a string, an integer, a boolean, `undefined` — and lists and records built out of them. So `"a" == "a"` is `True`, while two functions, two classes or two GSN nodes have no value when compared, just as `"a" < "b"` has none. To ask whether a list is empty, apply `is_empty`; comparing the list with `empty` answers only for a list whose elements are base values, or lists and records built out of them.
 
 **Operators cannot be redefined.** `1 + 2` is addition even inside a scope that binds the name `plus`.
 
@@ -149,7 +159,7 @@ Ordering compares integers only, so `"a" < "b"` has no value. Equality compares 
 
 A *name* is what `<def>` and `<param>` introduce and what `<var>` refers to. The same rule applies to every attribute that holds one: `name` on `<def>`, `<param>` and `<var>`, `typeOf` on `<def>` and `<var>`, `as` on `<from>` and `<import>`, `template` on `<apply>`, `of` on `<get>`, `to` on `<send>`, `name` on `<arg>`, and the `var` shorthand attribute.
 
-A name must begin with a letter and may continue with letters, digits and underscores. Letters are not restricted to ASCII, so `ゴール` is a name. A name may **not** begin with an underscore; those are reserved by the implementation. The words `and`, `or` and `not` are not names, because an [expression](#expressions-expr) uses them as operators: every name a `<def>` can bind can then be written in an expression.
+A name must begin with a letter and may continue with letters, digits and underscores. Letters are not restricted to ASCII, so `ゴール` is a name. A name may **not** begin with an underscore; those are reserved by the implementation. Python's keywords — `and`, `if`, `lambda`, `None`, `True` and the rest — are not names either, because an [expression](#expressions-expr) has them as its keywords; every name a `<def>` can bind can then be written in an expression. Python's soft keywords, such as `match` and `type`, are names.
 
 Record labels are a different namespace and are unrestricted: `key` on `<get>` and `<dt>`, `method` on `<send>` and `name` on `<attribute>` are arbitrary strings. So is `name` on `<class>`, which is what the class is called rather than a name anything refers to.
 
@@ -647,8 +657,9 @@ record whose labels are computed is built with `add_attribute` instead.
 
 ### Format Strings in Text
 
-Wherever text stands for a value, you can embed in-scope variables with the `{name}` notation.
-This becomes a `format_string` application. What stands between the braces is a name, and anything else there is an error, as is a brace left single. To write a literal brace, escape it as `{{` or `}}`.
+Wherever text stands for a value, a field `{...}` puts a value into it. What stands between the braces is an expression, as in [`<expr>`](#expressions-expr), so `{c}` is the variable `c` and `{n + 1}` is one more than `n`. This becomes a `format_string` application. To write a literal brace, escape it as `{{` or `}}`.
+
+Text is not checked when the document is compiled. A field that cannot be read as an expression, and a brace left single, stay in the text as written, and `pgsn doc` and `python_value` report them when the document is evaluated.
 
 ```xml
 <template>
@@ -659,7 +670,7 @@ This becomes a `format_string` application. What stands between the braces is a 
 
 ### GSN Leading Text as Description
 
-For GSN header elements (`Goal`, `Strategy`, `Solution`, `Context`, `Assumption`), leading plain text is automatically treated as the `description`. It is the description whether or not the element also has child elements (such as a nested `<Strategy>`), and writing a `<description>` element says the same thing. `{name}` expansion applies here too.
+For GSN header elements (`Goal`, `Strategy`, `Solution`, `Context`, `Assumption`), leading plain text is automatically treated as the `description`. It is the description whether or not the element also has child elements (such as a nested `<Strategy>`), and writing a `<description>` element says the same thing. `{...}` fields apply here too.
 
 ```xml
 <!-- these two forms are equivalent -->

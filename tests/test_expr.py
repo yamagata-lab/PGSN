@@ -140,58 +140,149 @@ def test_ordering_is_limited_to_integers():
 
 
 @pytest.mark.parametrize("source,expected", [
-    ("true and false", False),
-    ("true or false", True),
-    ("not true", False),
-    ("true and true and false", False),
+    ("True and False", False),
+    ("True or False", True),
+    ("not True", False),
+    ("True and True and False", False),
     ("1 &lt; 2 and 3 > 2", True),
     ("not 1 == 2", True),
-    ("false or true and false", False),
+    ("False or True and False", False),
 ])
 def test_boolean_operators(source, expected):
     assert expr(source) is expected
 
 
-def test_true_and_false_are_names():
-    """They are the builtins `true` and `false`, reached by name where the
-    <expr> stands, like any other name in an expression."""
+def test_true_and_false_are_literals():
+    """`True` and `False` reach the builtins as the operators do, through a
+    name no document can bind; `true` and `false` are the builtins' names."""
+    assert expanded("True") == '<var name="_true" />'
+    assert expr("True", '<def name="true"><num>0</num></def>') is True
     assert expanded("true") == '<var name="true" />'
-    assert expr("flag and true", '<def name="flag"><expr>1 == 1</expr></def>') is True
+
+
+@pytest.mark.parametrize("source,expected", [
+    ("1 &lt; 2 &lt; 3", True),
+    ("1 &lt; 3 &lt; 2", False),
+    ("3 > 2 == 2", True),
+])
+def test_comparisons_chain_as_in_python(source, expected):
+    assert expr(source) is expected
+
+
+@pytest.mark.parametrize("source,expected", [
+    ('"big" if n > 2 else "small"', "big"),
+    ('"big" if n > 5 else "small"', "small"),
+    ('1 if False else 2 if True else 3', 2),
+])
+def test_conditional_expression(source, expected):
+    assert expr(source, DEFS) == expected
+
+
+def test_the_branch_not_taken_is_not_evaluated():
+    assert expr('"ok" if True else missing') == "ok"
 
 
 # ------------------------------------------------------------------ #
-# Strings and f-strings
+# Calls and attributes
 # ------------------------------------------------------------------ #
+
+TEMPLATE = ('<def name="f" as="template">'
+            '<param name="p" positional="true"/><param name="k">dk</param>'
+            '<dl><dt>p</dt><dd var="p"/><dt>k</dt><dd var="k"/></dl></def>')
+
+
+def test_a_call_is_an_application():
+    assert expr('f("a", k="b")', TEMPLATE) == {"p": "a", "k": "b"}
+    assert expr('is_empty(xs)', '<def name="xs"><ol/></def>') is True
+
+
+def test_a_call_with_no_arguments_takes_the_defaults():
+    defs = '<def name="g" as="template"><param name="k">dk</param><var name="k"/></def>'
+    assert expr("g()", defs) == "dk"
+
+
+def test_a_call_reads_its_arguments_as_apply_does():
+    assert (expanded('f(1, k="x")')
+            == '<apply><var name="f" /><arg><num>1</num></arg>'
+               '<arg name="k"><str>x</str></arg></apply>')
+
+
+def test_a_positional_argument_after_a_keyword_one_is_an_error():
+    with pytest.raises(PGSNError, match="positional argument follows"):
+        expr('f(k="b", "a")', TEMPLATE)
+
+
+def test_an_attribute_reads_a_record_label():
+    defs = '<def name="r"><dl><dt>size</dt><dd><num>4</num></dd></dl></def>'
+    assert expr("r.size + 1", defs) == 5
+    assert expanded("r.size") == '<get key="size"><var name="r" /></get>'
+
+
+def test_a_method_is_called_through_its_attribute():
+    defs = ('<def name="Greeter" as="class"><attribute name="greeting"/>'
+            '<method name="greet"><param name="whom">world</param>'
+            '<expr>f"{self.greeting}, {whom}"</expr></method></def>'
+            '<def name="g" as="object"><instanceOf var="Greeter"/>'
+            '<attribute name="greeting">hello</attribute></def>')
+    assert expr('g.greet(whom="you")', defs) == "hello, you"
+
+
+# ------------------------------------------------------------------ #
+# Literals, strings and f-strings
+# ------------------------------------------------------------------ #
+
+@pytest.mark.parametrize("source,expected", [
+    ("1_000", 1000), ("0x1F", 31), ("0o17", 15), ("0b101", 5), ("+3", 3),
+])
+def test_integers_as_python_writes_them(source, expected):
+    assert expr(source) == expected
+
+
+@pytest.mark.parametrize("source", ["1.5", "1e3", ".5", "007"])
+def test_what_is_not_an_integer(source):
+    with pytest.raises(PGSNError, match="floating point|not an integer"):
+        expr(source)
+
 
 def test_plain_string_literal_does_not_interpolate():
     assert expr('"plain {x}"') == "plain {x}"
+
+
+def test_string_literals_as_python_writes_them():
+    assert expr("'single'") == "single"
+    assert expr(r'"say \"hi\" \\ done"') == 'say "hi" \\ done'
+    assert expr(r'"a\tb\x41é\N{BULLET}"') == "a\tbAé•"
+    assert expr(r'"\q"') == "\\q"
+    assert expr(r'r"\n"') == "\\n"
+    assert expr('"""tri"ple"""') == 'tri"ple'
+    assert expr('"con" \'cat\'') == "concat"
 
 
 def test_fstring_interpolates_variables():
     assert expr('f"hello {who}"', DEFS) == "hello world"
 
 
-def test_fstring_fields_are_names_as_in_text():
-    """An f-string writes its fields as bare text does: a field is a name."""
-    assert expr('f"{who}"', DEFS) == run("{who}", DEFS)
-    for field in ("n + 1", "n:>4", "who!r", "who=", ""):
-        with pytest.raises(PGSNError, match="not a valid name"):
-            expr(f'f"[{{{field}}}]"', DEFS)
+def test_fstring_interpolates_expressions():
+    assert expr('f"{n} + 1 = {n + 1}"', DEFS) == "3 + 1 = 4"
+    # A field may hold a string literal in the other quote, braces and all.
+    assert expr("""f'{"}" if n > 2 else "{"}'""", DEFS) == "}"
 
 
-def test_a_single_brace_is_an_error():
+def test_fstring_joins_with_adjacent_strings():
+    assert expr('"{n} is " f"{n}"', DEFS) == "{n} is 3"
+
+
+@pytest.mark.parametrize("field", ["n:>4", "who!r", "who="])
+def test_fstring_refuses_what_a_format_string_cannot_do(field):
+    with pytest.raises(PGSNError, match="not allowed in an f-string field"):
+        expr(f'f"[{{{field}}}]"', DEFS)
+
+
+def test_a_single_brace_in_an_fstring_is_an_error():
     with pytest.raises(PGSNError, match="does not close it"):
         expr('f"{who"', DEFS)
     with pytest.raises(PGSNError, match="closes no field"):
         expr('f"who}"', DEFS)
-
-
-def test_string_literals_take_either_quote_and_escapes():
-    assert expr("'single'") == "single"
-    assert expr(r'"say \"hi\" \\ done"') == 'say "hi" \\ done'
-    assert expr(r'"a\tb"') == "a\tb"
-    with pytest.raises(PGSNError, match="is not an escape"):
-        expr(r'"\q"')
 
 
 def test_fstring_without_fields_is_a_plain_string():
@@ -204,35 +295,51 @@ def test_fstring_escapes_literal_braces():
 
 
 # ------------------------------------------------------------------ #
+# Fields in bare text
+# ------------------------------------------------------------------ #
+
+def test_a_field_in_text_is_an_expression():
+    assert run('{n + 1} items, {"many" if n > 2 else "few"}', DEFS) == "4 items, many"
+
+
+@pytest.mark.parametrize("text", ["{}", "{n +}", "{n:>4}", "a } b", "a { b"])
+def test_a_field_that_cannot_be_read_is_reported_at_evaluation(text):
+    """Text is not checked at compile time: what cannot be read stays in the
+    format string, which reports it when the document is evaluated."""
+    term = pgsn.load_xml_string(f"<PGSN>{text}</PGSN>")
+    with pytest.raises(ValueError, match="Formatter"):
+        pgsn.python_value(term)
+
+
+# ------------------------------------------------------------------ #
 # What the syntax deliberately excludes
 # ------------------------------------------------------------------ #
 
 @pytest.mark.parametrize("source", [
-    "obj.field", "xs[0]", "lambda x: x", "[i for i in xs]", "x if y else z",
-    "2 ** 3", "{1: 2}", "(1, 2)", "1 +", "(1", "3abc", "x = 1",
+    "xs[0]", "lambda x: x", "[i for i in xs]", "{1: 2}", "(1, 2)", "1 +",
+    "(1", "3abc", "x = 1", "a in b", "a is b", "x.0", 'b"x"',
 ])
 def test_what_the_grammar_does_not_have(source):
     with pytest.raises(PGSNError, match="Cannot parse <expr>"):
         expr(source)
 
 
-def test_a_call_is_not_allowed():
-    with pytest.raises(PGSNError, match="a call is not allowed"):
-        expr("f(x)")
+@pytest.mark.parametrize("name", ["and", "lambda", "if", "class", "None", "True"])
+def test_a_python_keyword_is_not_a_name(name):
+    """Every name a <def> can bind can be written in an <expr>, so the
+    keywords of the expression syntax -- Python's -- are not names."""
+    with pytest.raises(PGSNError, match="keyword of the expression syntax"):
+        run(f'<def name="{name}">x</def>x')
 
 
-@pytest.mark.parametrize("word", ["and", "or", "not"])
-def test_the_words_of_the_syntax_are_not_names(word):
-    """Every name a <def> can bind can be written in an <expr>, so the words
-    the expression syntax uses are kept out of names altogether."""
-    with pytest.raises(PGSNError, match="words of the expression syntax"):
-        run(f'<def name="{word}">x</def>x')
-
-
-@pytest.mark.parametrize("name", ["lambda", "if", "class", "None", "True"])
-def test_a_python_keyword_is_an_ordinary_name(name):
-    """The grammar is PGSN's own, so Python's keywords mean nothing to it."""
+@pytest.mark.parametrize("name", ["match", "case", "type", "true", "ゴール"])
+def test_a_soft_keyword_is_a_name(name):
     assert expr(f"{name} + 1", f'<def name="{name}"><num>1</num></def>') == 2
+
+
+def test_none_has_no_counterpart():
+    with pytest.raises(PGSNError, match="None has no counterpart"):
+        expr("None")
 
 
 def test_true_division_is_reserved():
@@ -241,9 +348,9 @@ def test_true_division_is_reserved():
         expr("7 / 2")
 
 
-def test_chained_comparison_is_rejected():
-    with pytest.raises(PGSNError, match="chained comparison"):
-        expr("1 &lt; 2 &lt; 3")
+def test_there_is_no_power():
+    with pytest.raises(PGSNError, match="'\\*\\*' is not defined"):
+        expr("2 ** 3")
 
 
 def test_empty_and_malformed_expressions():
