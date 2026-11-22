@@ -70,11 +70,10 @@ XML ドキュメントの例 `examples/gsn.xml`：
 </PGSN>
 ```
 
-`pgsn doc` はこれを評価し、構造を木として表示します。
+`pgsn doc` はこれを評価し、構造を木として `-o` で指定したファイルに書き出します。`-o -` は標準出力です。
 
 ```shell
-% pgsn doc examples/gsn.xml
-Generating 'None' from 'examples/gsn.xml'
+% pgsn doc examples/gsn.xml -o -
 Evaluating term 'main'...
 Goal: System is secure
 └── Strategy: Break into sub-goals
@@ -86,7 +85,7 @@ Goal: System is secure
 Done.
 ```
 
-`.py` の入力は、表示する項を `main`（`--term-name` で別の名前にできます）に束縛する Python のプログラムです。[基本例](#基本例)を参照してください。`pgsn render` は同じ構造を SVG・PNG・PDF の図に描き、他のコマンドとオプションは `pgsn --help` で一覧できます。コマンドが失敗すると `Error:` を表示して終了コード 1 で終わります。入力ファイルが無い、`--jail` の書き方が誤っている、といった使い方の誤りは終了コード 2 で終わります。
+`.py` の入力は、表示する項を `main`（`--term-name` で別の名前にできます）に束縛する Python のプログラムです。[基本例](#基本例)を参照してください。`pgsn render` は同じ構造を SVG・PNG・PDF の図に描き、他のコマンドとオプションは `pgsn --help` で一覧できます。コマンドが失敗すると `Error:` を表示して終了コード 1 で終わります。入力ファイルが無い、`pgsn doc` に `-o` が無い、`--jail` の書き方が誤っている、といった使い方の誤りは終了コード 2 で終わります。
 
 ### GSN の規則の検査
 
@@ -103,7 +102,7 @@ Warning: S1 at <root>.support: a strategy relates a goal to supporting goals, bu
 XML ドキュメントは他のドキュメントを import できますが、既定では自身のディレクトリ配下のファイルにしか届きません。共有モジュール群へのアクセスを許可するには、それを *jail*（名前の付いたディレクトリルート）として登録し、ドキュメント側からは `/<名前>/...` で参照します。
 
 ```shell
-PGSN % pgsn doc main.xml --jail lib=/opt/pgsn-lib
+PGSN % pgsn doc main.xml -o - --jail lib=/opt/pgsn-lib
 ```
 
 ```xml
@@ -155,7 +154,7 @@ g = goal(
 gsn_tree(g.fully_eval()).show(sorting=False)
 ```
 
-これは[コマンドライン](#コマンドライン)の例を Python で書いたものです。`examples/gsn.py` はこれを `main` に束縛しているので、`pgsn doc examples/gsn.py` も同じ木を表示します。
+これは[コマンドライン](#コマンドライン)の例を Python で書いたものです。`examples/gsn.py` はこれを `main` に束縛しているので、`pgsn doc examples/gsn.py -o -` も同じ木を表示します。
 
 ---
 

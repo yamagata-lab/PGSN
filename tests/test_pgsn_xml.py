@@ -599,6 +599,15 @@ def test_missing_value(tmp_path):
         compile_pgsn(p)
 
 
+@pytest.mark.parametrize("source", [
+    "<PGSN><var/></PGSN>",
+    '<PGSN><def name="x" as="var">y</def><var name="x"/></PGSN>',
+], ids=["a var with no name", "as=var on a def"])
+def test_a_var_without_a_name_says_so(source, tmp_path):
+    with pytest.raises(PGSNError, match="<var> needs a 'name' attribute"):
+        run(source, tmp_path)
+
+
 def test_unknown_expression(tmp_path):
     p = tmp_path / "test.pgsn"
     p.write_text("<PGSN><bogus/></PGSN>")

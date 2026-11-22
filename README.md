@@ -73,11 +73,10 @@ An XML document, `examples/gsn.xml`:
 </PGSN>
 ```
 
-`pgsn doc` evaluates it and prints the structure as a tree:
+`pgsn doc` evaluates it and writes the structure as a tree to the file `-o` names, `-o -` being standard output:
 
 ```shell
-% pgsn doc examples/gsn.xml
-Generating 'None' from 'examples/gsn.xml'
+% pgsn doc examples/gsn.xml -o -
 Evaluating term 'main'...
 Goal: System is secure
 └── Strategy: Break into sub-goals
@@ -89,7 +88,7 @@ Goal: System is secure
 Done.
 ```
 
-A `.py` input is a Python program that binds the term to show to `main` (another name with `--term-name`); see [Example](#example). `pgsn render` draws the same structure as SVG, PNG or PDF, and `pgsn --help` lists the other commands and options. When a command fails, it prints `Error:` and exits with status 1. A usage error, such as a missing input file or a malformed `--jail`, exits with status 2.
+A `.py` input is a Python program that binds the term to show to `main` (another name with `--term-name`); see [Example](#example). `pgsn render` draws the same structure as SVG, PNG or PDF, and `pgsn --help` lists the other commands and options. When a command fails, it prints `Error:` and exits with status 1. A usage error, such as a missing input file, a `pgsn doc` without `-o` or a malformed `--jail`, exits with status 2.
 
 ### Checking against GSN
 
@@ -106,7 +105,7 @@ The rules: a goal is supported by a strategy, a solution or sub-goals, and a str
 An XML document may import other documents. By default it can only reach files under its own directory. To grant access to a shared library of modules, register it as a *jail* — a named directory root — and refer to it from the document as `/<name>/...`:
 
 ```shell
-PGSN % pgsn doc main.xml --jail lib=/opt/pgsn-lib
+PGSN % pgsn doc main.xml -o - --jail lib=/opt/pgsn-lib
 ```
 
 ```xml
@@ -158,7 +157,7 @@ g = goal(
 gsn_tree(g.fully_eval()).show(sorting=False)
 ```
 
-This is the case of [Command-line interface](#command-line-interface), written in Python. `examples/gsn.py` binds it to `main`, so `pgsn doc examples/gsn.py` prints the same tree.
+This is the case of [Command-line interface](#command-line-interface), written in Python. `examples/gsn.py` binds it to `main`, so `pgsn doc examples/gsn.py -o -` prints the same tree.
 
 ---
 

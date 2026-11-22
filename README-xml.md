@@ -292,7 +292,7 @@ A document is confined to a directory tree, and `file` may only name a file insi
 Here `lib` is a jail name, not a directory on disk. It is resolved against the jail table supplied on the command line or through the API:
 
 ```console
-$ pgsn doc main.xml --jail lib=/opt/pgsn-lib
+$ pgsn doc main.xml -o - --jail lib=/opt/pgsn-lib
 ```
 
 ```python
