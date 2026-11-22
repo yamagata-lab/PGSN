@@ -1690,9 +1690,7 @@ def _sub_goals(elem: ET.Element, unit: _Unit) -> Term:
     computed = elem.find("subGoals")
     if computed is not None:
         return _content(computed, unit)
-    # None written is the empty list, which the GSN check reports with the
-    # output, as it does a computed list that comes out empty.
-    return empty
+    raise PGSNError("<Strategy> requires sub-goals or <subGoals>")
 
 
 def _e_solution(elem: ET.Element, unit: _Unit) -> Term:

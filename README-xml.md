@@ -716,7 +716,7 @@ compile error. It is the empty string ([Literals](#literals)), and the GSN check
 
 **Context vs Assumption**
 
-`Context` and `Assumption` are both documentation elements attached to the header; each holds a single value (text, a variable reference, an object, a list, and so on). The GSN check of `pgsn doc` and `pgsn render` reports only a description that is blank text, and is content with any other value.
+`Context` and `Assumption` are both documentation elements attached to the header; each holds a single value (text, a variable reference, an object, a list, and so on). The GSN check of `pgsn doc` and `pgsn render`, however, reports any value that is not a non-blank string as a breach (an error under `--strict`), since GSN gives every element a statement.
 
 - `Context` describes the setting or subject matter in which the argument is made.
 - `Assumption` states an assumption the argument relies on.
@@ -770,8 +770,6 @@ A goal has exactly one support. A `<Goal>` with none is undeveloped, as if `<und
     <subGoals var="goals"/>    <!-- sub-goals via variable reference -->
 </Strategy>
 ```
-
-A `<Strategy>` with neither has no sub-goals, which is not a compile error: the GSN check of `pgsn doc` and `pgsn render` reports it, as it does a computed list that comes out empty.
 
 An `<undeveloped/>` may stand among the written sub-goals, alone or beside `<Goal>` elements, for the part of the strategy not developed yet. The strategy is then undeveloped, which GSN v3 allows for strategies as well as goals, and a drawing marks it with the undeveloped decorator.
 
