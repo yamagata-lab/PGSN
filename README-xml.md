@@ -771,8 +771,6 @@ A goal has exactly one support. A `<Goal>` with none is undeveloped, as if `<und
 </Strategy>
 ```
 
-A `<Strategy>` with neither has no sub-goals, which is not a compile error: the GSN check of `pgsn doc` and `pgsn render` reports it, as it does a computed list that comes out empty.
-
 An `<undeveloped/>` may stand among the written sub-goals, alone or beside `<Goal>` elements, for the part of the strategy not developed yet. The strategy is then undeveloped, which GSN v3 allows for strategies as well as goals, and a drawing marks it with the undeveloped decorator.
 
 ```xml

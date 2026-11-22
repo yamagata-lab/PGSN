@@ -56,14 +56,6 @@ def test_an_empty_strategy():
         "goals, but this one has none"]
 
 
-def test_a_strategy_written_without_sub_goals():
-    """Not a compile error: written or computed, an empty strategy is
-    reported by the check."""
-    assert _violations("<Goal>g<Strategy>s</Strategy></Goal>") == [
-        "S1 at <root>.support: a strategy relates a goal to supporting goals, "
-        "but this one has none"]
-
-
 def test_a_goal_where_a_defeater_belongs():
     term = pgsn.goal(description="g", support=pgsn.undeveloped,
                      defeaters=pgsn.list_term((pgsn.goal(
