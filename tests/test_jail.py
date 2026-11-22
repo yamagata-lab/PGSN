@@ -409,7 +409,7 @@ def test_parse_jails_duplicate(tmp_path):
 def test_cli_doc_with_jail(tmp_path):
     lib = tmp_path / "lib"
     write(lib / "mod.xml", """<PGSNModule>
-        <def name="g"><Goal>imported goal<undeveloped/></Goal></def>
+        <def name="g"><Goal>imported goal</Goal></def>
     </PGSNModule>""")
     src = write(tmp_path / "main.xml", """<PGSN>
         <from file="/lib/mod.xml" import="g"/>
@@ -424,7 +424,7 @@ def test_cli_doc_with_jail(tmp_path):
 def test_cli_doc_without_jail_fails(tmp_path):
     lib = tmp_path / "lib"
     write(lib / "mod.xml", """<PGSNModule>
-        <def name="g"><Goal>imported goal<undeveloped/></Goal></def>
+        <def name="g"><Goal>imported goal</Goal></def>
     </PGSNModule>""")
     src = write(tmp_path / "main.xml", """<PGSN>
         <from file="/lib/mod.xml" import="g"/>
