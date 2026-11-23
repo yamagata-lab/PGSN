@@ -670,5 +670,4 @@ Sharing is what keeps a module cheap: a name imported with
 and a definition of the module that the document does not use takes none.
 
 `tests/test_examples.py` evaluates every entry point without fixing what they
-produce, since they are material rather than specification. The four full EU
-AI Act cases are marked `slow` and run only under `pytest -m slow`.
+produce, since they are material rather than specification.

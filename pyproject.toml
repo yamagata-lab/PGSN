@@ -51,11 +51,3 @@ pgsn = "pgsn.cli:cli"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-
-# Tests. `slow` marks the examples named in the SLOW set of
-# tests/test_examples.py. A plain `pytest` leaves those out and says so
-# ("deselected"); `pytest -m slow` runs only them, and `pytest -m ""` runs
-# everything.
-[tool.pytest.ini_options]
-markers = ["slow: an example kept out of a plain run; run it with -m slow"]
-addopts = "-m 'not slow'"

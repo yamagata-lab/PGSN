@@ -9,9 +9,6 @@ size a reader will meet them.
 
 Modules (`<PGSNModule>`) are skipped: they are meant to be imported, and
 cannot be evaluated on their own.
-
-An example that takes minutes rather than seconds is marked `slow` and left
-out of a plain `pytest` run; see `pyproject.toml` for how to ask for it.
 """
 
 import xml.etree.ElementTree as ET
@@ -23,24 +20,14 @@ import pgsn
 
 EXAMPLES = Path(__file__).resolve().parent.parent / "examples"
 
-# Named rather than measured, because a threshold would have to run the
-# example to apply it. Paths are relative to `examples/`, which is also how
-# the tests are named.
-SLOW = {"EU_AI_ACT/case_proctoring.xml",
-        "EU_AI_ACT/case_medical_ai.xml",
-        "EU_AI_ACT/case_gpai_system.xml",
-        "EU_AI_ACT/case_recruitment_ai.xml"}
-
 
 def _entry_points() -> list:
+    # Ids are paths relative to `examples/`.
     params = []
     for path in sorted(EXAMPLES.rglob("*.xml")):
         if ET.parse(path).getroot().tag != "PGSN":
             continue
-        name = str(path.relative_to(EXAMPLES))
-        params.append(pytest.param(
-            path, id=name,
-            marks=[pytest.mark.slow] if name in SLOW else []))
+        params.append(pytest.param(path, id=str(path.relative_to(EXAMPLES))))
     return params
 
 
