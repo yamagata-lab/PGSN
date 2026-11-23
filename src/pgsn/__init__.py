@@ -6,13 +6,14 @@ This module is the public API.  It exposes three groups of names:
   combine with (`string`, `record`, `lambda_abs`, `map_term`, ...);
 * constructors for GSN nodes and classes, together with the functions that
   turn an evaluated term into something readable (`python_value`, `gsn_tree`,
-  `gsn_dot`, `save_gsn`);
+  `gsn_dot`, `save_gsn`) and check it against the rules of GSN
+  (`gsn_violations`);
 * the XML front end (`load_xml`, `load_xml_string`) and its configuration
   (`Config`, `Jails`, `configure`).
 
 Everything else in the `pgsn` package is implementation detail.  The submodules
-`pgsn.dsl`, `pgsn.gsn`, `pgsn.pgsn_term`, `pgsn.pgsn_xml`, `pgsn.dcom`,
-`pgsn.helpers` and `pgsn.cli` are internal: their contents may change without
+`pgsn.dsl`, `pgsn.gsn`, `pgsn.pgsn_term`, `pgsn.pgsn_xml`, `pgsn.helpers`
+and `pgsn.cli` are internal: their contents may change without
 notice, and importing from them directly is unsupported.
 
 Loading XML is confined by a jail table.  A jail is a named directory root, and
@@ -95,7 +96,6 @@ from pgsn.dsl import (
     list_all,
     # Records
     has_label,
-    list_labels,
     add_attribute,
     remove_attribute,
     overwrite_record,
@@ -114,18 +114,18 @@ from pgsn.gsn import (
     # GSN node constructors
     goal,
     strategy,
-    evidence,
+    solution,
     context,
     assumption,
     defeater,
     undeveloped,
     immediate,
-    evidence_as_goal,
+    solution_as_goal,
     # GSN classes
     gsn_class,
     goal_class,
     strategy_class,
-    evidence_class,
+    solution_class,
     context_class,
     assumption_class,
     support_class,
@@ -136,8 +136,12 @@ from pgsn.gsn import (
     gsn_dot,
     save_gsn,
     LABEL_WIDTH,
+    # Checking
+    gsn_violations,
+    GSNViolation,
 )
 
+from pgsn.pgsn_term import LambdaInterpreterError
 from pgsn.pgsn_xml import PGSNError, load_xml, load_xml_string
 
 __all__ = [
@@ -153,6 +157,8 @@ __all__ = [
     "load_xml",
     "load_xml_string",
     "PGSNError",
+    # Evaluation
+    "LambdaInterpreterError",
     # Terms and variables
     "Term",
     "variable",
@@ -205,7 +211,6 @@ __all__ = [
     "list_all",
     # Records
     "has_label",
-    "list_labels",
     "add_attribute",
     "remove_attribute",
     "overwrite_record",
@@ -219,18 +224,18 @@ __all__ = [
     # GSN node constructors
     "goal",
     "strategy",
-    "evidence",
+    "solution",
     "context",
     "assumption",
     "defeater",
     "undeveloped",
     "immediate",
-    "evidence_as_goal",
+    "solution_as_goal",
     # GSN classes
     "gsn_class",
     "goal_class",
     "strategy_class",
-    "evidence_class",
+    "solution_class",
     "context_class",
     "assumption_class",
     "support_class",
@@ -242,4 +247,6 @@ __all__ = [
     "gsn_dot",
     "save_gsn",
     "LABEL_WIDTH",
+    "gsn_violations",
+    "GSNViolation",
 ]

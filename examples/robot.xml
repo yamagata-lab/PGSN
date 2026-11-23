@@ -3,14 +3,14 @@
         There is no known vulnerability in the robot
         <Strategy>
             Argument over each vulnerability
-            <Goal>Vulnerability A is not exploited<Evidence>Test results</Evidence></Goal>
-            <Goal>Vulnerability B is not exploited<Evidence>Test results</Evidence></Goal>
+            <Goal>Vulnerability A is not exploited<Solution>Test results</Solution></Goal>
+            <Goal>Vulnerability B is not exploited<Solution>Test results</Solution></Goal>
         </Strategy>
     </def>
 
     <def name="webServer" as="Goal">
         The server can deal with DoS attacks on the server
-        <Evidence>Access restriction</Evidence>
+        <Solution>Access restriction</Solution>
     </def>
 
     <Goal>

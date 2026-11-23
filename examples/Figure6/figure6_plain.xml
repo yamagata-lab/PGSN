@@ -37,19 +37,19 @@
         <!-- G4 / Sn1 -->
         <Goal>
           <description>Hazard H1 has been eliminated</description>
-          <Evidence>Formal Verification</Evidence>
+          <Solution>Formal Verification</Solution>
         </Goal>
 
         <!-- G5 / Sn2 -->
         <Goal>
           <description>Probability of Hazard H2 occurring &lt; 1x10-6 per year</description>
-          <Evidence>Fault Tree Analysis</Evidence>
+          <Solution>Fault Tree Analysis</Solution>
         </Goal>
 
         <!-- G6 / Sn2 -->
         <Goal>
           <description>Probability of Hazard H3 occurring &lt; 1x10-3 per year</description>
-          <Evidence>Fault Tree Analysis</Evidence>
+          <Solution>Fault Tree Analysis</Solution>
         </Goal>
       </Strategy>
     </Goal>
@@ -69,13 +69,13 @@
         <!-- G7 / Sn3 -->
         <Goal>
           <description>Primary Protection System developed to SIL 4</description>
-          <Evidence>Process Evidence for SIL 4</Evidence>
+          <Solution>Process Evidence for SIL 4</Solution>
         </Goal>
 
         <!-- G8 / Sn4 -->
         <Goal>
           <description>Secondary Protection System developed to SIL 2</description>
-          <Evidence>Process Evidence for SIL 2</Evidence>
+          <Solution>Process Evidence for SIL 2</Solution>
         </Goal>
       </Strategy>
     </Goal>

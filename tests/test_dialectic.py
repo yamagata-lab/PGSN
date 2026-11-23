@@ -58,7 +58,7 @@ def test_a_defeater_can_argue_its_case():
     a bare objection."""
     node = pgsn.defeater(
         description="hazard H4 is unmitigated",
-        support=pgsn.evidence(description="incident report 2026-03"))
+        support=pgsn.solution(description="incident report 2026-03"))
     value = pgsn.python_value(node.fully_eval())
     assert value["support"]["description"] == "incident report 2026-03"
 
@@ -67,7 +67,7 @@ def test_defeaters_attach_to_a_goal():
     g = pgsn.goal(
         description="safe",
         defeaters=[pgsn.defeater(description="hazard H4 is unmitigated")],
-        support=pgsn.evidence(description="test report"))
+        support=pgsn.solution(description="test report"))
     value = pgsn.python_value(g.fully_eval())
     assert [d["description"] for d in value["defeaters"]] == [
         "hazard H4 is unmitigated"]
@@ -78,7 +78,7 @@ def test_defeaters_attach_to_strategies_and_evidence():
     s = pgsn.strategy(description="argue over hazards",
                       sub_goals=pgsn.list_term(()),
                       defeaters=[pgsn.defeater(description="list is stale")])
-    e = pgsn.evidence(description="report",
+    e = pgsn.solution(description="report",
                       defeaters=[pgsn.defeater(description="report is old")])
     assert pgsn.python_value(s.fully_eval())["defeaters"][0]["description"] \
         == "list is stale"
@@ -111,7 +111,7 @@ def test_defeater_tag_in_xml():
     result = run("""<Goal>the system is safe
         <Defeater>hazard H4 is unmitigated</Defeater>
         <Defeater>the test suite is out of date</Defeater>
-        <Evidence>test report</Evidence>
+        <Solution>test report</Solution>
     </Goal>""")
     assert [class_marker(d) for d in result["defeaters"]] == [
         "__Defeater__", "__Defeater__"]
@@ -122,9 +122,9 @@ def test_defeater_tag_in_xml():
 def test_a_defeater_carries_its_own_support():
     result = run("""<Goal>the system is safe
         <Defeater>hazard H4 is unmitigated
-            <Evidence>incident report 2026-03</Evidence>
+            <Solution>incident report 2026-03</Solution>
         </Defeater>
-        <Evidence>test report</Evidence>
+        <Solution>test report</Solution>
     </Goal>""")
     challenge = result["defeaters"][0]
     assert challenge["support"]["description"] == "incident report 2026-03"
@@ -133,7 +133,7 @@ def test_a_defeater_carries_its_own_support():
 def test_a_defeater_without_support_is_undeveloped():
     result = run("""<Goal>the system is safe
         <Defeater>the test suite is out of date</Defeater>
-        <Evidence>test report</Evidence>
+        <Solution>test report</Solution>
     </Goal>""")
     assert class_marker(result["defeaters"][0]["support"]) == "__Undeveloped__"
 
@@ -143,7 +143,7 @@ def test_defeaters_nest_in_xml():
         <Defeater>hazard H4 is unmitigated
             <Defeater>H4 was withdrawn in revision 7</Defeater>
         </Defeater>
-        <Evidence>test report</Evidence>
+        <Solution>test report</Solution>
     </Goal>""")
     inner = result["defeaters"][0]["defeaters"][0]
     assert inner["description"] == "H4 was withdrawn in revision 7"
@@ -154,7 +154,7 @@ def test_defeater_on_a_strategy_in_xml():
     result = run("""<Goal>the system is safe
         <Strategy>argue over each hazard
             <Defeater>the hazard list is incomplete</Defeater>
-            <Goal>H1 is mitigated<Evidence>report H1</Evidence></Goal>
+            <Goal>H1 is mitigated<Solution>report H1</Solution></Goal>
         </Strategy>
     </Goal>""")
     strategy = result["support"]
@@ -166,7 +166,7 @@ def test_defeater_description_may_be_computed():
         <Goal>the system is safe
             <Defeater><description><expr>f"hazard H{i} is unmitigated"</expr>
                 </description></Defeater>
-            <Evidence>test report</Evidence>
+            <Solution>test report</Solution>
         </Goal>""")
     assert result["defeaters"][0]["description"] == "hazard H4 is unmitigated"
 
@@ -198,7 +198,7 @@ def test_the_dropped_tags_are_not_recognised():
 def test_tree_names_the_defeater():
     text = tree("""<Goal>safe
         <Defeater>H4 unmitigated</Defeater>
-        <Evidence>report</Evidence>
+        <Solution>report</Solution>
     </Goal>""")
     assert "Defeater: H4 unmitigated" in text
 
@@ -206,7 +206,7 @@ def test_tree_names_the_defeater():
 def test_dot_draws_defeaters_as_dashed_hexagons():
     term = pgsn.load_xml_string(
         "<PGSN><Goal>safe<Defeater>H4</Defeater>"
-        "<Evidence>report</Evidence></Goal></PGSN>")
+        "<Solution>report</Solution></Goal></PGSN>")
     source = pgsn.gsn_dot(term).source
     hexagons = [line for line in source.splitlines() if "hexagon" in line]
     assert len(hexagons) == 1
@@ -217,7 +217,7 @@ def test_dot_draws_the_challenge_edge_differently():
     """A challenge must not read as SupportedBy."""
     term = pgsn.load_xml_string(
         "<PGSN><Goal>safe<Defeater>H4</Defeater>"
-        "<Evidence>report</Evidence></Goal></PGSN>")
+        "<Solution>report</Solution></Goal></PGSN>")
     edges = [line for line in pgsn.gsn_dot(term).source.splitlines()
              if "->" in line]
     challenge = [e for e in edges if "dashed" in e]

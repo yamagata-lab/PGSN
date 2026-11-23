@@ -33,7 +33,7 @@
   <!-- IEC 62304 development process compliance -->
   <def name="processGoal" as="Goal">
     Software development lifecycle follows IEC 62304 Class C requirements
-    <Evidence>IEC 62304 Class C process audit certificate</Evidence>
+    <Solution>IEC 62304 Class C process audit certificate</Solution>
   </def>
 
   <Goal>

@@ -8,8 +8,9 @@ def test_record():
     r = record({'x': x, 'y': y, 'z': z})
     k1 = string('x')
     k2 = string('w')
-    assert r(k1).eval() == x.eval()
-    assert r(k2).eval_or_none() is None
+    assert r(k1).fully_eval() == x.fully_eval()
+    stuck = r(k2).fully_eval()
+    assert isinstance(stuck, App) and "error" in stuck.meta_info
 
 
 x = variable('x')
@@ -50,18 +51,9 @@ def test_self_reference4():
 
 
 """
-Tests for the Record field access bug in PGSN.
-
-The root cause is two cooperating bugs in pgsn_term.py:
-  1. App._shift_or_none (line 379): uses self.t1 instead of self.t2
-  2. Record._shift_or_none (lines 558-562): calls t.shift() instead of
-     t.shift_or_none(), causing it to return a non-None value even for
-     constant records, which then triggers bug 1.
-
-Together they corrupt the t2 (argument) slot of an App node during the
-shift(-1, 0) step that follows beta reduction, replacing the String key
-with the Record itself.  The subsequent field lookup then fails because
-Record._apply_arg declines anything but a String.
+Field access on a record, directly and with the record or the label passed
+through abstractions, so that the label reaches the record from an
+environment.
 """
 
 import pytest
@@ -89,7 +81,7 @@ def fully_eval(t: Term) -> Term:
 # ---------------------------------------------------------------------------
 
 class TestDirectFieldAccess:
-    """Record field access with no intervening beta reduction."""
+    """Record field access with no abstraction in between."""
 
     def test_single_field_integer(self):
         """record({"foo": 1})("foo") => 1"""
@@ -122,24 +114,17 @@ class TestDirectFieldAccess:
 
 
 # ---------------------------------------------------------------------------
-# Core bug: field access after beta reduction triggers the shift path
+# Field access with the record or the label passed through an abstraction
 # ---------------------------------------------------------------------------
 
-class TestFieldAccessAfterBetaReduction:
+class TestFieldAccessThroughAbstractions:
     """
-    These tests trigger App._shift_or_none during beta reduction.
-    With the bug present the reduction terminates early (reduction stops)
-    instead of returning the expected value.
+    The record or the label reaches the projection as an argument, so the
+    machine finds it in an environment rather than written in place.
     """
 
     def test_lambda_passes_key_directly(self):
-        """
-        (λx. record({"foo": 1})(x))("foo") => 1
-
-        Beta reduction substitutes String("foo") for x, then does
-        shift(-1, 0) on App(Record, Var(0)).  Bug 1 + Bug 2 cause t2 to
-        be overwritten with the Record, making field lookup impossible.
-        """
+        """(λx. record({"foo": 1})(x))("foo") => 1"""
         _x = variable("x")
         r = record({"foo": integer(1)})
         term = lambda_abs(_x, r(_x))(string("foo"))
@@ -157,11 +142,7 @@ class TestFieldAccessAfterBetaReduction:
         assert result.value == 20
 
     def test_lambda_wraps_record_and_key(self):
-        """
-        (λr k. r(k))(record({"x": 99}))("x") => 99
-
-        Two levels of beta reduction; both shift passes must be correct.
-        """
+        """(λr k. r(k))(record({"x": 99}))("x") => 99, two arguments deep."""
         _r = variable("r")
         _k = variable("k")
         r_val = record({"x": integer(99)})
@@ -174,8 +155,8 @@ class TestFieldAccessAfterBetaReduction:
         """
         let r = record({"v": 7}) in r("v") => 7
 
-        let desugars to (λr. r("v"))(record({"v":7})), exercising the
-        same shift path.
+        let desugars to (λr. r("v"))(record({"v":7})), so the record
+        reaches the projection as an argument.
         """
         _r = variable("r")
         r_val = record({"v": integer(7)})
@@ -241,8 +222,7 @@ class TestFieldAccessAfterBetaReduction:
 class TestKeywordArguments:
     """
     lambda_abs_keywords internally uses overwrite_record and record field
-    access via String keys.  All of these paths go through the same
-    shift machinery.
+    access via String keys, with the record passed as an argument.
     """
 
     def test_single_keyword_arg(self):
@@ -288,17 +268,14 @@ class TestKeywordArguments:
 
 class TestShiftCorrectness:
     """
-    Directly verify that Record.shift_or_none behaves correctly so that
-    future refactors don't silently re-introduce the bug.
+    Shifting is what turning the machine's state back into a term does to a
+    value read under binders, so it is checked on its own.
     """
 
     def test_constant_record_shift_or_none_returns_none(self):
         """
         A Record containing only constants has no free variables, so
         shift_or_none should return None (nothing to shift).
-
-        Bug 2 caused it to always return a new non-None Record for
-        constant records, masking the App._shift_or_none bug.
         """
         r = Record.nameless(attributes={"foo": Integer.nameless(value=1)})
         result = r.shift_or_none(1, 0)
@@ -312,8 +289,6 @@ class TestShiftCorrectness:
         App(Record, String).shift_or_none(d, c) must not overwrite t2
         with t1.  After the shift the App's second child must still be
         a String, not a Record.
-
-        This directly exercises App._shift_or_none bug 1.
         """
         rec = Record.nameless(attributes={"foo": Integer.nameless(value=1)})
         key = String.nameless(value="foo")

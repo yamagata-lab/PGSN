@@ -2,15 +2,15 @@
     <!-- per-component evidence-goal builders; {c} is filled from the param -->
     <def name="mkTestDoc" as="template">
         <param name="c" positional="true"/>
-        <apply template="evidence_as_goal">
-            <arg><Evidence>Test doc for {c}</Evidence></arg>
+        <apply template="solution_as_goal">
+            <arg><Solution>Test doc for {c}</Solution></arg>
         </apply>
     </def>
 
     <def name="mkTestResource" as="template">
         <param name="c" positional="true"/>
-        <apply template="evidence_as_goal">
-            <arg><Evidence>Test resources for {c}</Evidence></arg>
+        <apply template="solution_as_goal">
+            <arg><Solution>Test resources for {c}</Solution></arg>
         </apply>
     </def>
 
@@ -24,7 +24,7 @@
         </def>
         <def name="evidences">
             <apply template="cons">
-                <arg><apply template="evidence_as_goal"><arg><Evidence>E3.1...</Evidence></arg></apply></arg>
+                <arg><apply template="solution_as_goal"><arg><Solution>E3.1...</Solution></arg></apply></arg>
                 <arg><apply template="concat"><arg var="testDocs"/><arg var="testResources"/></apply></arg>
             </apply>
         </def>

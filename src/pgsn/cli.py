@@ -27,6 +27,36 @@ def jail_option(f):
     )(f)
 
 
+def strict_option(f):
+    """Add the --strict option to a command that outputs GSN."""
+    return click.option(
+        '--strict', is_flag=True, default=False,
+        help='Stop with a non-zero exit status, writing nothing, when the '
+             'evaluated structure breaks a rule of GSN v3. Without it the '
+             'breaches are reported as warnings.'
+    )(f)
+
+
+def check_gsn(evaluated, strict: bool) -> None:
+    """Report where the structure breaks the rules of GSN v3.
+
+    Under --strict this ends the command: SystemExit is not an Exception, so
+    the commands' catch-all handlers let it through with its status.
+    """
+    violations = gsn.gsn_violations(evaluated)
+    label = "Error" if strict else "Warning"
+    for v in violations:
+        click.echo(f"{label}: {v}", err=True)
+    if strict and violations:
+        sys.exit(1)
+
+
+def _message(e: Exception) -> str:
+    """What `Error:` reports: the message, or the kind of failure when there
+    is none, so that the line is never empty."""
+    return str(e) or type(e).__name__
+
+
 def parse_jails(jail_specs: tuple[str, ...]) -> Jails:
     """Turn --jail NAME=PATH arguments into a Jails table."""
     roots: dict[str, str] = {}
@@ -110,13 +140,16 @@ def cli():
 @click.option('--term-name', default='main', help='The name of the Term object to evaluate.')
 @click.option('--doc-type', '-d', default='plain', type=click.Choice(['plain', 'json']),
               help='The output document format.')
-@click.option('--output', '-o', default=None, help='The output filename.')
+@click.option('--output', '-o', required=True,
+              help='The output filename, or - for standard output.')
 @click.option('--steps', '-s', help='maximum number of evaluation steps', type=int, default=DEFAULT_STEPS)
+@strict_option
 @jail_option
-def doc(input_file, term_name, doc_type, output, steps, jail_specs):
+def doc(input_file, term_name, doc_type, output, steps, strict, jail_specs):
     """Evaluates a PGSN term and outputs a document in a specified format."""
 
-    click.echo(f"Generating '{output}' from '{input_file}'", err=True)
+    if output != '-':
+        click.echo(f"Generating '{output}' from '{input_file}'", err=True)
 
     try:
         term = load_term(input_file, term_name, jail_specs)
@@ -124,6 +157,7 @@ def doc(input_file, term_name, doc_type, output, steps, jail_specs):
         evaluated_gsn = term.fully_eval(steps=steps)
 
         tree = gsn.gsn_tree(evaluated_gsn)
+        check_gsn(evaluated_gsn, strict)
 
         # Both renderings are asked not to sort: treelib orders siblings by tag
         # by default, and the order of a List is part of what the document
@@ -133,14 +167,13 @@ def doc(input_file, term_name, doc_type, output, steps, jail_specs):
         elif doc_type == 'json':
             document = tree.to_json(sort=False)
         else:
-            click.echo("Error: Unsupported document type. Use plain or json.", err=True)
-            return
+            raise click.UsageError("Unsupported document type. Use plain or json.")
 
-        if output and output != '-':
+        if output == '-':
+            click.echo(document)
+        else:
             with open(output, 'w', encoding='utf-8') as f:
                 f.write(document)
-        else:
-            click.echo(document)
 
         click.echo("Done.", err=True)
 
@@ -148,7 +181,9 @@ def doc(input_file, term_name, doc_type, output, steps, jail_specs):
         # Malformed invocations must fail loudly, with a non-zero exit status.
         raise
     except Exception as e:
-        click.echo(f"Error: {e}", err=True)
+        # Reported as `Error: ...` on stderr, with a non-zero exit status, so
+        # that a script running the command can tell that it failed.
+        raise click.ClickException(_message(e)) from e
 
 
 @cli.command()
@@ -160,8 +195,9 @@ def doc(input_file, term_name, doc_type, output, steps, jail_specs):
 @click.option('--steps', '-s', help='maximum number of evaluation steps', type=int, default=DEFAULT_STEPS)
 @click.option('--label-width', type=int, default=gsn.LABEL_WIDTH, show_default=True,
               help='Wrap node labels at this many columns. 0 leaves them on one line.')
+@strict_option
 @jail_option
-def render(input_file, term_name, output, image_format, steps, label_width, jail_specs):
+def render(input_file, term_name, output, image_format, steps, label_width, strict, jail_specs):
     """Evaluates a PGSN term and renders it as a graph."""
 
     click.echo(f"Processing '{input_file}' to render a graph...", err=True)
@@ -172,6 +208,7 @@ def render(input_file, term_name, output, image_format, steps, label_width, jail
         evaluated_gsn = term.fully_eval(steps=steps)
 
         dot = gsn.gsn_dot(evaluated_gsn, label_width=label_width)
+        check_gsn(evaluated_gsn, strict)
 
         if output and output != '-':
             click.echo(f"Saving graph to '{output}.{image_format}'...", err=True)
@@ -192,7 +229,9 @@ def render(input_file, term_name, output, image_format, steps, label_width, jail
         # Malformed invocations must fail loudly, with a non-zero exit status.
         raise
     except Exception as e:
-        click.echo(f"Error: {e}", err=True)
+        # Reported as `Error: ...` on stderr, with a non-zero exit status, so
+        # that a script running the command can tell that it failed.
+        raise click.ClickException(_message(e)) from e
 
 
 @cli.command()
@@ -221,7 +260,9 @@ def compile(input_file, term_name, output, jail_specs):
         # Malformed invocations must fail loudly, with a non-zero exit status.
         raise
     except Exception as e:
-        click.echo(f"Error: {e}", err=True)
+        # Reported as `Error: ...` on stderr, with a non-zero exit status, so
+        # that a script running the command can tell that it failed.
+        raise click.ClickException(_message(e)) from e
 
 
 if __name__ == '__main__':

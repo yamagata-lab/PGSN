@@ -1,5 +1,6 @@
 import textwrap
 import uuid
+from dataclasses import dataclass
 from treelib import Tree
 import treelib
 import graphviz
@@ -20,11 +21,11 @@ undeveloped_class = pgsn.dsl.define_class(inherit=support_class,
                                           name='Undeveloped',
                                           defaults={"description": ""})
 undeveloped = undeveloped_class()
-evidence_class = pgsn.dsl.define_class(inherit=support_class, name='Evidence')
+solution_class = pgsn.dsl.define_class(inherit=support_class, name='Solution')
 # A Context or an Assumption attaches to a Goal or a Strategy, which is what
 # lets a strategy carry the assumption its reasoning depends on -- GSN
 # Community Standard Figure 6 does exactly that with "All hazards have been
-# identified". Evidence takes neither: the standard attaches nothing to a
+# identified". A Solution takes neither: the standard attaches nothing to a
 # Solution.
 strategy_class = pgsn.dsl.define_class(inherit=support_class, name='Strategy',
                                           attributes=["assumptions",
@@ -63,10 +64,10 @@ _contexts = pgsn.dsl.variable('contexts')
 _sub_goals = pgsn.dsl.variable('sub_goals')
 _defeaters = pgsn.dsl.variable('defeaters')
 
-evidence = pgsn.dsl.lambda_abs_keywords(
+solution = pgsn.dsl.lambda_abs_keywords(
     arguments={'description': _d, 'defeaters': _defeaters},
     defaults=pgsn.dsl.record({'defeaters': pgsn.dsl.empty}),
-    body=evidence_class(description=_d, defeaters=_defeaters))
+    body=solution_class(description=_d, defeaters=_defeaters))
 strategy = pgsn.dsl.lambda_abs_keywords(
     arguments={'description': _d, 'sub_goals': _sub_goals,
                'assumptions': _assumptions, 'contexts': _contexts,
@@ -112,19 +113,34 @@ defeater = pgsn.dsl.lambda_abs_keywords(
 _goals = pgsn.dsl.variable('goals')
 immediate = pgsn.dsl.lambda_abs(_goals, strategy(description="immediate", sub_goals=_goals))
 
-_evd = pgsn.dsl.variable('evidence')
-evidence_as_goal = pgsn.dsl.lambda_abs(_evd, goal(description=_evd('description'), support=_evd))
+_sol = pgsn.dsl.variable('solution')
+solution_as_goal = pgsn.dsl.lambda_abs(_sol, goal(description=_sol('description'), support=_sol))
 
 # Keys for lists whose children should be attached directly to the parent.
 # An empty list therefore contributes nothing, which is what keeps a node
 # without contexts, assumptions or defeaters from showing empty entries.
 GSN_KEYS_TO_FLATTEN = {"support", "sub_goals", "contexts", "assumptions",
                        "defeaters"}
-GSN_TYPES = {"Goal", "Strategy", "Evidence", "Context", "Assumption",
+GSN_TYPES = {"Goal", "Strategy", "Solution", "Context", "Assumption",
              "Undeveloped", "Defeater"}
 
 # The kinds of node that challenge rather than support what holds them.
 GSN_DEFEATER_TYPES = {"Defeater"}
+
+# The elements GSN v3 lets the undeveloped decorator apply to (Table 1:2-1),
+# and the glyph a drawing puts at the bottom of one.
+UNDEVELOPED_DECORATED_TYPES = {"Goal", "Strategy"}
+UNDEVELOPED_DECORATOR = "◇"  # WHITE DIAMOND
+
+# GSN v3 gives every element an identifier (1:2.1.2), and a drawing heads each
+# element with one, numbered per kind in document order. The prefixes are the
+# ones the standard's own figures use; a defeater is a goal that challenges,
+# which the dialectic figures (1:6-1, 1:6-2) number CG.
+GSN_IDENTIFIER_PREFIXES = {"Goal": "G", "Strategy": "S", "Solution": "Sn",
+                           "Context": "C", "Assumption": "A", "Defeater": "CG"}
+
+# The letter GSN v3 sets at the right of an assumption (Table 1:2-1).
+ASSUMPTION_MARK = "A"
 
 
 # Term and to_python are assumed to be in your module
@@ -135,6 +151,15 @@ import uuid
 
 # Tree と pgsn は君のモジュールでインポートされている前提だね
 
+def _gsn_type(data) -> str | None:
+    """The GSN kind of a value `python_value` gave with its inheritance chain:
+    the first class in the chain that is a GSN kind, or None."""
+    if not isinstance(data, dict):
+        return None
+    return next((cls for cls in data.get("__parent_classes__", [])
+                 if cls in GSN_TYPES), None)
+
+
 def gsn_tree(root_term: pgsn.pgsn_term.Term) -> Tree:
     tree = Tree()
     # 継承チェーンを含めてPythonの辞書に変換
@@ -144,11 +169,8 @@ def gsn_tree(root_term: pgsn.pgsn_term.Term) -> Tree:
         node_id = str(uuid.uuid4())
 
         if isinstance(data, dict):
-            # 血脈（親クラスのリスト）を取り出す
-            parent_classes = data.get("__parent_classes__", [])
-
             # その血脈の中に、GSN_TYPES に該当する起源があるかを探す
-            gsn_type = next((cls for cls in parent_classes if cls in GSN_TYPES), None)
+            gsn_type = _gsn_type(data)
 
             # 実際のクラス名（派生クラス名。GSN以外のオブジェクト表示用として残す）
             class_name_key = next(
@@ -207,7 +229,6 @@ def gsn_tree(root_term: pgsn.pgsn_term.Term) -> Tree:
 GSN_SHAPES = {
         'Goal': 'box',
         'Strategy': 'polygon',
-        'Evidence': 'ellipse',  # Evidenceは円で表現することが多い
         'Solution': 'ellipse',  # Solutionも円で
         'Context': 'box',  # 本来は角丸だけど、まずは四角で
         'Assumption': 'ellipse',
@@ -264,6 +285,7 @@ def gsn_dot(gsn: pgsn.pgsn_term.Term,
 
     horizontal_pairs = []
     skipped_nodes = set()  # 親の箱に吸収された属性ノードのIDを記録
+    numbered = {kind: 0 for kind in GSN_IDENTIFIER_PREFIXES}
 
     # treelib sorts siblings by tag unless told otherwise, which would draw the
     # children of a node in alphabetical rather than document order. The order
@@ -300,6 +322,7 @@ def gsn_dot(gsn: pgsn.pgsn_term.Term,
         # --- 子ノードを覗き込んで、単なる属性なら親の箱の中に吸収する ---
         children = tree.children(node)
         attr_lines = []
+        undeveloped_here = False
         for child in children:
             child_tag = child.tag
             child_parts = child_tag.split(': ', 1)
@@ -308,6 +331,13 @@ def gsn_dot(gsn: pgsn.pgsn_term.Term,
             # GSNノードではなく、かつ子を持たない「葉っぱ」のノード（数値やBooleanも含む）の場合
             if not is_gsn and child.is_leaf():
                 attr_lines.append(child_tag)
+                skipped_nodes.add(child.identifier)
+            # GSN v3 (Table 1:2-1) marks an undeveloped goal or strategy with
+            # a decorator on the element itself, a hollow diamond at its
+            # bottom centre, rather than with an element of its own beneath.
+            elif (child_parts[0] == 'Undeveloped' and child.is_leaf()
+                  and node_type in UNDEVELOPED_DECORATED_TYPES):
+                undeveloped_here = True
                 skipped_nodes.add(child.identifier)
 
         # 吸収した属性があれば、ラベルの文字列に改行(\n)で合体させる
@@ -331,12 +361,37 @@ def gsn_dot(gsn: pgsn.pgsn_term.Term,
             node_attrs['skew'] = '0.3'
             node_attrs['margin'] = '0'
 
-        # ラベルの最終決定（GSNならタイプ名を見出しにし、それ以外はタグをそのまま使う）
-        final_label = f"{node_type}\n{node_label}" if node_type else node_label
+        # The heading is the element's identifier, the shape telling its kind;
+        # a node that is not a GSN element keeps its tag as it is.
+        if node_type in GSN_IDENTIFIER_PREFIXES:
+            numbered[node_type] += 1
+            heading = f"{GSN_IDENTIFIER_PREFIXES[node_type]}{numbered[node_type]}"
+        else:
+            heading = node_type
+        final_label = f"{heading}\n{node_label}" if node_type else node_label
 
+        # The label is the document's text, so nothing in it may mean anything
+        # to graphviz. Unescaped, a label of the form <...> is taken as HTML
+        # and written into the source unquoted, so whatever follows the end of
+        # the HTML label becomes attributes of the node -- image="..." among
+        # them, which embeds a file of the host in the drawing. A trailing
+        # backslash escapes the closing quote and the source no longer parses,
+        # \N and \G are replaced by the names of the node and the graph, and
+        # \l, \n and \r break the line. escape() quotes the label and doubles
+        # its backslashes, which leaves the newlines of _wrap as they are.
+        # tests/test_dot_escaping.py checks each of these.
+        label = _wrap(final_label, label_width)
+        if undeveloped_here:
+            # The last line of a label is centred at the bottom of the box.
+            label += "\n" + UNDEVELOPED_DECORATOR
+        label = graphviz.escape(label)
+        if node_type == 'Assumption':
+            # Added after escaping, since \r -- which sets the line before it
+            # flush right -- is graphviz's own and must reach it as written.
+            label = graphviz.nohtml(f"{label}\n{ASSUMPTION_MARK}\\r")
         dot.node(
             name=node_obj.identifier,
-            label=_wrap(final_label, label_width),
+            label=label,
             shape=shape,
             style=style,
             **node_attrs
@@ -350,7 +405,10 @@ def gsn_dot(gsn: pgsn.pgsn_term.Term,
             parent_node_type = parent_tag_parts[0] if len(parent_tag_parts) > 1 else 'Default'
 
             if node_type in ('Assumption', 'Context'):
-                edge_attrs['dir'] = 'back'
+                # InContextOf (GSN v3, Table 1:2-2) runs from the goal or the
+                # strategy to its context or assumption, and is drawn with a
+                # hollow arrowhead at the context or assumption.
+                edge_attrs['arrowhead'] = 'empty'
                 horizontal_pairs.append((parent_id, node_obj.identifier))
 
             if node_type in GSN_DEFEATER_TYPES:
@@ -365,8 +423,11 @@ def gsn_dot(gsn: pgsn.pgsn_term.Term,
                 # rank across the whole drawing.
                 edge_attrs['dir'] = 'back'
                 edge_attrs['style'] = 'dashed'
+                # GSN v3 (Table 1:6-2) gives Challenges an open arrowhead; the
+                # edge is reversed, so the head it points with is its tail.
+                edge_attrs['arrowtail'] = 'vee'
 
-            if parent_node_type == 'Goal' and node_type == 'Evidence':
+            if parent_node_type == 'Goal' and node_type == 'Solution':
                 edge_attrs['tailport'] = 's'
                 edge_attrs['headport'] = 'n'
                 edge_attrs['weight'] = '10'
@@ -388,3 +449,130 @@ def save_gsn(gsn: pgsn.pgsn_term.Term,
 
     dot = gsn_dot(gsn, label_width=label_width)
     dot.render(filename, view=view, format=image_format, cleanup=cleanup)
+
+
+@dataclass(frozen=True)
+class GSNViolation:
+    """A place where an evaluated structure breaks a rule of GSN v3.
+
+    `path` is written the way readback reports a stuck term, and `identifier`
+    is the one the drawing heads the element with, None for the place where
+    no element stands.
+    """
+    path: str
+    identifier: str | None
+    message: str
+
+    def __str__(self) -> str:
+        where = f"{self.identifier} at {self.path}" if self.identifier else self.path
+        return f"{where}: {self.message}"
+
+
+def gsn_violations(gsn: pgsn.pgsn_term.Term) -> list[GSNViolation]:
+    """The rules of GSN v3 the evaluated structure `gsn` breaks.
+
+    The language lets a document put any value anywhere, so a structure that
+    evaluates can still be one GSN does not allow: a string where a goal's
+    support should be, a strategy whose computed sub-goals came out empty.
+    The rules checked are the ones a document can break:
+
+    1. SupportedBy runs from a goal to a strategy, a solution or sub-goals,
+       and from a strategy to goals (Table 1:2-2). A goal's or a defeater's
+       support is a strategy, a solution or undeveloped, and a strategy's
+       sub-goals are goals or undeveloped.
+    2. InContextOf runs to contexts and assumptions (Table 1:2-2).
+    3. A strategy describes the inference between a goal and its supporting
+       goals (Table 1:2-1), so it has at least one.
+    4. What challenges is a goal or a solution (1:6.2.2); in PGSN, a defeater.
+    5. Every element states something (1:2.1), so its description is
+       non-empty text.
+    6. The structure is headed by a goal.
+
+    Identifiers are unique and the structure is acyclic by construction, and
+    how a statement is phrased (1:2.3) is not a thing to check mechanically.
+    """
+    data = pgsn.dsl.python_value(gsn, with_inherit_chain=True)
+    found: list[GSNViolation] = []
+    numbered = {kind: 0 for kind in GSN_IDENTIFIER_PREFIXES}
+
+    if _gsn_type(data) != "Goal":
+        found.append(GSNViolation("<root>", None,
+                                  "the structure is not headed by a goal"))
+
+    plain = {str: "text", bool: "a boolean", int: "a number",
+             list: "a list", dict: "a record"}
+
+    def named(value) -> str:
+        return (_gsn_type(value) or plain.get(type(value))
+                or type(value).__name__)
+
+    # The walk visits values in the order gsn_tree adds them, so it numbers
+    # the elements as the drawing does.
+    def walk(value, path: str):
+        kind = _gsn_type(value)
+        identifier = None
+        if kind in GSN_IDENTIFIER_PREFIXES:
+            numbered[kind] += 1
+            identifier = f"{GSN_IDENTIFIER_PREFIXES[kind]}{numbered[kind]}"
+
+        def broken(message: str):
+            found.append(GSNViolation(path, identifier, message))
+
+        if kind is not None and kind != "Undeveloped":
+            description = value.get("description")
+            if not isinstance(description, str) or not description.strip():
+                broken(f"the {kind.lower()} must state something in its "
+                       f"description, which is {description!r}")
+        if kind in ("Goal", "Defeater") and "support" in value:
+            support = named(value["support"])
+            if support not in ("Strategy", "Solution", "Undeveloped"):
+                broken(f"a {kind.lower()} is supported by a strategy, a "
+                       f"solution or sub-goals, not by {support}")
+        if kind == "Strategy" and "sub_goals" in value:
+            sub_goals = value["sub_goals"]
+            if not isinstance(sub_goals, list):
+                broken(f"a strategy's sub-goals are a list, not {named(sub_goals)}")
+            else:
+                if not sub_goals:
+                    broken("a strategy relates a goal to supporting goals, "
+                           "but this one has none")
+                for i, sub_goal in enumerate(sub_goals):
+                    if named(sub_goal) not in ("Goal", "Undeveloped"):
+                        found.append(GSNViolation(
+                            f"{path}.sub_goals[{i}]", identifier,
+                            f"a strategy is supported by goals, "
+                            f"not by {named(sub_goal)}"))
+        if kind in ("Goal", "Strategy"):
+            for key, wanted in (("contexts", "Context"),
+                                ("assumptions", "Assumption")):
+                for i, item in enumerate(value.get(key, [])):
+                    if named(item) != wanted:
+                        found.append(GSNViolation(
+                            f"{path}.{key}[{i}]", identifier,
+                            f"the {key} of a {kind.lower()} are "
+                            f"{wanted.lower()}s, not {named(item)}"))
+        if kind is not None:
+            for i, item in enumerate(value.get("defeaters", [])):
+                if named(item) != "Defeater":
+                    found.append(GSNViolation(
+                        f"{path}.defeaters[{i}]", identifier,
+                        f"what challenges an element is a defeater, "
+                        f"not {named(item)}"))
+
+        if isinstance(value, dict):
+            for key, item in value.items():
+                if key.startswith("__") and key.endswith("__"):
+                    continue
+                if kind and key == "description":
+                    continue
+                if key in GSN_KEYS_TO_FLATTEN and isinstance(item, list):
+                    for i, element in enumerate(item):
+                        walk(element, f"{path}.{key}[{i}]")
+                else:
+                    walk(item, f"{path}.{key}")
+        elif isinstance(value, list):
+            for i, element in enumerate(value):
+                walk(element, f"{path}[{i}]")
+
+    walk(data, "<root>")
+    return found

@@ -201,7 +201,7 @@
       <ref name="cases_content"/>
       <ref name="goal_content"/>
       <ref name="strategy_content"/>
-      <ref name="evidence_content"/>
+      <ref name="solution_content"/>
       <ref name="defeater_content"/>
       <ref name="annotation_content"/>
     </choice>
@@ -452,7 +452,7 @@
     <choice>
       <ref name="goal_pat"/>
       <ref name="strategy_pat"/>
-      <ref name="evidence_pat"/>
+      <ref name="solution_pat"/>
       <ref name="defeater_pat"/>
     </choice>
   </define>
@@ -514,7 +514,7 @@
   <define name="support_pat">
     <choice>
       <ref name="strategy_pat"/>
-      <ref name="evidence_pat"/>
+      <ref name="solution_pat"/>
       <oneOrMore>
         <ref name="goal_pat"/>
       </oneOrMore>
@@ -527,22 +527,27 @@
     <element name="Strategy"><ref name="strategy_content"/></element>
   </define>
 
+  <!-- An <undeveloped/> among the sub-goals leaves the strategy undeveloped:
+       GSN v3 lets the undeveloped decorator apply to strategies. -->
   <define name="strategy_content">
     <ref name="description_pat"/>
     <ref name="annotations_pat"/>
     <choice>
       <oneOrMore>
-        <ref name="goal_pat"/>
+        <choice>
+          <ref name="goal_pat"/>
+          <element name="undeveloped"><empty/></element>
+        </choice>
       </oneOrMore>
       <element name="subGoals"><ref name="val_pat"/></element>
     </choice>
   </define>
 
-  <define name="evidence_pat">
-    <element name="Evidence"><ref name="evidence_content"/></element>
+  <define name="solution_pat">
+    <element name="Solution"><ref name="solution_content"/></element>
   </define>
 
-  <define name="evidence_content">
+  <define name="solution_content">
     <ref name="gsn_header"/>
   </define>
 

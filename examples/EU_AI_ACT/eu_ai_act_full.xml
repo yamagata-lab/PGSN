@@ -19,7 +19,7 @@
     The Act reads as a chain of guarded clauses:
 
         if prohibited use           then it may not be placed on the market
-        elsif high-risk             then Art. 8-17, 43, 48, 49 apply
+        elsif high-risk             then Art. 8-17, 43, 47-49 apply
         elsif limited risk          then Art. 50 applies
         else                        no obligation follows from the risk tier
         (and, orthogonally, if GPAI then Art. 53, plus Art. 55 under systemic risk)
@@ -165,7 +165,7 @@
     <li><apply template="obligation"><arg>Quality management system established (Art. 17)</arg><arg>quality_management_system</arg></apply></li>
     <li><apply template="obligation"><arg>Conformity assessment procedure completed (Art. 43)</arg><arg>conformity_assessment</arg></apply></li>
     <li><apply template="obligation"><arg>CE marking affixed (Art. 48)</arg><arg>ce_marking</arg></apply></li>
-    <li><apply template="obligation"><arg>EU declaration of conformity drawn up and registered (Art. 49)</arg><arg>declaration_of_conformity</arg></apply></li>
+    <li><apply template="obligation"><arg>EU declaration of conformity drawn up (Art. 47) and system registered (Art. 49)</arg><arg>declaration_of_conformity</arg></apply></li>
   </def>
 
   <def name="limitedRiskObligations" as="ol">
@@ -182,8 +182,8 @@
 
   <def name="art55Obligations" as="ol">
     <li><apply template="obligation"><arg>Adversarial testing conducted to identify systemic risks (Art. 55(1)(a))</arg><arg>adversarial_testing</arg></apply></li>
-    <li><apply template="obligation"><arg>Serious incident reporting procedure in place (Art. 55(1)(b))</arg><arg>incident_reporting_procedure</arg></apply></li>
-    <li><apply template="obligation"><arg>Adequate cybersecurity protection ensured (Art. 55(1)(c))</arg><arg>cybersecurity_measures</arg></apply></li>
+    <li><apply template="obligation"><arg>Serious incident reporting procedure in place (Art. 55(1)(c))</arg><arg>incident_reporting_procedure</arg></apply></li>
+    <li><apply template="obligation"><arg>Adequate cybersecurity protection ensured (Art. 55(1)(d))</arg><arg>cybersecurity_measures</arg></apply></li>
   </def>
 
   <!-- ================================================================
@@ -240,7 +240,7 @@
               <li>
                 <Goal>
                   {fname} is properly managed as a high-risk AI system (Art. 8-17, 43-49)
-                  <Context>EU AI Act Art. 8-17, 43, 48, 49</Context>
+                  <Context>EU AI Act Art. 8-17, 43, 47-49</Context>
                   <Strategy>
                     Argument over each high-risk provider obligation
                     <subGoals><apply template="obligationGoals"><arg var="highRiskObligations"/></apply></subGoals>
@@ -329,7 +329,7 @@
       <arg name="strategy">Argument over the function's classification, the obligations the Act attaches to it, and the general-purpose model obligations that apply independently of it</arg>
       <arg name="defeaters"><ol>
         <li><apply template="concat_map"><arg><apply template="prohibitedGuardOrStop"><arg var="f"/></apply></arg><arg var="prohibitedPractices"/></apply></li>
-        <li><apply template="concat_map"><arg><apply template="routeGuardOrNothing"><arg var="f"/><arg>Art. 8-17, 43, 48 and 49 apply</arg></apply></arg><arg var="highRiskRoutes"/></apply></li>
+        <li><apply template="concat_map"><arg><apply template="routeGuardOrNothing"><arg var="f"/><arg>Art. 8-17, 43 and 47-49 apply</arg></apply></arg><arg var="highRiskRoutes"/></apply></li>
         <li var="gpaiDefeaters"/>
       </ol></arg>
       <arg name="subGoals"><ol>

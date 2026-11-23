@@ -5,112 +5,98 @@ Functional Programming for Assurance Case Generation
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
----
-
 ## What is PGSN?
 
-**PGSN** is a functional programming language and platform for constructing and transforming structured assurance cases based on the **Goal Structuring Notation (GSN)**.
-Unlike standard GSN, which primarily consists of static diagrams, PGSN allows dynamic and structured generation of argument elements using a functional and object-oriented programming language.
+PGSN lets you write a GSN (Goal Structuring Notation) assurance case as a program. Instead of drawing every goal by hand, you define a pattern once — a goal template, a class of goal with extra attributes — and generate the argument from it, for example one sub-goal per requirement in a list.
 
-**PGSN** comes in two forms: a DSL embedded in Python, and an XML syntax
-evaluated by the `pgsn` command. Either one can express a whole assurance case
-on its own. [README-api.md](README-api.md) is the reference for the Python API
-and [README-xml.md](README-xml.md) for the XML syntax.
+PGSN comes in two forms, and either one can express a whole assurance case on its own:
 
----
+- **XML**, evaluated by the `pgsn` command. An XML document is confined: it cannot open files other than the modules it imports, use the network or call the system. PGSN does not limit the memory or the time a document uses, however, so run a document you did not write in a virtual machine or a container that limits them. [README-xml.md](README-xml.md) is the reference.
+- **Python**, as a library embedded in Python. It has the full power of Python, so use it for code you trust. [README-api.md](README-api.md) is the reference.
 
-## Key Features
+[README-ja.md](README-ja.md) is the Japanese version of this document.
 
-- **GSN Modeling Using Functional Programming**: Write assurance cases as functional programs
-- **Reusable**: Build assurance structures compositionally
-- **Object-Oriented**: Class/inheritance for reusable node types
-- **Confined**: a document has no way to reach outside itself — there is no file, network or system access in the language — and the only files it may name are those under a directory root granted to it. Evaluation is bounded by a step budget.
+## Key features
 
----
+- **Assurance cases as functional programs**: goals, strategies and solutions are values that can be named, passed to templates and generated from lists.
+- **Reusable**: build assurance structures from parts, and import parts from other files.
+- **Object-oriented**: define new node types by inheriting from the GSN classes.
+- **GSN v3 output**: `pgsn render` draws the result following the GSN Community Standard, Version 3, including the dialectic extension (defeaters), and `pgsn doc` and `pgsn render` check the result against the standard's structural rules.
+- **Confined XML**: an XML document cannot open files other than the modules it imports, use the network or call the system. It can import only from its own directory or from directories you grant (jails). Evaluation has a step limit, which stops a document that does not terminate; it does not limit memory or time, since a single step can cost any amount.
+- **Python when you trust the code**: a `.py` input is an ordinary Python program, run with your privileges. Run only `.py` files you trust.
 
 ## Installation
 
-For users
+**Users:**
 
 ```shell
-pip install git+https://github.com/yamagata-lab/pgsn.git
+pip install git+https://github.com/yamagata-lab/PGSN.git
 ```
 
-For developers who want modify the library
-```bash
+**Developers** (editable install):
+
+```shell
 git clone https://github.com/yamagata-lab/PGSN.git
 cd PGSN
-pip install -e .
+pip install -e '.[dev]'
 ```
 
-Or using conda
-```bash
+**Developers, with conda** (also installs Graphviz):
+
+```shell
 git clone https://github.com/yamagata-lab/PGSN.git
 cd PGSN
 conda env create -f environment.yml -n PGSN
+conda activate PGSN
+pip install -e '.[dev]'
 ```
 
----
+Drawing needs the Graphviz programs (`dot`): `pgsn render`, `save_gsn`, and rendering the graph that `gsn_dot` returns. pip does not install them; get them from your system's package manager, or use the conda environment above.
 
-## Command-line interface
+## Quick start
 
-```shell
-PGSN % pgsn doc examples/cli.py
-Generating 'None' from 'examples/cli.py'
+An XML document, `examples/gsn.xml`:
+
+```xml
+<PGSN>
+    <Goal>
+        System is secure
+        <Strategy>
+            Break into sub-goals
+            <Goal>Input validated<Solution>Static analysis passed</Solution></Goal>
+            <Goal>Output sanitized<Solution>Fuzzing test succeeded</Solution></Goal>
+        </Strategy>
+    </Goal>
+</PGSN>
+```
+
+`pgsn doc` evaluates the document and writes the resulting argument as a text tree to the file given by `-o` (`-o -` prints it):
+
+```console
+$ pgsn doc examples/gsn.xml -o -
 Evaluating term 'main'...
 Goal: System is secure
 └── Strategy: Break into sub-goals
     ├── Goal: Input validated
-    │   └── Evidence: Static analysis passed
+    │   └── Solution: Static analysis passed
     └── Goal: Output sanitized
-        └── Evidence: Fuzzing test succeeded
+        └── Solution: Fuzzing test succeeded
 
 Done.
 ```
 
-Use `pgsn --help` for the other commands and options.
+`pgsn render` draws the same argument:
 
-### Jails for XML imports
-
-An XML document may import other documents. By default it can only reach files under its own directory. To grant access to a shared library of modules, register it as a *jail* — a named directory root — and refer to it from the document as `/<name>/...`:
-
-```shell
-PGSN % pgsn doc main.xml --jail lib=/opt/pgsn-lib
+```console
+$ pgsn render examples/gsn.xml -o gsn -f png     # writes gsn.png
 ```
 
-```xml
-<from file="/lib/security.pgsn" import="secureGoal"/>
-```
+Both check the result against the rules of GSN v3 and print a warning for each element that breaks one; `--strict` makes a breach an error. [Checking against GSN v3](README-xml.md#checking-against-gsn-v3) lists the rules.
 
-`--jail` may be given more than once, and applies to `.xml` input only. Nothing outside a registered jail can be imported: `..` may not leave the enclosing root, and symbolic links are expanded before that check. See [README-xml.md](README-xml.md) for the full rules.
-
----
-
-## Public API
-
-`import pgsn` gives you the supported interface:
+## The same case in Python
 
 ```python
-import pgsn
-
-cfg = pgsn.Config(jails={"lib": "/opt/pgsn-lib"})
-term = pgsn.load_xml("main.xml", config=cfg)
-print(pgsn.gsn_tree(term).show(stdout=False, sorting=False))
-```
-
-It exposes constructors for PGSN constants and terms (`string`, `record`, `lambda_abs`, `map_term`, ...), constructors for GSN nodes and classes (`goal`, `strategy`, `evidence`, `goal_class`, ...), the conversion and rendering functions (`python_value`, `gsn_tree`, `gsn_dot`, `save_gsn`), and the XML front end with its configuration (`load_xml`, `load_xml_string`, `Config`, `Jails`, `configure`).
-
-Everything else in the package — `pgsn.dsl`, `pgsn.gsn`, `pgsn.pgsn_term`, `pgsn.pgsn_xml`, `pgsn.dcom`, `pgsn.helpers`, `pgsn.cli` — is internal and may change without notice. The examples below import from those submodules directly and predate the public API; prefer `import pgsn` in new code.
-
-[README-api.md](README-api.md) is the full reference.
-
----
-
-## Example
-
-```python
-from pgsn.gsn import *
-from pgsn.dsl import *
+from pgsn import *
 
 g = goal(
     description="System is secure",
@@ -118,9 +104,9 @@ g = goal(
         description="Break into sub-goals",
         sub_goals=[
             goal(description="Input validated",
-                 support=evidence(description="Static analysis passed")),
+                 support=solution(description="Static analysis passed")),
             goal(description="Output sanitized",
-                 support=evidence(description="Fuzzing test succeeded"))
+                 support=solution(description="Fuzzing test succeeded"))
         ]
     )
 )
@@ -128,160 +114,151 @@ g = goal(
 gsn_tree(g.fully_eval()).show(sorting=False)
 ```
 
-The same case is in `examples/gsn.py`, which binds it to `main` for the command
-line to render:
-```shell
-% pgsn doc examples/gsn.py
-Generating 'None' from 'examples/gsn.py'
-Evaluating term 'main'...
-Goal: System is secure
-└── Strategy: Break into sub-goals
-    ├── Goal: Input validated
-    │   └── Evidence: Static analysis passed
-    └── Goal: Output sanitized
-        └── Evidence: Fuzzing test succeeded
+This builds the same assurance case as `examples/gsn.xml`. The `pgsn` command also accepts a `.py` input: it runs the program and shows the value of its variable `main` (choose another variable with `--term-name`). `examples/gsn.py` assigns the case above to `main`, so `pgsn doc examples/gsn.py -o -` prints the same tree. A `.py` input is an ordinary Python program run with your privileges, so run only files you trust.
 
-Done.
+## Going further
+
+Three techniques cover most uses:
+
+| Purpose | Technique | Example |
+|---|---|---|
+| Reusing a pattern | a template with parameters | `examples/secure_with_template.xml` |
+| Generating structure from a list | `map_term`, which applies a template to every item of a list | `examples/map_term.xml` |
+| Attaching extra data to nodes | a class inheriting from a GSN class | `examples/custom_goal.xml` |
+
+Each example has a Python version beside it (`examples/secure_with_template.py`, `examples/map_term.py`, `examples/custom_goal.py`).
+
+### A reusable goal template
+
+A template that makes a goal supported by a solution with the same description, applied three times:
+
+```xml
+<PGSN>
+    <def name="mkGoalWithEvidence" as="template">
+        <param name="desc"/>
+        <Goal>{desc}<Solution>{desc}</Solution></Goal>
+    </def>
+
+    <def name="g1" as="apply"><var name="mkGoalWithEvidence"/><arg name="desc">No hardcoded passwords</arg></def>
+    <def name="g2" as="apply"><var name="mkGoalWithEvidence"/><arg name="desc">Input sanitized</arg></def>
+    <def name="g3" as="apply"><var name="mkGoalWithEvidence"/><arg name="desc">Logging enabled</arg></def>
+
+    <Goal>
+        System is secure
+        <Strategy>
+            Apply security principles
+            <subGoals><ol><li var="g1"/><li var="g2"/><li var="g3"/></ol></subGoals>
+        </Strategy>
+    </Goal>
+</PGSN>
 ```
 
----
+### One goal per requirement
 
-## Advanced Examples
+`map_term` applies the template to every requirement in the list:
 
-### Example 1: Reusable Goal Template with Evidence
+```xml
+<PGSN>
+    <def name="goalTemplate" as="template">
+        <param name="desc" positional="true"/>
+        <Goal>{desc}<Solution>{desc}</Solution></Goal>
+    </def>
 
-Define a reusable function that generates a goal node supported by an evidence node with the same description.
+    <def name="goals" as="apply">
+        <var name="map_term"/>
+        <arg var="goalTemplate"/>
+        <arg><ol>
+            <li>Firewall enabled</li>
+            <li>Encrypted communication</li>
+            <li>Access control active</li>
+        </ol></arg>
+    </def>
+
+    <Goal>
+        Security requirements fulfilled
+        <supportedBy><apply><var name="immediate"/><arg var="goals"/></apply></supportedBy>
+    </Goal>
+</PGSN>
+```
+
+`immediate` makes a strategy that just carries the listed sub-goals; how it shows in the output is listed in [known_issues.md](known_issues.md).
+
+### A custom goal class with extra data
+
+A class that inherits from `Goal` and adds a `project` attribute:
+
+```xml
+<PGSN>
+    <def name="GoalWithProject">
+        <class name="GoalWithProject">
+            <inherit var="Goal"/>
+            <attribute name="project"/>
+        </class>
+    </def>
+
+    <object>
+        <instanceOf var="GoalWithProject"/>
+        <attribute name="description">Secure connection established</attribute>
+        <attribute name="project">Alpha</attribute>
+        <attribute name="support"><Solution>Verified by audit</Solution></attribute>
+    </object>
+</PGSN>
+```
+
+## Command line
+
+| Command | What it does |
+|---|---|
+| `pgsn doc FILE -o OUT` | evaluates the document and writes it as a text tree (`-d json` for JSON); `-o -` is standard output |
+| `pgsn render FILE -o NAME -f svg\|png\|pdf` | evaluates the document and draws it; `NAME` is given without an extension. `--label-width N` wraps labels at `N` columns |
+| `pgsn compile FILE -o OUT` | compiles the document to JSON |
+
+`pgsn --help` and `pgsn COMMAND --help` list every option. The options shared by `doc` and `render`:
+
+- `-s`, `--steps N` sets the step limit of the evaluation.
+- `--strict` makes a breach of the GSN v3 rules an error: the command writes nothing and exits with status 1.
+- `--jail NAME=DIR` grants access to a directory of shared modules (below).
+
+When a command fails, it prints `Error:` and exits with status 1. A usage error, such as a missing input file, a `pgsn doc` without `-o` or a malformed `--jail`, exits with status 2.
+
+### Jails for XML imports
+
+An XML document may import other documents. By default it can only reach files under its own directory. To grant access to a shared library of modules, register it as a *jail* — a named directory root — and refer to it from the document as `/<name>/...`:
+
+```console
+$ pgsn doc main.xml -o - --jail lib=/opt/pgsn-lib
+```
+
+```xml
+<from file="/lib/security.xml" import="secureGoal"/>
+```
+
+Here `/opt/pgsn-lib` and `main.xml` stand for your own directory and document. `--jail` may be given more than once, and applies to `.xml` input only. Nothing outside the document's own directory and the registered jails can be imported: `..` cannot climb above the document's own directory (or above the jail it lives in), and symbolic links are expanded before that check. [README-xml.md](README-xml.md#import-paths-and-jails) gives the full rules.
+
+## Using PGSN from Python
+
+`import pgsn` is the supported interface. Everything in `pgsn.__all__` is public; everything else, including all submodules (`pgsn.dsl`, `pgsn.gsn`, …), is internal and may change without notice. Load an XML document with `pgsn.load_xml`, or build terms in Python as above:
 
 ```python
-from pgsn.dsl import *
-from pgsn.gsn import *
+import pgsn
 
-# Define a reusable goal+evidence template
-mk_goal_with_evidence = lambda_abs_keywords(
-    {"desc": variable("desc")},
-    goal(
-        description=variable("desc"),
-        support=evidence(description=variable("desc"))
-    )
-)
-
-# Apply the template to multiple goals
-g1 = mk_goal_with_evidence(desc="No hardcoded passwords")
-g2 = mk_goal_with_evidence(desc="Input sanitized")
-g3 = mk_goal_with_evidence(desc="Logging enabled")
-
-# Compose a top-level goal with a strategy
-top = goal(
-    description="System is secure",
-    support=strategy(
-        description="Apply security principles",
-        sub_goals=[g1, g2, g3]
-    )
-)
-
-gsn_tree(top.fully_eval()).show(sorting=False)
+term = pgsn.load_xml("examples/gsn.xml")
+print(pgsn.gsn_tree(term).show(stdout=False, sorting=False))
 ```
 
----
+[README-api.md](README-api.md) is the reference.
 
-### Example 2: Auto-expanding Multiple Goals with `map_term`
+## Documentation
 
-Use `map_term` to generate multiple sub-goals from a list of requirements dynamically.
+| Document | For |
+|---|---|
+| [README-xml.md](README-xml.md) | the XML syntax: a guided start and the reference |
+| [README-api.md](README-api.md) | the Python API |
+| [known_issues.md](known_issues.md) | what the current version does wrong or does not do yet |
+| `examples/` | runnable documents, from small ones to the EU AI Act case generator |
+| [PGSN-implementation.md](PGSN-implementation.md) | why the processor is implemented as it is, for contributors |
 
-```python
-from pgsn.dsl import *
-from pgsn.gsn import *
-
-requirements = ["Firewall enabled", "Encrypted communication", "Access control active"]
-
-
-goal_template = lambda_abs(variable("desc"),
-    goal(description=variable("desc"),
-         support=evidence(description=variable("desc")))
-)
-
-goals = map_term(goal_template, requirements)
-
-secure_goal = goal(
-    description="Security requirements fulfilled",
-    support=immediate(goals)
-)
-
-gsn_tree(secure_goal.fully_eval()).show(sorting=False)
-```
-
----
-
-### Example 3: Class-based Node Composition Using Object System
-
-Define a custom goal class and instantiate it with additional metadata.
-
-```python
-from pgsn.dsl import *
-from pgsn.gsn import *
-
-# Define a custom subclass of Goal
-CustomGoal = define_class(inherit=goal_class, name="GoalWithProject", attributes=["project"])
-
-g = instantiate(CustomGoal, description="Secure connection established",
-                project='Alpha',
-                support=evidence(description="Verified by audit"))
-
-gsn_tree(g.fully_eval()).show(sorting=False)
-```
-
-These advanced examples demonstrate how to:
-
-| Purpose | Technique |
-|---------|-----------|
-| Template reuse | Define lambda abstractions and keyword arguments |
-| Bulk generation | Use `map_term` over lists |
-| Metadata handling | Extend GSN nodes via custom classes |
-
-You can adapt these techniques to build domain-specific GSN templates, automate assurance case generation, or validate structural constraints programmatically.
-
----
-
-## Summary of Techniques
-
-| Purpose                      | Technique                                   |
-|------------------------------|---------------------------------------------|
-| Reusing a template           | Lambda abstraction with keyword parameters  |
-| Generating structure in bulk | List expansion with `map_term`              |
-| Attaching metadata           | Class definition and `instantiate`          |
-
----
-
-## Summary of Common Constructs
-
-| Construct                    | Description                             |
-|-----------------------------|-----------------------------------------|
-| `goal(...)`                 | Defines a GSN Goal                      |
-| `strategy(...)`             | Logical inference for a Goal            |
-| `evidence(...)`             | Data supporting a Goal                  |
-| `context(...)`              | Context for a Goal or Strategy          |
-| `assumption(...)`           | Declares an assumption                  |
-| `immediate(...)`            | Binds sub-goals directly                |
-| `map_term(...)`             | Functional mapping over list_term       |
-| `lambda_abs(...)`           | Lambda abstraction (positional)         |
-| `lambda_abs_keywords(...)`  | Lambda abstraction (keyword args)       |
-| `define_class(...)`         | Defines a new object-based Goal class   |
-| `instantiate(...)`          | Instantiates an object-based Goal       |
-
----
-
-## Architecture
-
-| Layer          | Component              | Purpose                                       |
-|----------------|------------------------|-----------------------------------------------|
-| Core           | `pgsn_term.py`         | Lambda calculus interpreter                   |
-| Python DSL     | `dsl.py`, `gsn.py`     | Builds GSN nodes from a program               |
-| XML front end  | `pgsn_xml.py`          | Compiles the XML syntax onto the core         |
-| Sandbox        | `jail.py`, `config.py` | Confines what an import may reach             |
-| CLI            | `cli.py`               | `pgsn doc`, `pgsn render`, `pgsn compile`     |
-
-
----
+Each document has a Japanese version (`README-ja.md`, `README-ja-xml.md`, `README-ja-api.md`, `known_issues-ja.md`).
 
 ## License
 

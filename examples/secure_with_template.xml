@@ -1,7 +1,7 @@
 <PGSN>
     <def name="mkGoalWithEvidence" as="template">
         <param name="desc"/>
-        <Goal>{desc}<Evidence>{desc}</Evidence></Goal>
+        <Goal>{desc}<Solution>{desc}</Solution></Goal>
     </def>
 
     <def name="g1" as="apply"><var name="mkGoalWithEvidence"/><arg name="desc">No hardcoded passwords</arg></def>

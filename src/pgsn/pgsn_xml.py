@@ -4,9 +4,12 @@ XML parsing builds a single Term; all evaluation is deferred to fully_eval().
 Semantic errors surface as non-terminating reduction.
 """
 
-import ast
+import copy
+import re
+import unicodedata
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from typing import NamedTuple
 
 from pgsn.config import Config, get_config
 from pgsn.jail import JailError, is_within
@@ -21,16 +24,16 @@ from pgsn.dsl import (
     define_class, instantiate, type_of, is_subtype,
     base_class, undefined, empty,
     boolean_and, boolean_or, boolean_not,
-    has_label, list_labels, add_attribute, remove_attribute, overwrite_record,
+    has_label, add_attribute, remove_attribute, overwrite_record,
     format_string,
     Term,
 )
 from pgsn.gsn import (
-    goal, strategy, evidence, context, assumption, defeater,
-    goal_class, strategy_class, evidence_class,
+    goal, strategy, solution, context, assumption, defeater,
+    goal_class, strategy_class, solution_class,
     context_class, assumption_class, gsn_class,
     support_class, undeveloped_class, defeater_class,
-    undeveloped, immediate, evidence_as_goal,
+    undeveloped, immediate, solution_as_goal,
 )
 
 
@@ -39,18 +42,23 @@ class PGSNError(Exception):
 
 
 # ------------------------------------------------------------------ #
-# File-system view of the document being compiled
+# The unit of compilation
 # ------------------------------------------------------------------ #
 
-class _Chroot:
-    """The file-system view granted to the document being compiled.
+class _Unit:
+    """One document being compiled: where its imports resolve, and which
+    documents are already open around it.
 
     `cwd` is the directory relative import paths are resolved against, and
     `root` is the boundary they may not cross — the same pair of notions a
     chroot gives a process.  `..` is therefore allowed as long as the result
     stays below `root`.
 
-    Entering an import yields a new `_Chroot`: a jailed path (``/name/...``)
+    `visiting` holds the documents whose compilation encloses this one, the
+    entry document included, so that an import returning to one of them is a
+    cycle rather than a file to open a second time.
+
+    Entering an import yields a new `_Unit`: a jailed path (``/name/...``)
     switches `root` to that jail's root, while a relative path keeps the
     current `root`.  Crossing from one jail into another is only possible by
     naming the target jail explicitly; a relative path can never climb back
@@ -58,30 +66,45 @@ class _Chroot:
 
     `root` and `cwd` are both None for a document compiled from a string with
     no jail of its own; such a document can only use jailed paths.
+
+    `modules` is shared by every unit of one compilation: the modules compiled
+    so far, which the entry document binds once at its head.
+
+    Whatever a compiler needs to know beyond the element in front of it
+    belongs here, which is why the compilers below take one of these and
+    nothing else.
     """
 
-    __slots__ = ("root", "cwd", "config")
+    __slots__ = ("root", "cwd", "config", "visiting", "modules")
 
-    def __init__(self, root: Path | None, cwd: Path | None, config: Config):
+    def __init__(self, root: Path | None, cwd: Path | None, config: Config,
+                 visiting: frozenset[Path] = frozenset(),
+                 modules: "_Modules | None" = None):
         self.root = root
         self.cwd = cwd
         self.config = config
+        self.visiting = visiting
+        self.modules = _Modules() if modules is None else modules
 
     @classmethod
-    def for_entry(cls, path: Path, config: Config) -> "_Chroot":
-        """View for an entry document opened by path.
+    def for_entry(cls, path: Path, config: Config) -> "_Unit":
+        """Unit for an entry document opened by path.
 
         If the document lives inside a registered jail, that jail confines it.
         Otherwise its own directory becomes an implicit jail, so a document
         opened directly can still import its neighbours but nothing above them.
+
+        The document counts as visiting itself, so an import that comes back
+        round to it is reported as the cycle it is.
         """
         parent = path.parent
         root = config.jails.containing_root(path) or parent
-        return cls(root=root, cwd=parent, config=config)
+        return cls(root=root, cwd=parent, config=config,
+                   visiting=frozenset({path}))
 
     @classmethod
-    def for_jail(cls, name: str, config: Config) -> "_Chroot":
-        """View for a document considered to live at the root of a jail."""
+    def for_jail(cls, name: str, config: Config) -> "_Unit":
+        """Unit for a document considered to live at the root of a jail."""
         try:
             root = config.jails.root_of(name)
         except JailError as exc:
@@ -89,21 +112,35 @@ class _Chroot:
         return cls(root=root, cwd=root, config=config)
 
     @classmethod
-    def unrooted(cls, config: Config) -> "_Chroot":
-        """View with no directory of its own: jailed paths only."""
+    def unrooted(cls, config: Config) -> "_Unit":
+        """Unit with no directory of its own: jailed paths only."""
         return cls(root=None, cwd=None, config=config)
 
-    def enter(self, spec: str) -> tuple["_Chroot", Path]:
-        """Resolve an import path and return the view for the imported file."""
+    def enter(self, spec: str) -> tuple["_Unit", Path]:
+        """The unit for an imported file, and the path it was found at.
+
+        Resolving the path and recording that the file is open are one step.
+        Every import passes through here, so no document can be entered
+        without extending `visiting`, and a cycle is reported before the file
+        it would close is read.
+        """
+        root, path = self._resolve(spec)
+        if path in self.visiting:
+            raise PGSNError(f"Circular import: {path}")
+        return _Unit(root=root, cwd=path.parent, config=self.config,
+                     visiting=self.visiting | {path},
+                     modules=self.modules), path
+
+    def _resolve(self, spec: str) -> tuple[Path, Path]:
+        """The confinement root an import lands in, and the file it names."""
         if not spec:
             raise PGSNError("<from> requires a non-empty 'file' attribute")
 
         if spec.startswith("/"):
             try:
-                root, path = self.config.jails.resolve(spec)
+                return self.config.jails.resolve(spec)
             except JailError as exc:
                 raise PGSNError(str(exc)) from None
-            return _Chroot(root=root, cwd=path.parent, config=self.config), path
 
         if "\\" in spec:
             raise PGSNError(
@@ -126,8 +163,49 @@ class _Chroot:
                 f"Unsafe file path: {spec!r} escapes {str(self.root)!r}")
         if not candidate.is_file():
             raise PGSNError(f"No such file: {spec!r}")
-        return _Chroot(root=self.root, cwd=candidate.parent,
-                       config=self.config), candidate
+        return self.root, candidate
+
+
+class _Modules:
+    """The modules one compilation has compiled, each under a name of its own.
+
+    A file is compiled once however many times it is imported, and the entry
+    document binds every module it reaches once, at its head; an import is an
+    application of that binding to the import's arguments. Embedding the
+    module at every import instead made the compiled term, and the time spent
+    building it and walking it, grow with the number of import paths -- which
+    is exponential in the depth of the imports.
+
+    Moving a module out to the head of the document is sound because a module
+    is closed (`_compile_closed_module` rejects one that is not), so nothing between
+    the head and the import can capture its names. A file is identified by its
+    path together with the root it was reached under, since the root decides
+    where the file's own imports may resolve.
+
+    The bindings are kept in the order the modules were finished, and a module
+    is finished only after every module it imports, so each binding refers to
+    earlier ones only.
+    """
+
+    __slots__ = ("_names", "bindings")
+
+    def __init__(self):
+        self._names: dict[tuple[Path, Path], str] = {}
+        self.bindings: list[tuple[str, Term]] = []
+
+    def name_of(self, root: Path, path: Path) -> str | None:
+        return self._names.get((root, path))
+
+    def add(self, root: Path, path: Path, term: Term) -> str:
+        # Not an identifier, so no document can write it, and distinct from
+        # every reserved alias, which is one.
+        name = f"{_RESERVED_PREFIX}module:{len(self.bindings)}"
+        self._names[(root, path)] = name
+        self.bindings.append((name, term))
+        return name
+
+    def names(self) -> set[str]:
+        return {name for name, _ in self.bindings}
 
 
 # ------------------------------------------------------------------ #
@@ -156,9 +234,6 @@ class _Chroot:
 # and `<apply template="f" var="x"/>` was rejected by a rule that the longhand
 # it stands for never met.
 # ------------------------------------------------------------------ #
-
-# Tags that attach a defeater to the node holding them.
-_DEFEATER_TAGS = {"Defeater"}
 
 
 # ------------------------------------------------------------------ #
@@ -203,10 +278,42 @@ _NAME_ATTRS: dict[str, tuple[str, ...]] = {
 }
 
 
+# The keywords of the expression syntax: Python's, as of Python 3.12, since
+# <expr> reads expressions the way Python does. They are not names, so that
+# every name a <def> can bind can also be written in an <expr>. The list is
+# written out rather than taken from Python, so that PGSN does not change
+# when Python does.
+_KEYWORDS = frozenset({
+    "False", "None", "True", "and", "as", "assert", "async", "await",
+    "break", "class", "continue", "def", "del", "elif", "else", "except",
+    "finally", "for", "from", "global", "if", "import", "in", "is",
+    "lambda", "nonlocal", "not", "or", "pass", "raise", "return", "try",
+    "while", "with", "yield",
+})
+
+
+def _is_name(s: str) -> bool:
+    """A letter, then letters, digits and underscores; not a keyword.
+
+    Letters are Unicode letters, so a Japanese name is a name.
+    """
+    return (bool(s) and s[0].isalpha()
+            and all(c.isalnum() or c == "_" for c in s)
+            and s not in _KEYWORDS)
+
+
+def _check_name(name: str, where: str = "") -> None:
+    if name.startswith(_RESERVED_PREFIX) or not _is_name(name):
+        raise _name_error(name, where)
+
+
 def _name_error(name: str, where: str = "") -> PGSNError:
     if name.startswith(_RESERVED_PREFIX):
         reason = ("a name may not begin with an underscore; "
                   "those are reserved by the implementation")
+    elif name in _KEYWORDS:
+        reason = ("it is a keyword of the expression syntax, which has "
+                  "Python's keywords")
     else:
         reason = ("a name must begin with a letter and continue with letters, "
                   "digits or underscores")
@@ -231,33 +338,70 @@ def _check_names(elem: ET.Element) -> None:
         value = elem.get(attr)
         if value is None:
             continue
-        if value.startswith(_RESERVED_PREFIX) or not value.isidentifier():
-            raise _name_error(value, f' in <{elem.tag} {attr}="{value}">')
+        _check_name(value, f' in <{elem.tag} {attr}="{value}">')
 
 
 # ------------------------------------------------------------------ #
 # <expr>: infix notation for the terms that are already expressible
 #
-# The text of an <expr> is parsed with Python's own parser and the resulting
-# syntax tree is *translated* into the XML the document could have written by
-# hand. Nothing is evaluated, and no node type is translated unless it appears
-# in the tables below, so the syntax cannot reach anything `<apply>` could not.
+# The text of an <expr> is parsed by the grammar below, a subset of Python's
+# expressions read the way Python reads them, and *translated* into the XML
+# the document could have written by hand, at the place the <expr> stands: a
+# name is a <var>, resolved in the scope of that place like any other.
+# Nothing is evaluated, and the grammar has no form that `<apply>`, `<get>`
+# or a literal could not write, so the syntax cannot reach anything more.
 #
-# Operators expand to the reserved alias of a builtin, so that `1 + 2` means
-# addition whatever the surrounding document happens to bind.
+#   expression  := disjunction ("if" disjunction "else" expression)?
+#   disjunction := conjunction ("or" conjunction)*
+#   conjunction := inversion ("and" inversion)*
+#   inversion   := "not" inversion | comparison
+#   comparison  := sum (compare_op sum)*          (chains as in Python)
+#   sum         := term (("+" | "-") term)*
+#   term        := factor (("*" | "//" | "%") factor)*
+#   factor      := ("+" | "-") factor | primary
+#   primary     := atom ("." word | "(" arguments ")")*
+#   arguments   := (argument ("," argument)* ","?)?
+#   argument    := expression | name "=" expression
+#   atom        := name | "True" | "False" | integer | string+
+#                | "(" expression ")"
+#
+# The parser is PGSN's own rather than Python's, so that the language does
+# not change when Python's grammar does.
+#
+# Operators, `True` and `False` expand to the reserved alias of a builtin, so
+# that `1 + 2` means addition whatever the surrounding document binds.
 # ------------------------------------------------------------------ #
 
-_BIN_OPS = {
-    ast.Add: "plus",
-    ast.Sub: "minus",
-    ast.Mult: "times",
-    # `//` is integer division. `/` is left unassigned so that it can mean
-    # true division if PGSN ever gains a floating point type.
-    ast.FloorDiv: "div",
-    ast.Mod: "mod",
-}
+_BIN_OPS = {"+": "plus", "-": "minus", "*": "times", "//": "div", "%": "mod"}
 
-_BOOL_OPS = {ast.And: "boolean_and", ast.Or: "boolean_or"}
+_COMPARE_OPS = {"==", "!=", "<", "<=", ">", ">="}
+
+_NUMBER = re.compile(r"""
+    (?P<float>[0-9][0-9_]*\.[0-9_]*([eE][-+]?[0-9_]+)?
+             |\.[0-9][0-9_]*([eE][-+]?[0-9_]+)?
+             |[0-9][0-9_]*[eE][-+]?[0-9_]+)
+  | (?P<integer>0[xX][0-9a-fA-F_]+|0[oO][0-7_]+|0[bB][01_]+|[0-9][0-9_]*)
+""", re.VERBOSE)
+
+_STRING_START = re.compile(r"(?P<prefix>[rRbBuUfF]{0,2})(?P<quote>'''|\"\"\"|'|\")")
+
+_OP = re.compile(r"//|\*\*|==|!=|<=|>=|[-+*%<>()/.,=]")
+
+_WORD = re.compile(r"\w+")
+
+# Python's simple escapes; octal, \x, \u, \U and \N{...} are read separately.
+_SIMPLE_ESCAPES = {"\\": "\\", "'": "'", '"': '"', "a": "\a", "b": "\b",
+                   "f": "\f", "n": "\n", "r": "\r", "t": "\t", "v": "\v",
+                   "\n": ""}
+
+
+class _Token(NamedTuple):
+    kind: str      # "integer", "string", "op" or "word"
+    text: str      # the integer's digits, the op or the word
+    column: int
+    # A string's parts: literal text and the sources of an f-string's fields,
+    # as ("text", value) and ("field", source, column of the source).
+    parts: tuple = ()
 
 
 def _reserved(name: str) -> ET.Element:
@@ -284,175 +428,498 @@ def _call_builtin(name: str, *args: ET.Element) -> ET.Element:
     return apply_elem
 
 
-def _expr_error(node: ast.AST) -> PGSNError:
-    return PGSNError(
-        f"{type(node).__name__} is not allowed in <expr>. The expression "
-        "syntax covers arithmetic, comparison, boolean operators and "
-        "f-strings; use <apply>, <get> or <ol>/<dl> for anything else.")
+def _parse_error(source: str, what: str, column: int | None) -> PGSNError:
+    where = "at the end" if column is None else f"at column {column + 1}"
+    return PGSNError(f"Cannot parse <expr>: {source!r}: {what} {where}")
 
 
-def _translate(node: ast.AST) -> ET.Element:
-    """Translate one allowed AST node into the XML element it stands for."""
-    match node:
-        case ast.Expression():
-            return _translate(node.body)
+def _unescape(body: str) -> str:
+    """A string literal's body with its backslash escapes resolved, as Python
+    resolves them. An escape Python does not know keeps its backslash."""
+    out, i = [], 0
+    while i < len(body):
+        c = body[i]
+        if c != "\\" or i + 1 == len(body):
+            out.append(c)
+            i += 1
+            continue
+        e = body[i + 1]
+        if e in _SIMPLE_ESCAPES:
+            out.append(_SIMPLE_ESCAPES[e])
+            i += 2
+        elif e in "01234567":
+            m = re.match(r"[0-7]{1,3}", body[i + 1:])
+            out.append(chr(int(m.group(), 8)))
+            i += 1 + len(m.group())
+        elif e in "xuU":
+            width = {"x": 2, "u": 4, "U": 8}[e]
+            digits = body[i + 2:i + 2 + width]
+            if not re.fullmatch(r"[0-9a-fA-F]{%d}" % width, digits):
+                raise PGSNError(f"'\\{e}' needs {width} hexadecimal digits "
+                                f"in {body!r}")
+            out.append(chr(int(digits, 16)))
+            i += 2 + width
+        elif e == "N":
+            m = re.match(r"\{([^}]*)\}", body[i + 2:])
+            char = None
+            if m:
+                try:
+                    char = unicodedata.lookup(m.group(1))
+                except KeyError:
+                    pass
+            if char is None:
+                raise PGSNError(f"'\\N' needs the name of a character in "
+                                f"braces, in {body!r}")
+            out.append(char)
+            i += 2 + len(m.group())
+        else:
+            out.append(c)
+            i += 1
+    return "".join(out)
 
-        case ast.Constant(value=bool() as b):
-            # Checked before int: in Python, bool is a subclass of int.
-            return _reserved("true" if b else "false")
 
-        case ast.Constant(value=int() as i):
-            elem = ET.Element("num")
-            elem.text = str(i)
-            return elem
+def _format_parts(body: str, *, strict: bool) -> list[tuple]:
+    """Split text with `{...}` fields into ("text", t) and ("field", src, at).
 
-        case ast.Constant(value=str() as s):
-            elem = ET.Element("str")
-            elem.text = s
-            return elem
+    `{{` and `}}` are literal braces. A field runs to the `}` that closes it,
+    skipping brackets and string literals inside it, so `{f(x)}` and
+    `{"}" + x}` are fields. With `strict`, as for an f-string in an <expr>, a
+    brace left single is an error; otherwise it is kept as text, for the
+    format string to report when the document is evaluated.
+    """
+    parts: list[tuple] = []
+    text, i = [], 0
+    while i < len(body):
+        if body.startswith(("{{", "}}"), i):
+            text.append(body[i:i + 2])
+            i += 2
+        elif body[i] == "{":
+            end = _field_end(body, i + 1)
+            if end is None:
+                if strict:
+                    raise PGSNError(f"{body!r} opens a field with '{{' and "
+                                    "does not close it; write '{{{{' for a "
+                                    "literal brace")
+                text.append(body[i:])
+                break
+            if text:
+                parts.append(("text", "".join(text)))
+                text = []
+            parts.append(("field", body[i + 1:end], i + 1))
+            i = end + 1
+        elif body[i] == "}" and strict:
+            raise PGSNError(f"{body!r} has a '}}' that closes no field; "
+                            "write '}}}}' for a literal brace")
+        else:
+            text.append(body[i])
+            i += 1
+    if text:
+        parts.append(("text", "".join(text)))
+    return parts
 
-        case ast.Name():
-            if node.id.startswith(_RESERVED_PREFIX):
-                raise _name_error(node.id)
-            elem = ET.Element("var")
-            elem.set("name", node.id)
-            return elem
 
-        case ast.BinOp() if type(node.op) in _BIN_OPS:
-            return _call_builtin(_BIN_OPS[type(node.op)],
-                                 _translate(node.left), _translate(node.right))
+def _field_end(body: str, i: int) -> int | None:
+    """Where the field starting at `i` ends: the index of its closing `}`."""
+    depth, quote = 0, None
+    while i < len(body):
+        c = body[i]
+        if quote:
+            if c == "\\":
+                i += 1
+            elif c == quote:
+                quote = None
+        elif c in "'\"":
+            quote = c
+        elif c in "([{":
+            depth += 1
+        elif c in ")]":
+            depth -= 1
+        elif c == "}":
+            if depth == 0:
+                return i
+            depth -= 1
+        i += 1
+    return None
 
-        case ast.BinOp(op=ast.Div()):
-            raise PGSNError(
-                "'/' is not defined in <expr>. PGSN has integers only, so "
-                "write '//' for integer division; '/' is reserved for true "
-                "division should a floating point type be added.")
 
-        case ast.UnaryOp(op=ast.USub()):
+def _scan_string(source: str, pos: int) -> tuple[_Token, int] | None:
+    """The string literal starting at `pos`, and where it ends, if one does."""
+    m = _STRING_START.match(source, pos)
+    if m is None:
+        return None
+    prefix, quote = m.group("prefix").lower(), m.group("quote")
+    if prefix not in ("", "r", "u", "f", "rf", "fr", "b", "rb", "br"):
+        return None
+    if "b" in prefix:
+        raise _parse_error(source, "PGSN has no bytes", pos)
+    i = m.end()
+    while i < len(source):
+        if source.startswith(quote, i):
+            break
+        if source[i] == "\\":
+            i += 1
+        elif source[i] == "\n" and len(quote) == 1:
+            raise _parse_error(source, "a string ends at the end of its line",
+                               pos)
+        i += 1
+    else:
+        raise _parse_error(source, "a string is not closed", pos)
+    body, end = source[m.end():i], i + len(quote)
+    raw, formatted = "r" in prefix, "f" in prefix
+    if not formatted:
+        value = body if raw else _unescape(body)
+        return _Token("string", value, pos, (("text", value),)), end
+    parts = []
+    for part in _format_parts(body, strict=True):
+        if part[0] == "text":
+            literal = part[1].replace("{{", "{").replace("}}", "}")
+            parts.append(("text", literal if raw else _unescape(literal)))
+        else:
+            parts.append(("field", part[1], m.end() + part[2]))
+    return _Token("string", "", pos, tuple(parts)), end
+
+
+def _tokens(source: str) -> list[_Token]:
+    tokens, pos = [], 0
+    while pos < len(source):
+        if source[pos].isspace():
+            pos += 1
+            continue
+        string = _scan_string(source, pos)
+        if string is not None:
+            token, pos = string
+            tokens.append(token)
+            continue
+        m = _NUMBER.match(source, pos)
+        if m and m.group("float"):
+            raise _parse_error(source, "PGSN has no floating point numbers",
+                               pos)
+        if m:
+            try:
+                int(m.group(), 0)
+            except ValueError:
+                raise _parse_error(source, f"{m.group()!r} is not an integer "
+                                   "as Python writes one", pos) from None
+            tokens.append(_Token("integer", m.group(), pos))
+            pos = m.end()
+            continue
+        m = _OP.match(source, pos) or _WORD.match(source, pos)
+        if m is None:
+            raise _parse_error(source, f"unexpected {source[pos]!r}", pos)
+        kind = "op" if _OP.match(source, pos) else "word"
+        tokens.append(_Token(kind, m.group(), pos))
+        pos = m.end()
+    return tokens
+
+
+class _ExprParser:
+    """Recursive descent over the grammar at the head of this section."""
+
+    def __init__(self, source: str):
+        self.source = source
+        self.tokens = _tokens(source)
+        self.pos = 0
+
+    def parse(self) -> ET.Element:
+        if not self.tokens:
+            raise PGSNError("<expr> is empty")
+        result = self.expression()
+        if self.pos < len(self.tokens):
+            raise self.unexpected()
+        return result
+
+    # -- tokens ------------------------------------------------------- #
+
+    def peek(self, ahead: int = 0) -> _Token | None:
+        i = self.pos + ahead
+        return self.tokens[i] if i < len(self.tokens) else None
+
+    def at(self, kind: str, *texts: str, ahead: int = 0) -> bool:
+        token = self.peek(ahead)
+        return (token is not None and token.kind == kind
+                and (not texts or token.text in texts))
+
+    def take(self) -> _Token:
+        token = self.tokens[self.pos]
+        self.pos += 1
+        return token
+
+    def expect(self, kind: str, text: str) -> None:
+        if not self.at(kind, text):
+            raise self.unexpected()
+        self.take()
+
+    def unexpected(self) -> PGSNError:
+        token = self.peek()
+        if token is None:
+            return _parse_error(self.source, "the expression stops", None)
+        what = token.text if token.kind != "string" else "a string"
+        return _parse_error(self.source, f"unexpected {what!r}", token.column)
+
+    # -- grammar ------------------------------------------------------ #
+
+    def expression(self) -> ET.Element:
+        value = self.disjunction()
+        if not self.at("word", "if"):
+            return value
+        self.take()
+        condition = self.disjunction()
+        self.expect("word", "else")
+        # if_then_else takes its branches unevaluated, so only the one chosen
+        # is evaluated, as in Python.
+        return _call_builtin("if_then_else", condition, value,
+                             self.expression())
+
+    def disjunction(self) -> ET.Element:
+        result = self.conjunction()
+        while self.at("word", "or"):
+            self.take()
+            result = _call_builtin("boolean_or", result, self.conjunction())
+        return result
+
+    def conjunction(self) -> ET.Element:
+        result = self.inversion()
+        while self.at("word", "and"):
+            self.take()
+            result = _call_builtin("boolean_and", result, self.inversion())
+        return result
+
+    def inversion(self) -> ET.Element:
+        if self.at("word", "not"):
+            self.take()
+            return _call_builtin("boolean_not", self.inversion())
+        return self.comparison()
+
+    def comparison(self) -> ET.Element:
+        """`a < b < c` is `a < b and b < c`, as in Python."""
+        left = self.sum()
+        result = None
+        while self.at("op", *_COMPARE_OPS):
+            op = self.take().text
+            right = self.sum()
+            step = _translate_compare(op, left, right)
+            result = step if result is None else _call_builtin(
+                "boolean_and", result, step)
+            left = copy.deepcopy(right)
+        return left if result is None else result
+
+    def sum(self) -> ET.Element:
+        result = self.term()
+        while self.at("op", "+", "-"):
+            op = self.take().text
+            result = _call_builtin(_BIN_OPS[op], result, self.term())
+        return result
+
+    def term(self) -> ET.Element:
+        result = self.factor()
+        while self.at("op", "*", "//", "%", "/"):
+            op = self.take().text
+            if op == "/":
+                raise PGSNError(
+                    "'/' is not defined in <expr>. PGSN has integers only, so "
+                    "write '//' for integer division; '/' is reserved for true "
+                    "division should a floating point type be added.")
+            result = _call_builtin(_BIN_OPS[op], result, self.factor())
+        return result
+
+    def factor(self) -> ET.Element:
+        if self.at("op", "-"):
+            self.take()
             zero = ET.Element("num")
             zero.text = "0"
-            return _call_builtin("minus", zero, _translate(node.operand))
+            return _call_builtin("minus", zero, self.factor())
+        if self.at("op", "+"):
+            self.take()
+            return self.factor()
+        value = self.primary()
+        if self.at("op", "**"):
+            raise PGSNError("'**' is not defined in <expr>: PGSN has no "
+                            "builtin for powers.")
+        return value
 
-        case ast.UnaryOp(op=ast.Not()):
-            return _call_builtin("boolean_not", _translate(node.operand))
+    def primary(self) -> ET.Element:
+        value = self.atom()
+        while True:
+            if self.at("op", "."):
+                self.take()
+                token = self.peek()
+                if (token is None or token.kind != "word"
+                        or token.text in _KEYWORDS or token.text[0].isdigit()):
+                    raise self.unexpected()
+                self.take()
+                # A record label is not a name: it reads a field, as <get>.
+                get = ET.Element("get")
+                get.set("key", token.text)
+                get.append(value)
+                value = get
+            elif self.at("op", "("):
+                self.take()
+                value = self.call(value)
+            else:
+                return value
 
-        case ast.BoolOp() if type(node.op) in _BOOL_OPS:
-            name = _BOOL_OPS[type(node.op)]
-            result = _translate(node.values[0])
-            for value in node.values[1:]:
-                result = _call_builtin(name, result, _translate(value))
-            return result
+    def call(self, function: ET.Element) -> ET.Element:
+        """`f(a, k=b)` is <apply> with the same arguments; `f()` passes the
+        empty keyword record, as in the Python API."""
+        application = ET.Element("apply")
+        application.append(function)
+        keywords: set[str] = set()
+        while not self.at("op", ")"):
+            arg = ET.SubElement(application, "arg")
+            if self.at("word") and self.at("op", "=", ahead=1):
+                name = self.take().text
+                self.take()
+                _check_name(name, " in <expr>")
+                if name in keywords:
+                    raise PGSNError(f"the keyword argument {name!r} is given "
+                                    f"twice in <expr>: {self.source!r}")
+                keywords.add(name)
+                arg.set("name", name)
+            elif keywords:
+                raise PGSNError("a positional argument follows a keyword "
+                                f"argument in <expr>: {self.source!r}")
+            arg.append(self.expression())
+            if not self.at("op", ","):
+                break
+            self.take()
+        self.expect("op", ")")
+        if len(application) == 1:
+            ET.SubElement(application, "arg")
+        return application
 
-        case ast.Compare():
-            if len(node.ops) != 1:
+    def atom(self) -> ET.Element:
+        token = self.peek()
+        if token is None:
+            raise self.unexpected()
+        match token.kind:
+            case "integer":
+                self.take()
+                elem = ET.Element("num")
+                elem.text = str(int(token.text, 0))
+                return elem
+            case "string":
+                parts = []
+                while self.at("string"):
+                    parts.extend(self.take().parts)
+                return _translate_string(parts, self.source)
+            case "word" if token.text in ("True", "False"):
+                self.take()
+                return _reserved(token.text.lower())
+            case "word" if token.text == "None":
                 raise PGSNError(
-                    "chained comparison is not allowed in <expr>; "
-                    "write it with 'and'")
-            return _translate_compare(node.ops[0],
-                                      _translate(node.left),
-                                      _translate(node.comparators[0]))
+                    f"None has no counterpart in PGSN: {self.source!r}")
+            case "word" if token.text not in _KEYWORDS:
+                self.take()
+                _check_name(token.text, " in <expr>")
+                elem = ET.Element("var")
+                elem.set("name", token.text)
+                return elem
+            case "op" if token.text == "(":
+                self.take()
+                inner = self.expression()
+                self.expect("op", ")")
+                return inner
+        raise self.unexpected()
 
-        case ast.JoinedStr():
-            return _translate_fstring(node)
 
-        case _:
-            raise _expr_error(node)
-
-
-def _translate_compare(op: ast.cmpop, left: ET.Element,
+def _translate_compare(op: str, left: ET.Element,
                        right: ET.Element) -> ET.Element:
     """Derive every comparison from `equal` and `less_than`."""
     match op:
-        case ast.Eq():
+        case "==":
             return _call_builtin("equal", left, right)
-        case ast.NotEq():
+        case "!=":
             return _call_builtin("boolean_not",
                                  _call_builtin("equal", left, right))
-        case ast.Lt():
+        case "<":
             return _call_builtin("less_than", left, right)
-        case ast.Gt():
+        case ">":
             return _call_builtin("less_than", right, left)
-        case ast.LtE():
+        case "<=":
             # a <= b is not (b < a); using or would evaluate both sides.
             return _call_builtin("boolean_not",
                                  _call_builtin("less_than", right, left))
-        case ast.GtE():
+        case ">=":
             return _call_builtin("boolean_not",
                                  _call_builtin("less_than", left, right))
-        case _:
-            raise _expr_error(op)
+    raise AssertionError(op)  # only _COMPARE_OPS reach here
 
 
-def _translate_fstring(node: ast.JoinedStr) -> ET.Element:
-    """Expand an f-string into an application of `format_string`.
+def _field_label(source: str, i: int) -> str:
+    """The record label a field's value is passed under: the name itself when
+    the field is a name, as bare text has always done, else a reserved one."""
+    source = source.strip()
+    return source if _is_plain_name(source) else f"{_RESERVED_PREFIX}e{i}"
 
-    Each interpolated expression is bound to a generated name in a record, and
-    the template refers to that name, so `str.format` never sees an expression.
-    Literal text is escaped, since the template is a format string.
+
+def _is_plain_name(source: str) -> bool:
+    return not source.startswith(_RESERVED_PREFIX) and _is_name(source)
+
+
+def _translate_string(parts: list[tuple], source: str) -> ET.Element:
+    """Adjacent literals joined, and an f-string's fields given to
+    `format_string`.
+
+    The template of the format string holds labels and nothing else, so a
+    field that is an expression is passed under a generated label. A field's
+    conversion (`!r`) or format specification (`:>4`) has no counterpart in a
+    format string, so it is refused.
     """
     template: list[str] = []
-    fields: list[tuple[str, ET.Element]] = []
-
-    for part in node.values:
-        match part:
-            case ast.Constant(value=str() as text):
-                template.append(text.replace("{", "{{").replace("}", "}}"))
-            case ast.FormattedValue():
-                name = f"_e{len(fields)}"
-                fields.append((name, _translate(part.value)))
-                spec = ""
-                if part.format_spec is not None:
-                    spec = _constant_format_spec(part.format_spec)
-                conversion = ""
-                if part.conversion != -1:
-                    conversion = "!" + chr(part.conversion)
-                template.append("{" + name + conversion + spec + "}")
-            case _:
-                raise _expr_error(part)
-
+    fields: dict[str, ET.Element] = {}
+    for part in parts:
+        if part[0] == "text":
+            template.append(part[1].replace("{", "{{").replace("}", "}}"))
+            continue
+        field_source = part[1]
+        if not field_source.strip():
+            raise PGSNError(f"an f-string has an empty field in <expr>: "
+                            f"{source!r}")
+        try:
+            value = _ExprParser(field_source).parse()
+        except PGSNError:
+            if re.search(r"![rsa]\s*$|:[^}]*$|=\s*$", field_source):
+                raise PGSNError(
+                    "a conversion (!r), a format specification (:>4) or a "
+                    "'=' is not allowed in an f-string field in <expr>: "
+                    f"{source!r}") from None
+            raise
+        label = _field_label(field_source, len(fields))
+        fields.setdefault(label, value)
+        template.append("{" + label + "}")
     text_elem = ET.Element("str")
-    text_elem.text = "".join(template)
     if not fields:
+        text_elem.text = "".join(
+            part[1] for part in parts)
         return text_elem
-
+    text_elem.text = "".join(template)
     record_elem = ET.Element("dl")
-    for name, value in fields:
+    for label, value in fields.items():
         dt = ET.SubElement(record_elem, "dt")
-        dt.text = name
+        dt.text = label
         dd = ET.SubElement(record_elem, "dd")
         dd.append(value)
     return _call_builtin("format_string", text_elem, record_elem)
 
 
-def _constant_format_spec(spec: ast.JoinedStr) -> str:
-    """Accept `{x:>3}` but not a spec that is itself computed."""
-    parts = []
-    for piece in spec.values:
-        if not isinstance(piece, ast.Constant) or not isinstance(piece.value, str):
-            raise PGSNError(
-                "a computed format specification is not allowed in <expr>")
-        parts.append(piece.value)
-    return ":" + "".join(parts)
+def _replace_with(elem: ET.Element, replacement: ET.Element) -> None:
+    """Become `replacement`, in place.
+
+    Rewriting is done in place because an element does not know its parent:
+    every rule here is handed the element to rewrite, not the list holding it.
+    """
+    elem.tag = replacement.tag
+    elem.attrib.clear()
+    elem.attrib.update(replacement.attrib)
+    elem.text = replacement.text
+    elem[:] = list(replacement)
 
 
 def _expand_expr(elem: ET.Element) -> None:
     """Replace an <expr> element, in place, with the XML it stands for."""
     if len(elem):
         raise PGSNError("<expr> takes an expression as text, not child elements")
-    source = (elem.text or "").strip()
-    if not source:
-        raise PGSNError("<expr> is empty")
-    try:
-        tree = ast.parse(source, mode="eval")
-    except SyntaxError as exc:
-        raise PGSNError(f"Cannot parse <expr>: {source!r}: {exc.msg}") from None
-
-    expansion = _translate(tree)
-    elem.tag = expansion.tag
-    elem.attrib.clear()
-    elem.attrib.update(expansion.attrib)
-    elem.text = expansion.text
-    elem[:] = list(expansion)
+    _replace_with(elem, _ExprParser((elem.text or "").strip()).parse())
 
 
 def _move_content(src: ET.Element, dst: ET.Element) -> None:
@@ -537,15 +1004,6 @@ def _rewrite_as_conditional(elem: ET.Element, parts: list[ET.Element]) -> None:
     _replace_with(elem, application)
 
 
-def _replace_with(elem: ET.Element, replacement: ET.Element) -> None:
-    """Become `replacement`, in place."""
-    elem.tag = replacement.tag
-    elem.attrib.clear()
-    elem.attrib.update(replacement.attrib)
-    elem.text = replacement.text
-    elem[:] = list(replacement)
-
-
 def _desugar(elem: ET.Element) -> None:
     """Expand the element-agnostic shorthands, in place, everywhere.
 
@@ -620,7 +1078,7 @@ def _expand_as_attribute(elem: ET.Element) -> None:
     elem.append(wrapper)
 
 
-# Builtins substituted inline during compilation (not at evaluation time).
+# The builtins, bound around each compilation unit by `_builtin_scope`.
 #
 # Every term-valued name the `pgsn` package exports is bound here under the
 # same name, so that the two front ends offer the same standard library; see
@@ -636,57 +1094,63 @@ _BUILTINS: dict[str, Term] = {
     "plus": plus, "minus": minus, "times": times, "div": div, "mod": mod,
     "boolean_and": boolean_and, "boolean_or": boolean_or,
     "boolean_not": boolean_not, "true": true, "false": false,
-    "has_label": has_label, "list_labels": list_labels,
+    "has_label": has_label,
     "add_attribute": add_attribute, "remove_attribute": remove_attribute,
     "overwrite_record": overwrite_record, "format_string": format_string,
     "empty_record": empty_record, "undefined": undefined,
     "define_class": define_class, "instantiate": instantiate,
     "type_of": type_of, "is_subtype": is_subtype, "base_class": base_class,
-    "goal": goal, "strategy": strategy, "evidence": evidence,
+    "goal": goal, "strategy": strategy, "solution": solution,
     "context": context, "assumption": assumption,
     "defeater": defeater,
     "immediate": immediate, "undeveloped": undeveloped,
-    "evidence_as_goal": evidence_as_goal,
+    "solution_as_goal": solution_as_goal,
     "gsn_class": gsn_class, "goal_class": goal_class,
-    "strategy_class": strategy_class, "evidence_class": evidence_class,
+    "strategy_class": strategy_class, "solution_class": solution_class,
     "context_class": context_class, "assumption_class": assumption_class,
     "support_class": support_class, "undeveloped_class": undeveloped_class,
     "defeater_class": defeater_class,
     # Intuitive aliases for GSN class values
-    "Goal": goal_class, "Strategy": strategy_class, "Evidence": evidence_class,
+    "Goal": goal_class, "Strategy": strategy_class, "Solution": solution_class,
     "Context": context_class, "Assumption": assumption_class,
     "GSN": gsn_class, "Support": support_class,
     "Defeater": defeater_class,
 }
 
-_SUPPORT_TAGS = {"Strategy", "Evidence", "Goal", "supportedBy", "undeveloped"}
+_SUPPORT_TAGS = {"Strategy", "Solution", "Goal", "supportedBy", "undeveloped"}
 
 
-def _text_fields(s: str) -> list[str]:
-    """Return the {name} field names in s, honouring Python's {{ }} escaping."""
-    import string as _stringmod
-    return [fname for _, fname, _, _ in _stringmod.Formatter().parse(s)
-            if fname is not None and fname != ""]
+def _text_to_term(s: str, unit: "_Unit | None" = None) -> Term:
+    """Turn user text into a Term.
 
-
-def _text_to_term(s: str) -> Term:
+    Text is a string. A `{...}` in it is a field: what stands between the
+    braces is an expression, read as in <expr>, and its value is put in its
+    place by `format_string`; `{{` and `}}` are the braces themselves. Text is
+    not checked at compile time: a field that cannot be read as an expression,
+    and a brace left single, stay in the format string as written, and
+    `format_string` reports them when the document is evaluated.
     """
-    Turn user text into a Term. If it contains {name} fields, build a
-    format_string application binding each field to the variable of that name.
-    If it contains {{ }} escapes but no fields, still run format_string so
-    the escapes are resolved ({{ -> {, }} -> }).
-    Plain text with no braces at all becomes a String directly.
-    Escaping follows Python's str.format ({{ -> {).
-    """
-    fields = _text_fields(s)
-    if fields:
-        args = record({name: variable(name) for name in fields})
-        return format_string(string(s))(args)
-    if "{{" in s or "}}" in s:
-        # No variable fields but escape sequences present — run format_string
-        # with an empty record so {{ }} are resolved to literal braces.
-        return format_string(string(s))(empty_record)
-    return string(s)
+    if "{" not in s and "}" not in s:
+        return string(s)
+    template: list[str] = []
+    fields: dict[str, Term] = {}
+    for part in _format_parts(s, strict=False):
+        if part[0] == "text":
+            template.append(part[1])
+            continue
+        source = part[1]
+        try:
+            value = _ExprParser(source.strip()).parse()
+        except PGSNError:
+            template.append("{" + source + "}")
+            continue
+        label = _field_label(source, len(fields))
+        if label not in fields:
+            fields[label] = (variable(label) if label == source.strip()
+                             else _expr(value, unit))
+        template.append("{" + label + "}")
+    return format_string(string("".join(template)))(
+        record(fields) if fields else empty_record)
 
 
 def _resolve(name: str, type_name: str | None = None) -> Term:
@@ -725,10 +1189,9 @@ def _builtin_scope(body: Term) -> Term:
 
     Only the names the unit actually leaves free are bound. Binding the whole
     table instead would be equivalent — a name the document never mentions
-    cannot be observed — but ruinous: the builtin terms are large, every
-    binding substitutes its value through the body, and a chain deep enough to
-    hold them all exhausts the interpreter's stack, since every traversal of a
-    term recurses. A document mentions a handful.
+    cannot be observed — but every compiled document, and every module in it,
+    would then carry every builtin, in its term and in the JSON that
+    `pgsn compile` writes. A document mentions a handful.
 
     Which names are free is not decided here. `Term.free_variables` already
     answers it, and has to be right anyway: removing names before evaluation
@@ -742,27 +1205,49 @@ def _builtin_scope(body: Term) -> Term:
     return let_vars(tuple(bindings), body) if bindings else body
 
 
-def _thread_lets(bindings: list[tuple[str, Term]],
-                 body: Term) -> Term:
+def _thread_lets(bindings: list[tuple[str, Term]], body: Term) -> Term:
     """Fold a binding list into nested let expressions around body."""
     for name, term in reversed(bindings):
         body = let(variable(name), term, body)
     return body
 
 
-def _split_args(items: list[ET.Element | str], chroot: _Chroot,
-                visiting: frozenset[Path], owner: str) -> tuple[list, dict]:
+def _keyword_abs(params: list[ET.Element], body: Term, unit: _Unit) -> Term:
+    """Abstract `body` over keyword parameters, with the defaults they carry.
+
+    A parameter whose content is a value gives the default for its name; one
+    without has none, and an application that leaves it out leaves the name
+    unbound. <PGSNModule> and <template> are abstractions of the same shape,
+    so they are built the same way.
     """
-    Collect <arg> children into positional and keyword groups.
+    defaults = {p.get("name"): _content(p, unit) for p in params if _items(p)}
+    return lambda_abs_keywords(
+        {p.get("name"): variable(p.get("name")) for p in params},
+        body,
+        record(defaults) if defaults else empty_record)
+
+
+def _split_args(items: list[ET.Element | str], unit: _Unit,
+                owner: str) -> tuple[list, dict, bool]:
+    """
+    Collect <arg> children into positional and keyword groups, and say whether
+    the keyword record is passed.
     Positional args (no name) must precede keyword args, as in Python.
-    Application itself is delegated to Term.__call__.
+
+    The `<arg>` elements are the parameters passed, and one with nothing in it
+    passes nothing: a parameter left without a value takes its default. So an
+    empty `<arg name="x"/>` leaves `x` at its default, and an empty unnamed
+    `<arg/>` passes the keyword record with nothing in it, so that the keyword
+    parameters all take their defaults -- `<apply template="f"><arg/></apply>`
+    is `f()` in Python. Either counts as a keyword argument, so it comes after
+    the positional ones.
 
     Anything that is not an <arg> is an error rather than something to skip.
     Desugaring expands `var` and `expr` into a child of their own, so skipping
     would turn `<apply template="f" var="x"/>` into an application of `f` to
     nothing at all.
     """
-    positional, keyword = [], {}
+    positional, keyword, record_passed = [], {}, False
     for a in items:
         if isinstance(a, str):
             raise PGSNError(
@@ -773,13 +1258,15 @@ def _split_args(items: list[ET.Element | str], chroot: _Chroot,
                 f"<{owner}> takes its arguments as <arg> children, "
                 f"found <{a.tag}>")
         name = a.get("name")
-        if name is None:
-            if keyword:
+        if name is None and _items(a):
+            if record_passed:
                 raise PGSNError("positional arg after keyword arg")
-            positional.append(_content(a, chroot, visiting))
+            positional.append(_content(a, unit))
         else:
-            keyword[name] = _content(a, chroot, visiting)
-    return positional, keyword
+            if _items(a):
+                keyword[name] = _content(a, unit)
+            record_passed = True
+    return positional, keyword, record_passed
 
 
 # ------------------------------------------------------------------ #
@@ -794,84 +1281,60 @@ def compile_pgsn(path: str | Path, *, config: Config | None = None) -> Term:
     """
     cfg = get_config(config)
     p = Path(path).resolve()
-    return _compile_root(ET.parse(p).getroot(),
-                         _Chroot.for_entry(p, cfg), entry=p)
+    return _compile_root(ET.parse(p).getroot(), _Unit.for_entry(p, cfg))
 
 
-def compile_pgsn_string(xml: str, base_dir: str | Path | None = None, *,
-                        config: Config | None = None,
+def compile_pgsn_string(xml: str, *, config: Config | None = None,
                         jail: str | None = None) -> Term:
-    """
-    Compile a <PGSN> document from a string.
+    """Compile a <PGSN> document held in a string into a single Term.
 
-    Jailed imports (``/<jail>/...``) always work.  Relative imports need a
-    directory to resolve against: pass `jail` to place the document at the root
-    of a registered jail.  `base_dir` is an internal escape hatch that roots the
-    document at an arbitrary directory; it is not part of the public API,
-    because it turns any directory into a confinement root without validation.
+    A document that is not a file has no directory of its own, so there is
+    nothing for a relative import to resolve against. Jailed imports
+    (``/<jail>/...``) always work; `jail` places the document at the root of a
+    registered jail, which is what gives relative imports a meaning as well.
+    Naming a directory directly is deliberately not offered: it would make a
+    confinement root out of a path nobody registered as one.
     """
     cfg = get_config(config)
-    if jail is not None:
-        if base_dir is not None:
-            raise PGSNError("pass either 'jail' or 'base_dir', not both")
-        chroot = _Chroot.for_jail(jail, cfg)
-    elif base_dir is not None:
-        bd = Path(base_dir).resolve()
-        chroot = _Chroot(root=bd, cwd=bd, config=cfg)
-    else:
-        chroot = _Chroot.unrooted(cfg)
-    return _compile_root(ET.fromstring(xml), chroot, entry=None)
+    unit = _Unit.for_jail(jail, cfg) if jail is not None else _Unit.unrooted(cfg)
+    return _compile_root(ET.fromstring(xml), unit)
 
 
-def _compile_root(root: ET.Element, chroot: _Chroot,
-                  entry: Path | None = None) -> Term:
-    """Compile a parsed <PGSN> root element against a base directory.
-
-    The entry file path (when known) seeds the visiting set so that an
-    import cycle returning to the entry document is detected as such.
-    """
+def _compile_root(root: ET.Element, unit: _Unit) -> Term:
+    """Compile a parsed <PGSN> root element in the unit it was opened as."""
     if root.tag != "PGSN":
         raise PGSNError(f"Expected <PGSN>, got <{root.tag}>")
     _check_source(root)
     _desugar(root)
-    visiting = frozenset({entry}) if entry is not None else frozenset()
-    return _builtin_scope(_block(_items(root), chroot, visiting, "PGSN"))
+    body = _builtin_scope(_block(_items(root), unit, "PGSN"))
+    # Every module the document reaches, bound once (see _Modules).
+    return _thread_lets(unit.modules.bindings, body)
 
 
-def _compile_module(root: ET.Element, chroot: _Chroot,
-                    visiting: frozenset[Path]) -> Term:
-    """
-    Compile <PGSNModule> to a keyword-lambda Term.
-    When applied to a Record of args, yields a Record of exported names.
+def _compile_module(root: ET.Element, unit: _Unit) -> Term:
+    """Compile <PGSNModule> to a function from its arguments to its exports.
+
+    The exports are a record of every name the module's block binds with a
+    <def>, so taking a name out of a module is reading a label off a record,
+    and the module itself is a value like any other.
     """
     param_elems, items = _split_params(root)
-    params = [p.get("name") for p in param_elems]
-    defaults_dict = {p.get("name"): _content(p, chroot, visiting)
-                     for p in param_elems if _items(p)}
-
-    export_names = [i.get("name") for i in items
-                    if isinstance(i, ET.Element) and i.tag == "def"]
-
-    # Module body: let-chain ending in a record of all exported names
-    exports = record({n: variable(n) for n in export_names})
-    body = _thread_lets(
-        _bindings(items, chroot, visiting, "PGSNModule"), exports)
-
-    arguments = {p: variable(p) for p in params}
-    defaults_rec = record(defaults_dict) if defaults_dict else empty_record
+    exports = record({i.get("name"): variable(i.get("name")) for i in items
+                      if isinstance(i, ET.Element) and i.tag == "def"})
+    body = _thread_lets(_bindings(items, unit, "PGSNModule"), exports)
     # A module is a separate lexical scope, so it needs the builtin scope of
     # its own; the importing document's cannot reach inside it. The wrapping
     # sits outside the abstraction, so the bindings are reduced once rather
     # than once per application.
-    return _builtin_scope(lambda_abs_keywords(arguments, body, defaults_rec))
+    return _builtin_scope(_keyword_abs(param_elems, body, unit))
 
 
 # ------------------------------------------------------------------ #
 # Binding sequences  (def / from)
 # ------------------------------------------------------------------ #
 
-def _bindings(items: list[ET.Element | str], chroot: _Chroot,
-              visiting: frozenset[Path], owner: str) -> list[tuple[str, Term]]:
+def _bindings(items: list[ET.Element | str], unit: _Unit,
+              owner: str) -> list[tuple[str, Term]]:
     """The bindings a block opens with, in order."""
     result = []
     for item in items:
@@ -881,9 +1344,9 @@ def _bindings(items: list[ET.Element | str], chroot: _Chroot,
                 f"A block is bindings and then one value, so only its last "
                 f"item is its value.")
         if item.tag == "def":
-            result.append(_compile_def(item, chroot, visiting))
+            result.append(_compile_def(item, unit))
         elif item.tag == "from":
-            result.extend(_compile_from(item, chroot, visiting))
+            result.extend(_compile_from(item, unit))
         else:
             raise PGSNError(
                 f"<{owner}> takes <def> and <from> before its value, "
@@ -891,10 +1354,9 @@ def _bindings(items: list[ET.Element | str], chroot: _Chroot,
     return result
 
 
-def _compile_def(elem: ET.Element, chroot: _Chroot,
-                 visiting: frozenset[Path]) -> tuple[str, Term]:
+def _compile_def(elem: ET.Element, unit: _Unit) -> tuple[str, Term]:
     name = elem.get("name")
-    term = _content(elem, chroot, visiting)
+    term = _content(elem, unit)
 
     if elem.get("recursive", "false").lower() == "true":
         term = fix(lambda_abs(variable(name), term))
@@ -906,34 +1368,53 @@ def _compile_def(elem: ET.Element, chroot: _Chroot,
     return name, term
 
 
-def _module_record(elem: ET.Element, chroot: _Chroot,
-                   visiting: frozenset[Path]) -> Term:
+def _module_record(elem: ET.Element, unit: _Unit) -> Term:
     """The record a `<from>` denotes: its module applied to its arguments.
 
     File I/O happens here, at compile time, because the path is a static
-    literal. The application itself is an ordinary Term and is not evaluated.
+    literal. The module is compiled the first time its file is imported and
+    bound at the head of the entry document (see _Modules); the import is an
+    application of that binding, an ordinary Term that is not evaluated.
     """
     file_path = elem.get("file", "")
-    inner, full = chroot.enter(file_path)
-    if full in visiting:
-        raise PGSNError(f"Circular import: {full}")
+    inner, full = unit.enter(file_path)
 
+    name = unit.modules.name_of(inner.root, full)
+    if name is None:
+        name = unit.modules.add(inner.root, full,
+                                _compile_closed_module(file_path, full, inner))
+
+    # Args compiled in the caller's scope — they are Terms, not values yet
+    args = {a.get("name"): _content(a, unit) for a in elem.findall("arg")}
+    return variable(name)(record(args))
+
+
+def _compile_closed_module(file_path: str, full: Path, unit: _Unit) -> Term:
+    """Compile the module in `full`, which must be closed."""
     root = ET.parse(full).getroot()
     if root.tag != "PGSNModule":
         raise PGSNError(f"Expected <PGSNModule> in {file_path!r}")
     _check_source(root)
     _desugar(root)
 
-    module_term = _compile_module(root, inner, visiting | {full})
+    module_term = _compile_module(root, unit)
+    # A module takes values from its importer only through its parameters, so
+    # a component's argument is the same in every system that imports it with
+    # the same arguments. A name the module left free would be bound by
+    # whatever happened to be in scope where the module ends up, since nothing
+    # in the compiled term marks it as the module's own. The only free names a
+    # closed module has are the bindings of the modules it imports.
+    free = module_term.free_variables() - unit.modules.names()
+    if free:
+        raise PGSNError(
+            f"The module {file_path!r} uses "
+            f"{', '.join(repr(n) for n in sorted(free))}, which it neither "
+            f"defines nor takes as a parameter. A module receives values from "
+            f"the document that imports it only through its parameters.")
+    return module_term
 
-    # Args compiled in the caller's scope — they are Terms, not values yet
-    args = {a.get("name"): _content(a, chroot, visiting)
-            for a in elem.findall("arg")}
-    return module_term(record(args))
 
-
-def _e_from(elem: ET.Element, chroot: _Chroot,
-            visiting: frozenset[Path]) -> Term:
+def _e_from(elem: ET.Element, unit: _Unit) -> Term:
     """`<from>` in a value position is the module's record.
 
         <def name="lib"><from file="lib.xml"/></def>
@@ -953,11 +1434,10 @@ def _e_from(elem: ET.Element, chroot: _Chroot,
         raise PGSNError(
             "'as' renames an imported name, and <from> used as a value "
             "imports none. Bind the module with <def> instead.")
-    return _module_record(elem, chroot, visiting)
+    return _module_record(elem, unit)
 
 
-def _compile_from(elem: ET.Element, chroot: _Chroot,
-                  visiting: frozenset[Path]) -> list[tuple[str, Term]]:
+def _compile_from(elem: ET.Element, unit: _Unit) -> list[tuple[str, Term]]:
     """`<from>` in a binding position: bring selected names into scope.
 
     The applied module is bound to a name of its own and each import projects
@@ -979,7 +1459,7 @@ def _compile_from(elem: ET.Element, chroot: _Chroot,
             '<def name="..."><from file="..."/></def>.')
 
     module = variable(_MODULE_VAR)
-    return ([(_MODULE_VAR, _module_record(elem, chroot, visiting))]
+    return ([(_MODULE_VAR, _module_record(elem, unit))]
             + [(alias, module(string(exported))) for alias, exported in wanted])
 
 
@@ -1013,23 +1493,26 @@ def _items(parent: ET.Element) -> list[ET.Element | str]:
     return items
 
 
-def _item(item: ET.Element | str, chroot: _Chroot,
-          visiting: frozenset[Path]) -> Term:
+def _item(item: ET.Element | str, unit: _Unit) -> Term:
     """The term an item stands for."""
     if isinstance(item, str):
-        return _text_to_term(item)
-    return _expr(item, chroot, visiting)
+        return _text_to_term(item, unit)
+    return _expr(item, unit)
 
 
-def _content(parent: ET.Element, chroot: _Chroot,
-             visiting: frozenset[Path]) -> Term:
-    """The single value an element's content stands for."""
+def _content(parent: ET.Element, unit: _Unit) -> Term:
+    """The single value an element's content stands for.
+
+    Empty content is the empty string, as bare text is a string: in XML an
+    element with nothing in it holds the empty text. What the empty string
+    then fails to be is reported with the output, not here.
+    """
     items = _items(parent)
     if len(items) == 1:
-        return _item(items[0], chroot, visiting)
+        return _item(items[0], unit)
     if items:
         raise PGSNError(f"Multiple values in <{parent.tag}>")
-    raise PGSNError(f"No value in <{parent.tag}>")
+    return _text_to_term("")
 
 
 def _split_params(parent: ET.Element) -> tuple[list[ET.Element],
@@ -1042,52 +1525,48 @@ def _split_params(parent: ET.Element) -> tuple[list[ET.Element],
     return params, items
 
 
-def _block(items: list[ET.Element | str], chroot: _Chroot,
-           visiting: frozenset[Path], owner: str) -> Term:
+def _block(items: list[ET.Element | str], unit: _Unit, owner: str) -> Term:
     """Any number of bindings, then the value they are in scope for.
 
     `<PGSN>`, `<div>` and a template body are all this shape, and the value
-    is simply the last item -- a child element or a run of text.
+    is simply the last item -- a child element or a run of text. An empty
+    one is the empty string, as empty content is everywhere.
     """
     if not items:
-        raise PGSNError(f"<{owner}> has no value")
-    return _thread_lets(_bindings(items[:-1], chroot, visiting, owner),
-                        _item(items[-1], chroot, visiting))
+        return _text_to_term("")
+    return _thread_lets(_bindings(items[:-1], unit, owner),
+                        _item(items[-1], unit))
 
 
+def _expr(elem: ET.Element, unit: _Unit) -> Term:
+    """The term an element in a value position stands for.
 
-def _expr(elem: ET.Element, chroot: _Chroot,
-          visiting: frozenset[Path]) -> Term:
-    dispatch = {
-        "var":      _e_var,
-        "from":     _e_from,
-        "num":      _e_num,
-        "str":      _e_str,
-        "template": _e_template,
-        "apply":    _e_apply,
-        "class":    _e_class,
-        "object":   _e_object,
-        "get":      _e_get,
-        "send":     _e_send,
-        "div":      _e_div,
-        "ol":       _e_list,
-        "dl":       _e_dict,
-        "Goal":     _e_goal,
-        "Strategy": _e_strategy,
-        "Evidence": _e_evidence,
-        "Defeater": _e_defeater,
-    }
-    fn = dispatch.get(elem.tag)
-    if fn is None:
+    Which elements those are is `_COMPILERS`, at the foot of this file: it can
+    only be written once every compiler it names exists, and an element this
+    pass does not know is an error rather than something to skip.
+    """
+    compiler = _COMPILERS.get(elem.tag)
+    if compiler is None:
         raise PGSNError(f"Unknown expression: <{elem.tag}>")
-    return fn(elem, chroot, visiting)
+    return compiler(elem, unit)
 
 
-def _e_var(elem: ET.Element, _ch: "_Chroot", _v: frozenset) -> Term:
-    return _resolve(elem.get("name"), elem.get("typeOf"))
+def _e_var(elem: ET.Element, _unit: _Unit) -> Term:
+    """A reference to a name.
+
+    `as="var"` produces a `<var>` with no name, since `as` moves the content
+    and leaves the attributes where they were, so the message says so.
+    """
+    name = elem.get("name")
+    if name is None:
+        raise PGSNError(
+            "<var> needs a 'name' attribute naming the variable, as in "
+            '<var name="x"/>. as="var" cannot supply it: `as` moves the '
+            "content and leaves the attributes behind.")
+    return _resolve(name, elem.get("typeOf"))
 
 
-def _e_num(elem: ET.Element, _ch: "_Chroot", _v: frozenset) -> Term:
+def _e_num(elem: ET.Element, _unit: _Unit) -> Term:
     """An integer literal. Bare text is a String, so numbers are written out."""
     if len(elem):
         raise PGSNError("<num> takes text, not child elements")
@@ -1098,7 +1577,7 @@ def _e_num(elem: ET.Element, _ch: "_Chroot", _v: frozenset) -> Term:
         raise PGSNError(f"<num> is not an integer: {text!r}") from None
 
 
-def _e_str(elem: ET.Element, _ch: "_Chroot", _v: frozenset) -> Term:
+def _e_str(elem: ET.Element, _unit: _Unit) -> Term:
     """A verbatim string literal.
 
     Unlike bare text, the content is taken exactly as written: whitespace is
@@ -1110,89 +1589,92 @@ def _e_str(elem: ET.Element, _ch: "_Chroot", _v: frozenset) -> Term:
     return string(elem.text or "")
 
 
-def _e_template(elem: ET.Element, chroot: _Chroot,
-                visiting: frozenset[Path]) -> Term:
+def _e_template(elem: ET.Element, unit: _Unit) -> Term:
+    """A function: the parameters it opens with, then the block it stands for.
+
+    A parameter is a keyword parameter unless it says `positional="true"`.
+    The two kinds become two layers of abstraction -- positional outside,
+    keyword within -- which is the order `Term.__call__` unwinds them in: it
+    strips the positional arguments before passing the record of keyword ones.
+    """
     param_elems, items = _split_params(elem)
-    params = [(p.get("name"), p) for p in param_elems]
-
     # The body is a block like <div> and <PGSN>: bindings, then one value.
-    body = _block(items, chroot, visiting, elem.tag)
+    term = _block(items, unit, elem.tag)
+    if not param_elems:
+        return term
 
-    if not params:
-        return body
-
-    # Separate positional params (positional="true") from keyword params.
-    # Positional must all come before keyword params (Python convention).
-    positional_params = []
-    keyword_params = []
-    seen_keyword = False
-    for name, pelem in params:
-        is_pos = pelem.get("positional", "false").lower() == "true"
-        if is_pos:
-            if seen_keyword:
-                raise PGSNError(
-                    f"Positional param '{name}' must come before keyword params")
-            # Positional params must not carry a default value
-            if _items(pelem):
-                raise PGSNError(
-                    f"Positional param '{name}' must not have a default value")
-            positional_params.append(name)
-        else:
-            seen_keyword = True
-            keyword_params.append((name, pelem))
-
-    # Build default values dict for keyword params
-    defaults_dict = {}
-    for name, pelem in keyword_params:
-        if _items(pelem):
-            defaults_dict[name] = _content(pelem, chroot, visiting)
-
-    # Build the term: keyword layer first (innermost), then positional layer
-    # wrapping it. This matches Term.__call__ which strips positional args
-    # before passing the keyword Record.
-    if keyword_params:
-        t = lambda_abs_keywords(
-            {name: variable(name) for name in [n for n, _ in keyword_params]},
-            body,
-            record(defaults_dict) if defaults_dict else empty_record,
-        )
-    else:
-        t = body
-
-    if positional_params:
-        t = lambda_abs_vars(
-            tuple(variable(name) for name in positional_params),
-            t,
-        )
-
-    return t
+    positional, keyword = _split_param_kinds(param_elems)
+    if keyword:
+        term = _keyword_abs(keyword, term, unit)
+    if positional:
+        term = lambda_abs_vars(
+            tuple(variable(p.get("name")) for p in positional), term)
+    return term
 
 
-def _e_apply(elem: ET.Element, chroot: _Chroot,
-             visiting: frozenset[Path]) -> Term:
-    """An application. The function is `template=`, or else the first child.
+def _split_param_kinds(params: list[ET.Element]
+                       ) -> tuple[list[ET.Element], list[ET.Element]]:
+    """Separate the positional parameters from the keyword ones, in order.
+
+    Positional parameters come first, as in Python, and carry no default:
+    there is nothing for a default to stand in for when the argument is
+    reached by position rather than by name.
+    """
+    positional: list[ET.Element] = []
+    keyword: list[ET.Element] = []
+    for param in params:
+        name = param.get("name")
+        if param.get("positional", "false").lower() != "true":
+            keyword.append(param)
+            continue
+        if keyword:
+            raise PGSNError(
+                f"Positional param '{name}' must come before keyword params")
+        if _items(param):
+            raise PGSNError(
+                f"Positional param '{name}' must not have a default value")
+        positional.append(param)
+    return positional, keyword
+
+
+def _callee(elem: ET.Element, unit: _Unit, attr: str,
+            noun: str) -> tuple[Term, list[ET.Element | str]]:
+    """What an application applies, and the items left over to be arguments.
+
+    The callee is named by an attribute of the element's own -- `<apply
+    template="f">`, `<send to="obj">` -- or else it is the first item of the
+    content. Those attributes fill one slot rather than standing for the whole
+    content, so they are element-specific and survive desugaring; see the note
+    at the head of the file.
+    """
+    items = _items(elem)
+    named = elem.get(attr)
+    if named is not None:
+        return _resolve(named), items
+    if items:
+        return _item(items[0], unit), items[1:]
+    raise PGSNError(f"<{elem.tag}> needs {noun}")
+
+
+def _applied(func: Term, items: list[ET.Element | str], unit: _Unit,
+             owner: str) -> Term:
+    """`func` applied to the `<arg>` items, of which there may be none.
 
     An empty argument list is not an error. Application is binary, so applying
     a function to nothing is the function: `<apply template="f"/>` is `f`.
     """
-    items = _items(elem)
-    template = elem.get("template")
-    if template is not None:
-        func = _resolve(template)
-    elif items:
-        func = _item(items[0], chroot, visiting)
-        items = items[1:]
-    else:
-        raise PGSNError("<apply> needs a function")
-    positional, keyword = _split_args(items, chroot, visiting, "apply")
-    if not positional and not keyword:
-        return func
-    # Delegate to Term.__call__: it casts args and builds the keyword Record
-    return func(*positional, **keyword)
+    positional, keyword, record_passed = _split_args(items, unit, owner)
+    applied = func(*positional) if positional else func
+    return applied(record(keyword)) if record_passed else applied
 
 
-def _e_class(elem: ET.Element, chroot: _Chroot,
-             visiting: frozenset[Path]) -> Term:
+def _e_apply(elem: ET.Element, unit: _Unit) -> Term:
+    """An application. The function is `template=`, or else the first child."""
+    func, items = _callee(elem, unit, "template", "a function")
+    return _applied(func, items, unit, "apply")
+
+
+def _e_class(elem: ET.Element, unit: _Unit) -> Term:
     """A class definition.
 
     `name` is what the class is called, not what it is bound to: a binding is
@@ -1203,44 +1685,42 @@ def _e_class(elem: ET.Element, chroot: _Chroot,
     """
     inh = elem.find("inherit")
     kwargs: dict = {
-        "inherit": _content(inh, chroot, visiting) if inh is not None else base_class
+        "inherit": _content(inh, unit) if inh is not None else base_class
     }
     class_name = elem.get("name")
     if class_name is not None:
         kwargs["name"] = string(class_name)
-    attrs = [c.get("name") for c in elem if c.tag == "attribute"]
-    defs = {c.get("name"): _content(c, chroot, visiting)
-            for c in elem if c.tag == "attribute"
-            and (list(c) or (c.text and c.text.strip()))}
+    attributes = [c for c in elem if c.tag == "attribute"]
+    defaults = {c.get("name"): _content(c, unit)
+                for c in attributes if _items(c)}
     # Methods must be stored as λself.body so that PGSNObject._apply_arg can
     # call (method)(self) to bind the receiver. This mirrors the DSL pattern:
     #   define_class(methods={'m': lambda_abs(self_var, body)})
-    _self_var = variable("self")
-    methods = {c.get("name"): lambda_abs(_self_var, _e_template(c, chroot, visiting))
+    self_var = variable("self")
+    methods = {c.get("name"): lambda_abs(self_var, _e_template(c, unit))
                for c in elem if c.tag == "method"}
-    if attrs:
-        kwargs["attributes"] = list_term(tuple(string(a) for a in attrs))
-    if defs:
-        kwargs["defaults"] = record(defs)
+    if attributes:
+        kwargs["attributes"] = list_term(
+            tuple(string(c.get("name")) for c in attributes))
+    if defaults:
+        kwargs["defaults"] = record(defaults)
     if methods:
         kwargs["methods"] = record(methods)
     return define_class(**kwargs)
 
 
-def _e_object(elem: ET.Element, chroot: _Chroot,
-              visiting: frozenset[Path]) -> Term:
+def _e_object(elem: ET.Element, unit: _Unit) -> Term:
     inst = elem.find("instanceOf")
     if inst is None:
         raise PGSNError("<object> requires <instanceOf>")
     return instantiate(
-        _content(inst, chroot, visiting),
-        record({c.get("name"): _content(c, chroot, visiting)
+        _content(inst, unit),
+        record({c.get("name"): _content(c, unit)
                 for c in elem if c.tag == "attribute"})
     )
 
 
-def _e_get(elem: ET.Element, chroot: _Chroot,
-           visiting: frozenset[Path]) -> Term:
+def _e_get(elem: ET.Element, unit: _Unit) -> Term:
     """Read a label off a record. The receiver is `of=`, or else the content.
 
     A record label is not a name in the sense the reserved-name check means:
@@ -1255,7 +1735,7 @@ def _e_get(elem: ET.Element, chroot: _Chroot,
             '<get key="description" of="node"/>')
     receiver = elem.get("of")
     if receiver is None:
-        return _content(elem, chroot, visiting)(string(key))
+        return _content(elem, unit)(string(key))
     if len(elem) or (elem.text and elem.text.strip()):
         raise PGSNError(
             "<get> has both an 'of' attribute and a receiver of its own; "
@@ -1263,8 +1743,7 @@ def _e_get(elem: ET.Element, chroot: _Chroot,
     return _resolve(receiver)(string(key))
 
 
-def _e_send(elem: ET.Element, chroot: _Chroot,
-            visiting: frozenset[Path]) -> Term:
+def _e_send(elem: ET.Element, unit: _Unit) -> Term:
     """Call a method. The receiver is `to=`, or else the first child.
 
     receiver("methodName") triggers PGSNObject._apply_arg, which applies self
@@ -1276,36 +1755,19 @@ def _e_send(elem: ET.Element, chroot: _Chroot,
         raise PGSNError(
             "<send> needs a 'method' naming the method to call, as in "
             '<send method="greet" to="obj"/>')
-    items = _items(elem)
-    receiver_name = elem.get("to")
-    if receiver_name is not None:
-        receiver = _resolve(receiver_name)
-    elif items:
-        receiver = _item(items[0], chroot, visiting)
-        items = items[1:]
-    else:
-        raise PGSNError("<send> needs a receiver")
-    bound = receiver(string(method))
-    positional, keyword = _split_args(items, chroot, visiting, "send")
-    if not positional and not keyword:
-        return bound
-    return bound(*positional, **keyword)
+    receiver, items = _callee(elem, unit, "to", "a receiver")
+    return _applied(receiver(string(method)), items, unit, "send")
 
 
-def _e_div(elem: ET.Element, chroot: _Chroot,
-           visiting: frozenset[Path]) -> Term:
-    return _block(_items(elem), chroot, visiting, "div")
+def _e_div(elem: ET.Element, unit: _Unit) -> Term:
+    return _block(_items(elem), unit, "div")
 
 
-def _e_list(elem: ET.Element, chroot: _Chroot,
-            visiting: frozenset[Path]) -> Term:
-    return list_term(tuple(
-        _content(li, chroot, visiting) for li in elem.findall("li")
-    ))
+def _e_list(elem: ET.Element, unit: _Unit) -> Term:
+    return list_term(tuple(_content(li, unit) for li in elem.findall("li")))
 
 
-def _e_dict(elem: ET.Element, chroot: _Chroot,
-            visiting: frozenset[Path]) -> Term:
+def _e_dict(elem: ET.Element, unit: _Unit) -> Term:
     children = list(elem)
     attrs = {}
     for i in range(0, len(children) - 1, 2):
@@ -1313,7 +1775,7 @@ def _e_dict(elem: ET.Element, chroot: _Chroot,
         key = dt.get("key") or (dt.text or "").strip()
         if not key:
             raise PGSNError("<dt> key must be a string literal")
-        attrs[key] = _content(dd, chroot, visiting)
+        attrs[key] = _content(dd, unit)
     return record(attrs)
 
 
@@ -1327,25 +1789,39 @@ _VALUE_TAGS = {"var", "num", "str", "builtin", "apply", "get", "send",
                "div", "ol", "dl", "template", "class", "object"}
 
 
-def _header_description(elem: ET.Element, chroot: _Chroot,
-                        visiting: frozenset[Path]) -> Term:
+class _Header(NamedTuple):
+    """The parts every GSN node is written with: what the node says, and the
+    annotations and challenges hung off it.
+
+    Each field is already a PGSN list, which is what the constructors in
+    `gsn.py` take. A node with no place for one of them -- a <Solution>
+    carries no <Context> -- simply leaves that field unread.
+    """
+
+    description: Term
+    contexts: Term
+    assumptions: Term
+    defeaters: Term
+
+
+def _header_description(elem: ET.Element, unit: _Unit) -> Term:
     """The description of a GSN header element.
 
     Written as a `<description>` element, as the element's leading text, or —
     when neither is present — as a single value child, so that a computed
     description can be given directly:
 
-        <Evidence><expr>f"test report {i}"</expr></Evidence>
+        <Solution><expr>f"test report {i}"</expr></Solution>
     """
     desc_elem = elem.find("description")
     if desc_elem is not None:
-        return _content(desc_elem, chroot, visiting)
+        return _content(desc_elem, unit)
     text = (elem.text or "").strip()
     if text:
-        return _text_to_term(text)
+        return _text_to_term(text, unit)
     values = [c for c in elem if c.tag in _VALUE_TAGS]
     if len(values) == 1:
-        return _expr(values[0], chroot, visiting)
+        return _expr(values[0], unit)
     if len(values) > 1:
         raise PGSNError(
             f"<{elem.tag}> has several value children; "
@@ -1353,54 +1829,65 @@ def _header_description(elem: ET.Element, chroot: _Chroot,
     return _text_to_term("")
 
 
-def _gsn_header(elem: ET.Element, chroot: _Chroot,
-                visiting: frozenset[Path]) -> tuple[Term, list, list, list]:
-    desc = _header_description(elem, chroot, visiting)
-    contexts = [_e_annotation(c, chroot, visiting, context)
-                for c in elem if c.tag == "Context"]
-    assumptions = [_e_annotation(c, chroot, visiting, assumption)
-                   for c in elem if c.tag == "Assumption"]
-    defeaters = [_e_defeater(c, chroot, visiting)
-                 for c in elem if c.tag in _DEFEATER_TAGS]
-    return desc, contexts, assumptions, defeaters
+def _gsn_header(elem: ET.Element, unit: _Unit) -> _Header:
+    """Read the parts of a GSN node that every GSN node has."""
+    return _Header(
+        description=_header_description(elem, unit),
+        contexts=list_term(tuple(_e_annotation(c, unit, context)
+                                 for c in elem if c.tag == "Context")),
+        assumptions=list_term(tuple(_e_annotation(c, unit, assumption)
+                                    for c in elem if c.tag == "Assumption")),
+        defeaters=list_term(tuple(_e_defeater(c, unit)
+                                  for c in elem if c.tag == "Defeater")))
 
 
-def _e_defeater(elem: ET.Element, chroot: _Chroot,
-                visiting: frozenset[Path]) -> Term:
+def _support_of(elem: ET.Element, unit: _Unit) -> Term:
+    """What supports a node: its first support-bearing child, or nothing.
+
+    A node with nothing under it is undeveloped, which is also what
+    `<undeveloped/>` says in so many words. Sub-goals written directly under a
+    node are gathered into one immediate strategy, that being the shorthand
+    for an inference which needs no name of its own.
+    """
+    body = [c for c in elem if c.tag in _SUPPORT_TAGS]
+    if not body:
+        return undeveloped
+    first = body[0]
+    match first.tag:
+        case "Strategy" | "Solution":
+            return _expr(first, unit)
+        case "Goal":
+            return immediate(list_term(tuple(
+                _e_goal(c, unit) for c in body if c.tag == "Goal")))
+        case "supportedBy":
+            return _content(first, unit)
+        case _:  # <undeveloped/>
+            return undeveloped
+
+
+def _e_defeater(elem: ET.Element, unit: _Unit) -> Term:
     """A defeater challenging the node that holds it.
 
     It is written like any other GSN node — a description, and optionally a
     support of its own and further defeaters challenging it in turn:
 
         <Defeater>hazard H4 is unmitigated
-          <Evidence>incident report 2026-03</Evidence>
+          <Solution>incident report 2026-03</Solution>
         </Defeater>
     """
-    desc, _, _, defeaters = _gsn_header(elem, chroot, visiting)
-    body = [c for c in elem if c.tag in _SUPPORT_TAGS]
-    support = undeveloped
-    if body:
-        first = body[0]
-        if first.tag in ("Strategy", "Evidence"):
-            support = _expr(first, chroot, visiting)
-        elif first.tag == "Goal":
-            support = immediate(list_term(tuple(
-                _e_goal(c, chroot, visiting) for c in body if c.tag == "Goal"
-            )))
-        elif first.tag == "supportedBy":
-            support = _content(first, chroot, visiting)
-    return defeater(description=desc, support=support,
-                    defeaters=list_term(tuple(defeaters)))
+    header = _gsn_header(elem, unit)
+    return defeater(description=header.description,
+                    support=_support_of(elem, unit),
+                    defeaters=header.defeaters)
 
 
-def _e_annotation(elem: ET.Element, chroot: _Chroot, visiting: frozenset[Path],
-                  ctor: Term) -> Term:
-    """
-    Context and Assumption are documentation nodes: each carries a statement
-    and nothing else. The statement can be written as plain text, as a
-    <description> child, or as an expression -- which is what `var=` and
-    `expr=` expand to -- and all three land in `description`.
-    ctor is the constructor (context or assumption).
+def _e_annotation(elem: ET.Element, unit: _Unit, ctor: Term) -> Term:
+    """An annotation built by `ctor`, which is `context` or `assumption`.
+
+    Both are documentation nodes: each carries a statement and nothing else.
+    The statement can be written as plain text, as a <description> child, or
+    as an expression -- which is what `var=` and `expr=` expand to -- and all
+    three land in `description`.
     """
     desc_elem = elem.find("description")
     other = [c for c in elem if c.tag != "description"]
@@ -1409,7 +1896,7 @@ def _e_annotation(elem: ET.Element, chroot: _Chroot, visiting: frozenset[Path],
             raise PGSNError(
                 f"<{elem.tag}> carries both a <description> and <{other[0].tag}>; "
                 f"it holds a single statement, so give it only one")
-        desc = _content(desc_elem, chroot, visiting)
+        desc = _content(desc_elem, unit)
     elif other:
         if elem.text and elem.text.strip():
             raise PGSNError(
@@ -1419,62 +1906,83 @@ def _e_annotation(elem: ET.Element, chroot: _Chroot, visiting: frozenset[Path],
             raise PGSNError(
                 f"<{elem.tag}> holds a single statement, but was given "
                 f"{len(other)} children")
-        desc = _expr(other[0], chroot, visiting)
+        desc = _expr(other[0], unit)
     else:
-        desc = _text_to_term((elem.text or "").strip())
+        desc = _text_to_term((elem.text or "").strip(), unit)
     return ctor(description=desc)
 
 
-def _e_goal(elem: ET.Element, chroot: _Chroot,
-            visiting: frozenset[Path]) -> Term:
-    desc, contexts, assumptions, defeaters = _gsn_header(elem, chroot, visiting)
-    body = [c for c in elem if c.tag in _SUPPORT_TAGS]
-    support = undeveloped
-    if body:
-        first = body[0]
-        if first.tag == "undeveloped":
-            support = undeveloped
-        elif first.tag in ("Strategy", "Evidence"):
-            support = _expr(first, chroot, visiting)
-        elif first.tag == "Goal":
-            support = immediate(list_term(tuple(
-                _e_goal(c, chroot, visiting) for c in body if c.tag == "Goal"
-            )))
-        elif first.tag == "supportedBy":
-            support = _content(first, chroot, visiting)
-    return goal(
-        description=desc,
-        contexts=list_term(tuple(contexts)),
-        assumptions=list_term(tuple(assumptions)),
-        defeaters=list_term(tuple(defeaters)),
-        support=support,
-    )
+def _e_goal(elem: ET.Element, unit: _Unit) -> Term:
+    """A goal: the claim, whatever supports it, and whatever is attached."""
+    header = _gsn_header(elem, unit)
+    return goal(description=header.description,
+                contexts=header.contexts,
+                assumptions=header.assumptions,
+                defeaters=header.defeaters,
+                support=_support_of(elem, unit))
 
 
-def _e_strategy(elem: ET.Element, chroot: _Chroot,
-                visiting: frozenset[Path]) -> Term:
-    desc, contexts, assumptions, defeaters = _gsn_header(
-        elem, chroot, visiting)
-    sub_goal_elems = [c for c in elem if c.tag == "Goal"]
-    sub_goals_elem = elem.find("subGoals")
-    if sub_goal_elems:
-        sub_goals = list_term(tuple(
-            _e_goal(c, chroot, visiting) for c in sub_goal_elems
-        ))
-    elif sub_goals_elem is not None:
-        sub_goals = _content(sub_goals_elem, chroot, visiting)
-    else:
-        raise PGSNError("<Strategy> requires sub-goals or <subGoals>")
-    return strategy(description=desc, sub_goals=sub_goals,
-                    contexts=list_term(tuple(contexts)),
-                    assumptions=list_term(tuple(assumptions)),
-                    defeaters=list_term(tuple(defeaters)))
+def _e_strategy(elem: ET.Element, unit: _Unit) -> Term:
+    """A strategy: the inference, and the sub-goals it breaks a claim into."""
+    header = _gsn_header(elem, unit)
+    return strategy(description=header.description,
+                    sub_goals=_sub_goals(elem, unit),
+                    contexts=header.contexts,
+                    assumptions=header.assumptions,
+                    defeaters=header.defeaters)
 
 
-def _e_evidence(elem: ET.Element, chroot: _Chroot,
-                visiting: frozenset[Path]) -> Term:
-    desc, _, _, defeaters = _gsn_header(elem, chroot, visiting)
-    return evidence(description=desc, defeaters=list_term(tuple(defeaters)))
+def _sub_goals(elem: ET.Element, unit: _Unit) -> Term:
+    """The sub-goals of a strategy, written out or computed.
+
+    Writing them out as <Goal> children is the common case; <subGoals> holds a
+    value instead, which is how a strategy over a generated list is expressed.
+    An <undeveloped/> stands among the sub-goals for the part of the strategy
+    not developed yet, which is how a strategy is left undeveloped: GSN v3
+    lets the undeveloped decorator apply to strategies as well as goals.
+    """
+    written = [c for c in elem if c.tag in ("Goal", "undeveloped")]
+    if written:
+        return list_term(tuple(_e_goal(c, unit) if c.tag == "Goal"
+                               else undeveloped for c in written))
+    computed = elem.find("subGoals")
+    if computed is not None:
+        # <subGoals> requires a list, so its empty content is the empty
+        # list rather than the empty string.
+        return _content(computed, unit) if _items(computed) else empty
+    raise PGSNError("<Strategy> requires sub-goals or <subGoals>")
+
+
+def _e_solution(elem: ET.Element, unit: _Unit) -> Term:
+    """Solution: a reference to an evidence item, and whatever challenges it."""
+    header = _gsn_header(elem, unit)
+    return solution(description=header.description,
+                    defeaters=header.defeaters)
+
+
+# ------------------------------------------------------------------ #
+# The elements that stand for a value
+# ------------------------------------------------------------------ #
+
+_COMPILERS = {
+    "var":      _e_var,
+    "from":     _e_from,
+    "num":      _e_num,
+    "str":      _e_str,
+    "template": _e_template,
+    "apply":    _e_apply,
+    "class":    _e_class,
+    "object":   _e_object,
+    "get":      _e_get,
+    "send":     _e_send,
+    "div":      _e_div,
+    "ol":       _e_list,
+    "dl":       _e_dict,
+    "Goal":     _e_goal,
+    "Strategy": _e_strategy,
+    "Solution": _e_solution,
+    "Defeater": _e_defeater,
+}
 
 
 # ------------------------------------------------------------------ #
@@ -1516,15 +2024,3 @@ def load_xml_string(xml: str, *, config: Config | None = None,
     if steps is None:
         return compiled.fully_eval()
     return compiled.fully_eval(steps=steps)
-
-
-def load(path: str | Path, *, config: Config | None = None) -> Term:
-    """Deprecated alias of `load_xml`."""
-    return load_xml(path, config=config)
-
-
-def load_string(xml: str, base_dir: str | Path | None = None, *,
-                config: Config | None = None, jail: str | None = None) -> Term:
-    """Deprecated alias of `load_xml_string`, retaining the `base_dir` form."""
-    return compile_pgsn_string(xml, base_dir, config=config,
-                               jail=jail).fully_eval()

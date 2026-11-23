@@ -172,3 +172,94 @@ def test_the_single_import_form_still_works(project):
         '<from file="lib.xml" import="b" as="renamed">'
         '<arg name="prefix">p</arg></from><var name="renamed"/>')))
     assert result == "p b"
+
+
+# A module is closed: it receives values from its importer only through its
+# parameters. A name it leaves free would be bound by whatever the importer
+# has in scope where the module is embedded, so the same component would argue
+# differently in different systems (issue-drafts 10).
+OPEN_MODULE = '<PGSNModule><def name="leak"><var name="secret"/></def></PGSNModule>'
+
+
+def test_a_module_with_a_free_name_is_rejected(project, tmp_path):
+    (tmp_path / "open.xml").write_text(OPEN_MODULE)
+    with pytest.raises(PGSNError, match=r"'open\.xml' uses 'secret'"):
+        compile_pgsn(project(
+            '<def name="secret">the importer\'s value</def>'
+            '<from file="open.xml" import="leak"/><var name="leak"/>'))
+
+
+def test_a_free_name_is_rejected_when_the_module_is_a_value(project, tmp_path):
+    (tmp_path / "open.xml").write_text(OPEN_MODULE)
+    with pytest.raises(PGSNError, match=r"'open\.xml' uses 'secret'"):
+        compile_pgsn(project('<get key="leak"><from file="open.xml"/></get>'))
+
+
+def test_a_free_name_is_rejected_however_deep_the_module(project, tmp_path):
+    """The module in the middle binds the name, but it cannot lend it to the
+    module it imports: that one is closed or rejected on its own."""
+    (tmp_path / "open.xml").write_text(OPEN_MODULE)
+    (tmp_path / "middle.xml").write_text(
+        '<PGSNModule><def name="secret">the middle value</def>'
+        '<from file="open.xml" import="leak"/></PGSNModule>')
+    with pytest.raises(PGSNError, match=r"'open\.xml' uses 'secret'"):
+        compile_pgsn(project('<from file="middle.xml" import="leak"/>'
+                             '<var name="leak"/>'))
+
+
+def test_a_module_may_pass_its_parameters_on(project, tmp_path):
+    """Parameters, its own definitions, its imports and the builtins are what
+    a closed module may use."""
+    (tmp_path / "middle.xml").write_text(
+        '<PGSNModule><param name="prefix"/>'
+        '<from file="lib.xml" import="a"><arg name="prefix" var="prefix"/></from>'
+        '<def name="both"><ol><li><var name="a"/></li>'
+        '<li><apply template="plus"><arg><num>1</num></arg>'
+        '<arg><num>2</num></arg></apply></li>'
+        '</ol></def></PGSNModule>')
+    result = pgsn.python_value(pgsn.load_xml(project(
+        '<from file="middle.xml" import="both"><arg name="prefix">p</arg></from>'
+        '<var name="both"/>')))
+    assert result == ["p a", 3]
+
+
+# A file is compiled once however many times it is imported, and bound once at
+# the head of the entry document (issue-drafts 11). Embedding it at every
+# import made the compiled term grow with the number of import paths, which a
+# chain of files each importing the next twice makes exponential in its depth:
+# depth 12 took two seconds to compile, and nothing bounded it, since the step
+# budget applies only to evaluation.
+def _write_chain(directory, depth: int) -> None:
+    (directory / f"m{depth}.xml").write_text(
+        '<PGSNModule><def name="v">leaf</def></PGSNModule>')
+    for i in range(depth - 1, -1, -1):
+        (directory / f"m{i}.xml").write_text(
+            f'<PGSNModule><from file="m{i + 1}.xml" import="v" as="a"/>'
+            f'<from file="m{i + 1}.xml" import="v" as="b"/>'
+            f'<def name="v"><var name="b"/></def></PGSNModule>')
+
+
+def test_the_compiled_term_grows_with_the_files_not_the_import_paths(
+        project, tmp_path):
+    def size(depth):
+        _write_chain(tmp_path, depth)
+        return nodes(compile_pgsn(project(
+            '<from file="m0.xml" import="v"/><var name="v"/>')))
+
+    # One more file adds a fixed amount; along import paths it would double.
+    assert size(12) - size(11) == size(11) - size(10)
+
+
+def test_a_deep_chain_of_imports_evaluates(project, tmp_path):
+    _write_chain(tmp_path, 40)
+    assert pgsn.python_value(pgsn.load_xml(project(
+        '<from file="m0.xml" import="v"/><var name="v"/>'))) == "leaf"
+
+
+def test_a_module_imported_twice_takes_each_import_s_arguments(project):
+    """The module is shared; what it is applied to is not."""
+    result = pgsn.python_value(pgsn.load_xml(project(
+        '<from file="lib.xml" import="a" as="x"><arg name="prefix">p</arg></from>'
+        '<from file="lib.xml" import="a" as="y"><arg name="prefix">q</arg></from>'
+        '<ol><li><var name="x"/></li><li><var name="y"/></li></ol>')))
+    assert result == ["p a", "q a"]

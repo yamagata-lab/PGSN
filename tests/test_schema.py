@@ -55,15 +55,15 @@ REJECTED = {
     "an element the language does not have":
         "<PGSN><bogus/></PGSN>",
     "a misspelled Defeater, which the compiler would drop in silence":
-        "<PGSN><Goal>g<Rebuttal>r</Rebuttal><Evidence>e</Evidence></Goal></PGSN>",
+        "<PGSN><Goal>g<Rebuttal>r</Rebuttal><Solution>e</Solution></Goal></PGSN>",
     "a <def> with nothing to bind":
         "<PGSN><def>x</def>v</PGSN>",
     "a <get> with no key":
         '<PGSN><get of="r"/></PGSN>',
     "a <send> with no method":
         '<PGSN><send to="r"/></PGSN>',
-    "a <Context> on an <Evidence>, which cannot hold one":
-        "<PGSN><Evidence>e<Context>c</Context></Evidence></PGSN>",
+    "a <Context> on a <Solution>, which cannot hold one":
+        "<PGSN><Solution>e<Context>c</Context></Solution></PGSN>",
     "a <Strategy> with no sub-goals":
         "<PGSN><Strategy>s</Strategy></PGSN>",
     "an <if> with no <else>":
@@ -82,3 +82,21 @@ def test_the_schema_rejects(source, tmp_path):
     path = tmp_path / "doc.xml"
     path.write_text(source)
     assert VALIDATE(path).returncode != 0
+
+
+def test_the_schema_accepts_an_undeveloped_strategy(tmp_path):
+    """GSN v3 lets a strategy be undeveloped; an <undeveloped/> stands among
+    its sub-goals for the part not developed yet."""
+    path = tmp_path / "doc.xml"
+    path.write_text("<PGSN><Goal>g<Strategy>s<undeveloped/></Strategy></Goal></PGSN>")
+    result = VALIDATE(path)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_the_schema_accepts_an_empty_arg(tmp_path):
+    """An empty <arg/> calls a template with its keyword parameters at their
+    defaults."""
+    path = tmp_path / "doc.xml"
+    path.write_text('<PGSN><apply template="f"><arg>a</arg><arg/></apply></PGSN>')
+    result = VALIDATE(path)
+    assert result.returncode == 0, result.stdout + result.stderr

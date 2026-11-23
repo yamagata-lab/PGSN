@@ -44,7 +44,7 @@ def test_it_works_wherever_a_value_is_expected(source, expected):
 
 def test_it_works_in_a_gsn_node():
     result = run('<Goal><description expr=\'f"requirement {i} is met"\'/>'
-                 '<Evidence expr=\'f"test report {i}"\'/></Goal>', TWO)
+                 '<Solution expr=\'f"test report {i}"\'/></Goal>', TWO)
     assert result["description"] == "requirement 2 is met"
     assert result["support"]["description"] == "test report 2"
 
@@ -77,7 +77,7 @@ def test_the_attribute_conflicts_with_content_of_its_own():
 
 def test_the_expression_is_checked_like_any_other():
     """It goes through the same expansion, so the same rules apply."""
-    with pytest.raises(PGSNError, match="Call is not allowed"):
-        run('<ol><li expr="f(x)"/></ol>')
+    with pytest.raises(PGSNError, match="Cannot parse <expr>"):
+        run('<ol><li expr="xs[0]"/></ol>')
     with pytest.raises(PGSNError, match="not a valid name"):
         run('<ol><li expr="_plus"/></ol>')

@@ -1,7 +1,4 @@
-from pprint import pprint
-
-from pgsn.gsn import *
-from pgsn.dsl import python_value
+from pgsn import *
 
 main = goal(
     description="System is secure",
@@ -9,9 +6,9 @@ main = goal(
         description="Break into sub-goals",
         sub_goals=[
             goal(description="Input validated",
-                 support=evidence(description="Static analysis passed")),
+                 support=solution(description="Static analysis passed")),
             goal(description="Output sanitized",
-                 support=evidence(description="Fuzzing test succeeded"))
+                 support=solution(description="Fuzzing test succeeded"))
         ]
     )
 )

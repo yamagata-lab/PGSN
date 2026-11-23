@@ -3,7 +3,7 @@ from pprint import pprint
 from typing import Dict, List, Optional, Tuple
 
 from pgsn.dsl import *
-from pgsn.gsn import goal, evidence, context, strategy, assumption, undeveloped
+from pgsn.gsn import goal, solution, context, strategy, assumption, undeveloped
 import pgsn
 
 SUPPORT_PRIORITY = ["Strategy", "Evidence", "Goal", "Assumption", "Undeveloped"]
@@ -42,7 +42,7 @@ def build_gsn_from_json(json_path: str) -> Tuple[list[object], dict[str, object]
             obj = context(description = get_desc(node))
 
         elif typ == "Evidence":
-            obj = evidence(description = get_desc(node))
+            obj = solution(description = get_desc(node))
 
         elif typ == "Assumption":
             obj = assumption(description = get_desc(node))
@@ -91,7 +91,7 @@ def build_gsn_from_json(json_path: str) -> Tuple[list[object], dict[str, object]
 
             obj = goal(**kwargs)
 
-            obj2 = goal(description = "2", contexts = ["2は2である"], support = evidence(description="2は正しい"))
+            obj2 = goal(description = "2", contexts = ["2は2である"], support = solution(description="2は正しい"))
             # pprint(python_value(obj.fully_eval()))
             # pprint(python_value(obj2.fully_eval()))
 

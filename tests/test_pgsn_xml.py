@@ -5,7 +5,7 @@ from pathlib import Path
 import pgsn
 from pgsn.dsl import python_value
 from pgsn.pgsn_term import LambdaInterpreterError
-from pgsn.pgsn_xml import compile_pgsn, PGSNError, load_string
+from pgsn.pgsn_xml import compile_pgsn, PGSNError, load_xml_string
 from pgsn.gsn import gsn_tree
 
 
@@ -27,7 +27,7 @@ def gsn_type(result: dict) -> str:
     every nesting level, unlike '__parent_classes__' which to_python only
     attaches to the top-level term.
     """
-    gsn = {"Goal", "Strategy", "Evidence", "Context", "Assumption", "Undeveloped"}
+    gsn = {"Goal", "Strategy", "Solution", "Context", "Assumption", "Undeveloped"}
     for k in result:
         if k.startswith("__") and k.endswith("__"):
             name = k.strip("_")
@@ -274,7 +274,7 @@ def test_type_of_is_structural(tmp_path):
             <attribute name="defeaters"/>
             <attribute name="owner"/>
         </def>
-        <def name="n" typeOf="Evidence">
+        <def name="n" typeOf="Solution">
             <object>
                 <instanceOf var="MyNode"/>
                 <attribute name="description">an audit</attribute>
@@ -291,11 +291,11 @@ def test_type_of_stalls_when_a_label_is_missing(tmp_path):
     """An evidence node carries no `support`, so it does not satisfy Goal. A
     failed check leaves the document unreduced, and the readback says where.
     """
-    with pytest.raises(ValueError, match="unexpected term type"):
+    with pytest.raises(ValueError, match="Guard: the condition is false"):
         run("""
         <PGSN>
             <def name="e" typeOf="Goal">
-                <Evidence><description>a report</description></Evidence>
+                <Solution><description>a report</description></Solution>
             </def>
             <var name="e"/>
         </PGSN>""", tmp_path)
@@ -332,11 +332,11 @@ def test_there_is_no_ul_element(source, tmp_path):
 def test_evidence(tmp_path):
     result = run("""
     <PGSN>
-        <Evidence>
+        <Solution>
             <description>test report passed</description>
-        </Evidence>
+        </Solution>
     </PGSN>""", tmp_path)
-    assert gsn_type(result) == "Evidence"
+    assert gsn_type(result) == "Solution"
     assert result["description"] == "test report passed"
 
 
@@ -356,6 +356,15 @@ def test_goal_undeveloped(tmp_path):
     assert result["description"] == "system is safe"
 
 
+def test_a_goal_without_support_is_undeveloped(tmp_path):
+    """Not a compile error: the compiler checks the XML, and what the
+    structure lacks is reported with the output."""
+    bare = run("<PGSN><Goal>system is safe</Goal></PGSN>", tmp_path)
+    written = run("<PGSN><Goal>system is safe<undeveloped/></Goal></PGSN>",
+                  tmp_path)
+    assert bare == written
+
+
 # ------------------------------------------------------------------ #
 # GSN: Goal → Strategy → Evidence
 # ------------------------------------------------------------------ #
@@ -369,9 +378,9 @@ def test_goal_strategy_evidence(tmp_path):
                 argument text
                 <Goal>
                     <description>input validated</description>
-                    <Evidence>
+                    <Solution>
                         <description>static analysis passed</description>
-                    </Evidence>
+                    </Solution>
                 </Goal>
             </Strategy>
         </Goal>
@@ -543,9 +552,9 @@ def test_supported_by_var(tmp_path):
     result = run("""
     <PGSN>
         <def name="ev">
-            <Evidence>
+            <Solution>
                 <description>audit log</description>
-            </Evidence>
+            </Solution>
         </def>
         <Goal>
             <description>system logged</description>
@@ -553,7 +562,7 @@ def test_supported_by_var(tmp_path):
         </Goal>
     </PGSN>""", tmp_path)
     assert gsn_type(result) == "Goal"
-    assert gsn_type(result["support"]) == "Evidence"
+    assert gsn_type(result["support"]) == "Solution"
 
 
 # ------------------------------------------------------------------ #
@@ -567,11 +576,27 @@ def test_unsafe_path(tmp_path):
         compile_pgsn(p)
 
 
-def test_missing_value(tmp_path):
-    p = tmp_path / "test.pgsn"
-    p.write_text("<PGSN></PGSN>")
-    with pytest.raises(PGSNError):
-        compile_pgsn(p)
+@pytest.mark.parametrize("source, expected", [
+    ("<PGSN></PGSN>", ""),
+    ("<PGSN><div/></PGSN>", ""),
+    ("<PGSN><ol><li/><li>  </li></ol></PGSN>", ["", ""]),
+    ("<PGSN><dl><dt>k</dt><dd/></dl></PGSN>", {"k": ""}),
+    ('<PGSN><def name="x"/><var name="x"/></PGSN>', ""),
+], ids=["document", "div", "li", "dd", "def"])
+def test_empty_content_is_the_empty_string(source, expected, tmp_path):
+    """In XML an element with nothing in it holds the empty text, and bare
+    text is a string; what the empty string fails to be is for the output to
+    report, not the compiler."""
+    assert run(source, tmp_path) == expected
+
+
+@pytest.mark.parametrize("source", [
+    "<PGSN><var/></PGSN>",
+    '<PGSN><def name="x" as="var">y</def><var name="x"/></PGSN>',
+], ids=["a var with no name", "as=var on a def"])
+def test_a_var_without_a_name_says_so(source, tmp_path):
+    with pytest.raises(PGSNError, match="<var> needs a 'name' attribute"):
+        run(source, tmp_path)
 
 
 def test_unknown_expression(tmp_path):
@@ -606,14 +631,14 @@ class TestPositionalParams:
     keyword args as one trailing Record.
 
     Pipeline under test (mirrors examples/map_term.py):
-        load_string(xml) -> fully-evaluated Term
+        load_xml_string(xml) -> fully-evaluated Term
         pgsn.gsn.gsn_tree(term) -> GSN tree (where a leftover App used to surface
                                    the "does not normalize a Python value" error)
     """
 
     def _to_tree(self, xml: str):
         """Compile + fully_eval, then build the GSN tree. Errors propagate."""
-        term = load_string(xml)
+        term = load_xml_string(xml)
         tree = gsn_tree(term)
         tree.show()
         return tree
@@ -623,7 +648,7 @@ class TestPositionalParams:
         <PGSN>
             <def name="goalTemplate" as="template">
                 <param name="desc" positional="true"/>
-                <Goal><description var="desc"/><Evidence><description var="desc"/></Evidence></Goal>
+                <Goal><description var="desc"/><Solution><description var="desc"/></Solution></Goal>
             </def>
             <def name="goals" as="apply">
                 <var name="map_term"/>
@@ -643,7 +668,7 @@ class TestPositionalParams:
         <PGSN>
             <def name="mk" as="template">
                 <param name="desc"/>
-                <Goal><description var="desc"/><Evidence><description var="desc"/></Evidence></Goal>
+                <Goal><description var="desc"/><Solution><description var="desc"/></Solution></Goal>
             </def>
             <def name="g" as="apply"><var name="mk"/><arg name="desc">No hardcoded passwords</arg></def>
             <var name="g"/>
@@ -657,7 +682,7 @@ class TestPositionalParams:
             <def name="mk" as="template">
                 <param name="desc" positional="true"/>
                 <param name="ev"/>
-                <Goal><description var="desc"/><Evidence><description var="ev"/></Evidence></Goal>
+                <Goal><description var="desc"/><Solution><description var="ev"/></Solution></Goal>
             </def>
             <def name="g" as="apply"><var name="mk"/><arg>System is secure</arg><arg name="ev">Audit passed</arg></def>
             <var name="g"/>
@@ -677,7 +702,7 @@ class TestPositionalParams:
         </PGSN>
         """
         with pytest.raises(PGSNError):
-            load_string(xml)
+            load_xml_string(xml)
 
     def test_positional_with_default_rejected(self):
         xml = """
@@ -690,7 +715,7 @@ class TestPositionalParams:
         </PGSN>
         """
         with pytest.raises(PGSNError):
-            load_string(xml)
+            load_xml_string(xml)
 
 
 # ------------------------------------------------------------------ #
@@ -722,7 +747,7 @@ def test_template_inner_defs_gsn(tmp_path):
         <def name="makeGoal">
             <template>
                 <param name="desc"/>
-                <def name="ev"><Evidence><description var="desc"/></Evidence></def>
+                <def name="ev"><Solution><description var="desc"/></Solution></def>
                 <Goal>
                     <description var="desc"/>
                     <supportedBy var="ev"/>
@@ -733,7 +758,7 @@ def test_template_inner_defs_gsn(tmp_path):
     </PGSN>""", tmp_path)
     assert gsn_type(result) == "Goal"
     assert result["description"] == "system is safe"
-    assert gsn_type(result["support"]) == "Evidence"
+    assert gsn_type(result["support"]) == "Solution"
 
 
 def test_template_inner_defs_equiv_div(tmp_path):
@@ -796,7 +821,7 @@ def test_gsn_text_lift_goal(tmp_path):
     <PGSN>
         <Goal>
             system is secure
-            <Evidence>static analysis passed</Evidence>
+            <Solution>static analysis passed</Solution>
         </Goal>
     </PGSN>""", tmp_path)
     assert gsn_type(result) == "Goal"
@@ -848,12 +873,12 @@ def test_text_expansion_in_evidence(tmp_path):
         <def name="f">
             <template>
                 <param name="c"/>
-                <Evidence>Test doc for {c}</Evidence>
+                <Solution>Test doc for {c}</Solution>
             </template>
         </def>
         <apply><var name="f"/><arg name="c">C1</arg></apply>
     </PGSN>""", tmp_path)
-    assert gsn_type(result) == "Evidence"
+    assert gsn_type(result) == "Solution"
     assert result["description"] == "Test doc for C1"
 
 
@@ -864,7 +889,7 @@ def test_text_expansion_multiple_fields(tmp_path):
             <template>
                 <param name="a"/>
                 <param name="b"/>
-                <Evidence>{a} and {b}</Evidence>
+                <Solution>{a} and {b}</Solution>
             </template>
         </def>
         <apply>
@@ -880,7 +905,7 @@ def test_text_expansion_escaped_braces(tmp_path):
     # {{ and }} are Python str.format escapes for literal braces.
     result = run("""
     <PGSN>
-        <Evidence>{{not a var}}</Evidence>
+        <Solution>{{not a var}}</Solution>
     </PGSN>""", tmp_path)
     assert result["description"] == "{not a var}"
 
@@ -889,7 +914,7 @@ def test_text_no_expansion_without_braces(tmp_path):
     # Plain text without {} must pass through unchanged.
     result = run("""
     <PGSN>
-        <Evidence>plain text no braces</Evidence>
+        <Solution>plain text no braces</Solution>
     </PGSN>""", tmp_path)
     assert result["description"] == "plain text no braces"
 
@@ -919,14 +944,14 @@ def test_var_attribute_on_arg(tmp_path):
 def test_var_attribute_on_supportedBy(tmp_path):
     result = run("""
     <PGSN>
-        <def name="ev"><Evidence>audit passed</Evidence></def>
+        <def name="ev"><Solution>audit passed</Solution></def>
         <Goal>
             logged
             <supportedBy var="ev"/>
         </Goal>
     </PGSN>""", tmp_path)
     assert gsn_type(result) == "Goal"
-    assert gsn_type(result["support"]) == "Evidence"
+    assert gsn_type(result["support"]) == "Solution"
 
 
 def test_var_attribute_on_subGoals(tmp_path):
@@ -989,13 +1014,13 @@ def test_apply_template_positional(tmp_path):
     <PGSN>
         <def name="wrap" as="template">
             <param name="x" positional="true"/>
-            <Evidence>{x}</Evidence>
+            <Solution>{x}</Solution>
         </def>
         <apply template="wrap">
             <arg>component A</arg>
         </apply>
     </PGSN>""", tmp_path)
-    assert gsn_type(result) == "Evidence"
+    assert gsn_type(result) == "Solution"
     assert result["description"] == "component A"
 
 
@@ -1033,6 +1058,105 @@ def test_apply_template_builtin(tmp_path):
         </apply>
     </PGSN>""", tmp_path)
     assert result == "yes"
+
+
+# ------------------------------------------------------------------ #
+# An empty <arg/> passes the keyword record with nothing in it
+# ------------------------------------------------------------------ #
+
+DEFAULTED = """
+<PGSN>
+    <def name="f" as="template">
+        <param name="x">default x</param>
+        <param name="y">default y</param>
+        <dl><dt>x</dt><dd var="x"/><dt>y</dt><dd var="y"/></dl>
+    </def>
+    {call}
+</PGSN>"""
+
+
+def test_empty_arg_takes_every_default(tmp_path):
+    result = run(DEFAULTED.format(
+        call='<apply template="f"><arg/></apply>'), tmp_path)
+    assert result == {"x": "default x", "y": "default y"}
+
+
+def test_empty_arg_is_the_empty_record(tmp_path):
+    with_empty_arg = run(DEFAULTED.format(
+        call='<apply template="f"><arg/></apply>'), tmp_path)
+    with_empty_record = run(DEFAULTED.format(
+        call='<apply template="f"><arg><dl/></arg></apply>'), tmp_path)
+    assert with_empty_arg == with_empty_record
+
+
+def test_empty_arg_beside_a_keyword_arg(tmp_path):
+    result = run(DEFAULTED.format(
+        call='<apply template="f"><arg/><arg name="y">given</arg></apply>'),
+        tmp_path)
+    assert result == {"x": "default x", "y": "given"}
+
+
+def test_empty_arg_after_a_positional_arg(tmp_path):
+    result = run("""
+    <PGSN>
+        <def name="f" as="template">
+            <param name="p" positional="true"/>
+            <param name="k">default k</param>
+            <dl><dt>p</dt><dd var="p"/><dt>k</dt><dd var="k"/></dl>
+        </def>
+        <apply template="f"><arg>given p</arg><arg/></apply>
+    </PGSN>""", tmp_path)
+    assert result == {"p": "given p", "k": "default k"}
+
+
+def test_positional_arg_after_an_empty_arg_is_an_error(tmp_path):
+    with pytest.raises(PGSNError, match="positional arg after keyword arg"):
+        run(DEFAULTED.format(
+            call='<apply template="f"><arg/><arg>late</arg></apply>'),
+            tmp_path)
+
+
+def test_empty_arg_calls_a_method_with_its_defaults(tmp_path):
+    result = run("""
+    <PGSN>
+        <def name="Greeter" as="class">
+            <method name="greet">
+                <param name="whom">world</param>
+                <var name="whom"/>
+            </method>
+        </def>
+        <def name="g" as="object"><instanceOf var="Greeter"/></def>
+        <send method="greet" to="g"><arg/></send>
+    </PGSN>""", tmp_path)
+    assert result == "world"
+
+
+@pytest.mark.parametrize("arg", ['<arg name="x"/>', '<arg name="x"></arg>'])
+def test_an_empty_named_arg_leaves_its_parameter_at_the_default(arg, tmp_path):
+    """An <arg> with nothing in it passes nothing, so the parameter takes its
+    default, written either way."""
+    result = run(DEFAULTED.format(
+        call=f'<apply template="f">{arg}<arg name="y">given</arg></apply>'),
+        tmp_path)
+    assert result == {"x": "default x", "y": "given"}
+
+
+def test_an_empty_arg_written_open_and_closed_is_the_same(tmp_path):
+    assert (run(DEFAULTED.format(call='<apply template="f"><arg></arg></apply>'),
+                tmp_path)
+            == run(DEFAULTED.format(call='<apply template="f"><arg/></apply>'),
+                   tmp_path))
+
+
+def test_an_empty_sub_goals_is_the_empty_list(tmp_path):
+    """<subGoals> requires a list, so its empty content is the empty list,
+    which the GSN check reports."""
+    term = pgsn.load_xml_string(
+        "<PGSN><Goal>g<Strategy>s<subGoals/></Strategy></Goal></PGSN>")
+    value = python_value(term.fully_eval())
+    assert value["support"]["sub_goals"] == []
+    assert [v.message for v in pgsn.gsn_violations(term.fully_eval())] == [
+        "a strategy relates a goal to supporting goals, but this one has none"]
 
 
 # ------------------------------------------------------------------ #

@@ -372,8 +372,16 @@ def test_public_names_are_importable():
 def test_internals_are_not_exported():
     for hidden in ("json_dumps", "json_loads", "compile_pgsn",
                    "compile_pgsn_string", "dsl", "gsn", "pgsn_term",
-                   "pgsn_xml", "cli", "helpers", "dcom"):
+                   "pgsn_xml", "cli", "helpers"):
         assert hidden not in pgsn.__all__
+
+
+def test_the_step_limit_is_caught_by_its_public_name():
+    x = pgsn.variable("x")
+    omega = pgsn.lambda_abs(x, x(x))
+    with pytest.raises(pgsn.LambdaInterpreterError,
+                       match="Reduction did not terminate"):
+        omega(omega).fully_eval(steps=100)
 
 
 # ------------------------------------------------------------------ #
@@ -429,7 +437,7 @@ def test_cli_doc_without_jail_fails(tmp_path):
 def test_cli_rejects_jail_for_python_input(tmp_path):
     src = write(tmp_path / "main.py", "main = 1\n")
     result = CliRunner().invoke(
-        cli, ["doc", str(src), "--jail", f"lib={tmp_path}"])
+        cli, ["doc", str(src), "-o", "-", "--jail", f"lib={tmp_path}"])
     assert result.exit_code != 0
     assert "--jail applies to .xml input only" in result.output
 
@@ -437,13 +445,13 @@ def test_cli_rejects_jail_for_python_input(tmp_path):
 def test_cli_rejects_jail_for_json_input(tmp_path):
     src = write(tmp_path / "main.json", '{"__type__": "String", "value": "x"}')
     result = CliRunner().invoke(
-        cli, ["doc", str(src), "--jail", f"lib={tmp_path}"])
+        cli, ["doc", str(src), "-o", "-", "--jail", f"lib={tmp_path}"])
     assert result.exit_code != 0
     assert "--jail applies to .xml input only" in result.output
 
 
 def test_cli_rejects_malformed_jail(tmp_path):
     src = write(tmp_path / "main.xml", "<PGSN>hi</PGSN>")
-    result = CliRunner().invoke(cli, ["doc", str(src), "--jail", "lib"])
+    result = CliRunner().invoke(cli, ["doc", str(src), "-o", "-", "--jail", "lib"])
     assert result.exit_code != 0
     assert "NAME=PATH" in result.output

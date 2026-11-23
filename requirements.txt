@@ -1,6 +1,7 @@
-attrs==25.3.0
-cattrs==25.2.0
-click==8.2.1
+# Exact versions the test suite passes with. The ranges PGSN accepts are in
+# pyproject.toml.
+attrs==26.1.0
+cattrs==26.1.0
+click==8.4.2
 graphviz==0.21
 treelib==1.7.1
-typeguard==4.4.4

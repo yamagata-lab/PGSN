@@ -24,8 +24,8 @@ def test_map_term_does_not_reduce_its_function_first():
 
 
 def test_equal_does_not_see_a_bound_variable():
-    # With x unknown, equal compared the variable itself with "a" and fixed
-    # the answer to "no" before any element was substituted.
+    # Evaluated under the abstraction, with x unknown, equal would compare the
+    # variable itself with "a" and fix the answer to "no" for every element.
     x = variable("x")
     g = lambda_abs(x, if_then_else(equal(x)("a"))("yes")("no"))
     items = cast(["a"], is_named=True)

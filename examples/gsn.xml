@@ -3,8 +3,8 @@
         System is secure
         <Strategy>
             Break into sub-goals
-            <Goal>Input validated<Evidence>Static analysis passed</Evidence></Goal>
-            <Goal>Output sanitized<Evidence>Fuzzing test succeeded</Evidence></Goal>
+            <Goal>Input validated<Solution>Static analysis passed</Solution></Goal>
+            <Goal>Output sanitized<Solution>Fuzzing test succeeded</Solution></Goal>
         </Strategy>
     </Goal>
 </PGSN>

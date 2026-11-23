@@ -22,19 +22,19 @@
   <def name="G_authControl" as="Goal">
     HMI control functions require authentication (IEC 62443 SR 1.1)
     <Context>IEC 62443-3-3:2013, SR 1.1: Identification and Authentication Control</Context>
-    <Evidence>Role-based authentication implementation and test report</Evidence>
+    <Solution>Role-based authentication implementation and test report</Solution>
   </def>
 
   <def name="G_netSegment" as="Goal">
     Control network is segmented from corporate network (IEC 62443 SR 5.1)
     <Context>IEC 62443-3-3:2013, SR 5.1: Network Segmentation</Context>
-    <Evidence>Network architecture diagram and firewall rule audit</Evidence>
+    <Solution>Network architecture diagram and firewall rule audit</Solution>
   </def>
 
   <def name="G_replayProtect" as="Goal">
     Control commands are protected against replay attacks (IEC 62443 SR 3.3)
     <Context>IEC 62443-3-3:2013, SR 3.3: Security Functionality Verification</Context>
-    <Evidence>Sequence number and timestamp validation test report</Evidence>
+    <Solution>Sequence number and timestamp validation test report</Solution>
   </def>
 
   <Goal>

@@ -23,7 +23,7 @@ from pgsn.pgsn_xml import _BUILTINS, compile_pgsn_string
 XML_CLASS_ALIASES = {
     "Goal": "goal_class",
     "Strategy": "strategy_class",
-    "Evidence": "evidence_class",
+    "Solution": "solution_class",
     "Context": "context_class",
     "Assumption": "assumption_class",
     "GSN": "gsn_class",

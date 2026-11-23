@@ -13,12 +13,18 @@ evaluated as far as it goes, and it separates "no answer" from a wrong answer
 or a crash.
 """
 
+import re
+
 import pytest
 
 from pgsn import pgsn_term
-from pgsn.dsl import (base_class, define_class, div, equal, integer,
-                      lambda_abs, less_than, list_term, mod, python_value,
-                      record, string, true, undefined, variable)
+from pgsn.dsl import (base_class, cons, define_class, div, empty, equal,
+                      format_string, if_then_else, index, integer, integer_sum,
+                      is_empty, is_subtype,
+                      lambda_abs,
+                      less_than, list_term, map_term, minus, mod, plus,
+                      python_value, record, remove_attribute, string, true,
+                      undefined, variable)
 from pgsn.gsn import goal, gsn_tree, undeveloped
 
 _x = variable('x')
@@ -59,6 +65,16 @@ STUCK = {
                                                                methods={'a': _identity}),
     "an attribute already inherited as a method": define_class(inherit=_with_a_method,
                                                                attributes=['m']),
+    # Between the braces is a label, not Python: no attribute, index,
+    # conversion or format specification is read out of it.
+    "an attribute of a field in a format string":
+        format_string('{b.upper}')(record({'b': string('x')})),
+    "a conversion in a format string": format_string('{b!r}')(record({'b': string('x')})),
+    "a format specification in a format string":
+        format_string('{n:>3}')(record({'n': integer(1)})),
+    "a list shown by a format string":
+        format_string('{l}')(record({'l': list_term((integer(1),))})),
+    "an unmatched brace in a format string": format_string('{b')(record({'b': string('x')})),
 }
 
 
@@ -110,3 +126,222 @@ def test_conversion_to_gsn_reports_a_stuck_term():
                           support=undeveloped))
     with pytest.raises(ValueError, match=r"at path '<root>\.description'"):
         gsn_tree(node)
+
+
+# Readback says why it found no value, in the terms the document was written in.
+READBACK_REASONS = {
+    "a builtin declined": (STUCK["missing record key"],
+                           "evaluation stopped here: PGSNKeyError: Record: there is no label 'b'"),
+    "an undefined name applied": (variable('f')(integer(1)), "name 'f' is not defined"),
+    "an undefined name": (variable('q'), "name 'q' is not defined"),
+    "a function": (_identity, "a function is not a value"),
+}
+
+
+@pytest.mark.parametrize("term, reason", READBACK_REASONS.values(), ids=READBACK_REASONS.keys())
+def test_readback_says_why(term, reason):
+    with pytest.raises(ValueError, match=re.escape(reason)):
+        python_value(_evaluate(term))
+
+
+# ---------------------------------------------------------------------------
+# The term evaluation comes to rest on
+# ---------------------------------------------------------------------------
+#
+# Each case pairs a term with the exact term its evaluation stops at. The
+# expected term is written by hand, so a change to where evaluation stops, or
+# to what it leaves around a stuck application, shows up here.
+
+_thunk = variable('_thunk')
+
+SHAPES = {
+    "a builtin keeps arguments it declines":
+        (div(1)(0),
+         div(1)(0)),
+    "arguments are reduced before the builtin declines them":
+        (div(plus(1)(2))(minus(1)(1)),
+         div(3)(0)),
+    "an argument is bound, then reduced":
+        (lambda_abs(_x, div(_x)(0))(plus(1)(2)),
+         div(3)(0)),
+    "arguments beyond the arity are reduced too":
+        (div(1)(0)(plus(1)(2)),
+         div(1)(0)(3)),
+    "a stuck head keeps its arguments, reduced":
+        (record({'a': integer(1)})('b')(plus(1)(1)),
+         record({'a': integer(1)})('b')(2)),
+    "a stuck argument blocks the builtin that needs it":
+        (plus(div(1)(0))(plus(1)(1)),
+         plus(div(1)(0))(2)),
+    "a stuck argument blocks every builtin above it":
+        (plus(1)(plus(2)(div(1)(0))),
+         plus(1)(plus(2)(div(1)(0)))),
+    "a free variable as head":
+        (variable('f')(plus(1)(1)),
+         variable('f')(2)),
+    "a stuck term is copied wherever it is used":
+        (lambda_abs(_x, list_term((_x, _x)))(div(1)(0)),
+         list_term((div(1)(0), div(1)(0)))),
+    "the other elements of a list are reduced":
+        (list_term((plus(1)(1), div(1)(0), plus(2)(2))),
+         list_term((integer(2), div(1)(0), integer(4)))),
+    "the other fields of a record are reduced":
+        (record({'a': plus(1)(1), 'b': div(1)(0)}),
+         record({'a': integer(2), 'b': div(1)(0)})),
+    "a stuck condition leaves both branches unevaluated":
+        (if_then_else(div(1)(0))(plus(1)(1))(plus(2)(2)),
+         pgsn_term.IfThenElse.named()(div(1)(0))
+         (lambda_abs(_thunk, plus(1)(1)))
+         (lambda_abs(_thunk, plus(2)(2)))
+         (undefined)),
+    "the branch taken is stuck":
+        (if_then_else(true)(div(1)(0))(2),
+         div(1)(0)),
+    "map leaves the stuck element in place":
+        (map_term(lambda_abs(_x, div(6)(_x)))(list_term((integer(1), integer(0), integer(2)))),
+         list_term((integer(6), div(6)(0), integer(3)))),
+    "fold stops at the stuck element and keeps the rest of the sum":
+        (integer_sum(list_term((integer(1), div(1)(0), integer(3)))),
+         plus(1)(plus(div(1)(0))(3))),
+}
+
+
+@pytest.mark.parametrize("term, expected", SHAPES.values(), ids=SHAPES.keys())
+def test_evaluation_comes_to_rest_on(term, expected):
+    assert _evaluate(term) == expected.remove_name()
+
+
+# Where Python raises an exception of its own, the builtin declines instead,
+# and evaluation comes to rest on the term itself.
+_one_two = list_term((integer(1), integer(2)))
+_a_is_one = record({'a': integer(1)})
+
+DECLINED_INSTEAD_OF_FAILING = {
+    "index out of range": index(_one_two)(5),
+    "negative index out of range": index(_one_two)(-3),
+    "removing an absent label": remove_attribute(_a_is_one)('b'),
+    "positional field in a format string": format_string('{0}')(_a_is_one),
+    "attribute reference in a format string": format_string('{a.b}')(_a_is_one),
+}
+
+
+@pytest.mark.parametrize("term", DECLINED_INSTEAD_OF_FAILING.values(),
+                         ids=DECLINED_INSTEAD_OF_FAILING.keys())
+def test_a_builtin_declines_instead_of_failing(term):
+    assert _evaluate(term) == term.remove_name()
+
+
+# ---------------------------------------------------------------------------
+# A stuck application says why
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("term", [*STUCK.values(), *DECLINED_INSTEAD_OF_FAILING.values()],
+                         ids=[*STUCK.keys(), *DECLINED_INSTEAD_OF_FAILING.keys()])
+def test_a_stuck_application_records_the_reason(term):
+    assert _evaluate(term).meta_info["error"].startswith("PGSN")
+
+
+def test_the_reason_is_the_one_where_evaluation_stopped():
+    stuck = _evaluate(record({'a': integer(1)})('b'))
+    assert stuck.meta_info["error"] == "PGSNKeyError: Record: there is no label 'b'"
+
+
+def test_an_argument_declined_on_the_way_leaves_no_reason():
+    """A builtin declines an argument that is not reduced yet, too, but that
+    is not where evaluation stops."""
+    term = _evaluate(record({'a': plus(plus(1)(2))(3)}))
+    assert "error" not in term.attributes()['a'].meta_info
+
+
+def test_the_reason_is_not_shared_with_other_terms():
+    _evaluate(div(1)(0))
+    assert "error" not in div(1)(1).remove_name().meta_info
+    assert "error" not in integer(0).remove_name().meta_info
+
+
+def test_readback_shows_the_reason():
+    with pytest.raises(ValueError, match="PGSNValueError: Div: division by zero"):
+        python_value(_evaluate(div(1)(0)))
+
+
+# ---------------------------------------------------------------------------
+# A builtin refusing a stuck argument names why the argument is stuck
+#
+# Where a document leaves a gap, the gap flows on into whatever uses it, and
+# evaluation comes to rest at the last builtin that needed a value. Reported on
+# its own, that is "Cons: the second argument must be a list" for a record that
+# never answered a question: true, and far from the mistake.
+# ---------------------------------------------------------------------------
+
+_missing = record({'a': integer(1)})(string('b'))
+_MISSING = "PGSNKeyError: Record: there is no label 'b'"
+
+
+def test_a_stuck_argument_gives_the_cause():
+    stuck = _evaluate(plus(_missing)(integer(1)))
+    assert stuck.meta_info["cause"] == _MISSING
+
+
+def test_the_cause_is_the_first_reason_in_the_chain():
+    """The missing label reaches `cons` through a conditional, as an answer
+    missing from a record reaches a list of defeaters."""
+    term = cons(integer(1))(if_then_else(is_empty(_missing))(empty)(empty))
+    assert _evaluate(term).meta_info["cause"] == _MISSING
+
+
+def test_an_unbound_name_is_a_cause():
+    stuck = _evaluate(plus(variable('y'))(integer(1)).remove_name())
+    assert stuck.meta_info["cause"] == "name 'y' is not defined"
+
+
+def test_an_argument_of_the_wrong_type_has_no_cause():
+    stuck = _evaluate(plus(string('a'))(integer(1)))
+    assert "error" in stuck.meta_info
+    assert "cause" not in stuck.meta_info
+
+
+def test_readback_shows_the_cause():
+    with pytest.raises(ValueError, match=re.escape(
+            "Plus: both arguments must be integers, got App, "
+            f"which was stuck on {_MISSING}")):
+        python_value(_evaluate(plus(_missing)(integer(1))))
+
+
+# ---------------------------------------------------------------------------
+# A fault of the interpreter is not a stuck term
+# ---------------------------------------------------------------------------
+
+class _Broken(pgsn_term.ConstMixin, pgsn_term.Unary):
+
+    def _apply_arg(self, arg):
+        raise RuntimeError("a fault of the interpreter")
+
+
+def test_a_fault_of_the_interpreter_escapes():
+    with pytest.raises(RuntimeError, match="a fault of the interpreter"):
+        _evaluate(_Broken.named()(integer(1)))
+
+
+# A list applied to an integer is indexed as `index` indexes it: from the end
+# when the integer is negative, as in Python, and stuck outside the list.
+@pytest.mark.parametrize("i", (2, -3))
+def test_a_list_applied_out_of_range_is_stuck(i):
+    assert _evaluate(_one_two(i)) == _one_two(i).remove_name()
+
+
+@pytest.mark.parametrize("i, expected", ((-1, 2), (-2, 1)))
+def test_a_list_applied_to_a_negative_integer_counts_from_the_end(i, expected):
+    assert _evaluate(_one_two(i)) == integer(expected).remove_name()
+
+
+# A builtin is handed every pending argument and consumes as many as its arity;
+# the rest are applied to its result. The result of these two cannot be
+# applied, so what is checked is where evaluation stops.
+def test_formatter_applies_with_arguments_beyond_its_arity():
+    term = format_string('{a}')(_a_is_one)(plus(1)(1))
+    assert _evaluate(term) == string('1')(2).remove_name()
+
+
+def test_is_subtype_applies_with_arguments_beyond_its_arity():
+    term = is_subtype(_attributes_only)(base_class)(plus(1)(1))
+    assert _evaluate(term) == true(2).remove_name()
